@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(bun:*)",
+      "Shell(for i in $(seq 1 20); do curl -sf localhost:4100/health >/dev/null && break; sleep 0.5; done echo \"--- health\"; curl -s localhost:4100/health echo; echo \"--- status\"; curl -s localhost:4100/whatsapp/status echo; echo \"--- pair no body\"; curl -s -o /dev/null -w \"%{http_code}\\n\" -X POST localhost:4100/whatsapp/pair -H 'content-type: application/json' -d '{}' echo \"--- pair bad number\"; curl -s -X POST localhost:4100/whatsapp/pair -H 'content-type: application/json' -d '{\"phoneNumber\":\"abc\"}' echo; echo \"--- pair formatted number (normalizes, will hit WhatsApp)\"; curl -s -m 30 -X POST localhost:4100/whatsapp/pair -H 'content-type: application/json' -d '{\"phoneNumber\":\"+62 812-3456-7890\"}')",
+      "Shell(for i in $(seq 1 20); do curl -sf localhost:4199/health >/dev/null && break; sleep 0.5; done echo \"--- health\"; curl -s localhost:4199/health echo; echo \"--- status\"; curl -s localhost:4199/whatsapp/status echo; echo \"--- pair no body\"; curl -s -w \" [%{http_code}]\" -X POST localhost:4199/whatsapp/pair -H 'content-type: application/json' -d '{}' echo; echo \"--- pair bad number\"; curl -s -w \" [%{http_code}]\" -X POST localhost:4199/whatsapp/pair -H 'content-type: application/json' -d '{\"phoneNumber\":\"abc\"}' echo; echo \"--- pair formatted number\"; curl -s -m 40 -w \" [%{http_code}]\" -X POST localhost:4199/whatsapp/pair -H 'content-type: application/json' -d '{\"phoneNumber\":\"+62 812-3456-7890\"}' echo; echo \"--- status after\"; curl -s localhost:4199/whatsapp/status)",
+      "Shell(ss:*)",
+      "Shell(grep:*)",
+      "Shell(kill_shell:*)",
+      "Shell(curl -s -m 40 -w  [%{http_code}] -X POST localhost:4199/whatsapp/pair -H content-type: application/json -d {\"phoneNumber\":\"6281234567890\"} echo)",
+      "Shell(curl -s -X POST localhost:4199/whatsapp/stop echo)",
+      "Shell(curl -s localhost:4199/whatsapp/status echo)",
+      "Shell(echo:*)",
+      "Shell(curl -s -X POST localhost:4199/whatsapp/start echo)",
+      "Shell(sleep:*)",
+      "Shell(curl -s localhost:4199/whatsapp/status)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

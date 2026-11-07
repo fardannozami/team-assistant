@@ -2,6 +2,7 @@ import makeWASocket, {
   DisconnectReason,
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
+  type ConnectionState,
 } from "@whiskeysockets/baileys";
 import pino from "pino";
 import { createDbClient } from "@repo/database";
@@ -16,49 +17,83 @@ const SESSION_PATH = process.env.WHATSAPP_SESSION_PATH ?? "./data/whatsapp-sessi
 
 let sock: ReturnType<typeof makeWASocket> | null = null;
 let currentQr: string | null = null;
+let currentPairingCode: string | null = null;
+let pairingPhoneNumber: string | null = null;
 const processedMessageIds = new Set<string>();
 
 export function getQr() {
   return currentQr;
 }
 
+export function getPairingCode() {
+  return currentPairingCode;
+}
+
 export function getSocket(): any {
   return sock;
 }
 
-export async function startWhatsApp(): Promise<any> {
+export function normalizePhoneNumber(input: string): string {
+  const digits = (input ?? "").replace(/\D/g, "");
+  if (!/^\d{7,15}$/.test(digits)) {
+    throw new Error("Phone number must include the country code (7-15 digits, no +, spaces or dashes)");
+  }
+  return digits;
+}
+
+export async function startWhatsApp(): Promise<ReturnType<typeof makeWASocket>> {
+  if (sock) return sock;
+
   const { state, saveCreds } = await useMultiFileAuthState(SESSION_PATH);
   const { version } = await fetchLatestBaileysVersion();
 
-  sock = makeWASocket({
+  // A previous pairing attempt may have persisted `me` without completing
+  // registration, which makes Baileys log in instead of registering.
+  if (!state.creds.registered) {
+    delete state.creds.me;
+  }
+
+  const socket = makeWASocket({
     version,
-    printQRInTerminal: true,
+    printQRInTerminal: false,
     auth: state,
     logger: pino({ level: "silent" }),
   });
+  sock = socket;
 
-  sock.ev.on("creds.update", saveCreds);
+  socket.ev.on("creds.update", saveCreds);
 
-  sock.ev.on("connection.update", (update) => {
-    const { connection, lastDisconnect, qr } = update;
-    if (qr) {
+  socket.ev.on("connection.update", (update) => {
+    if (sock !== socket) return;
+
+    const { connection, lastDisconnect, qr, isNewLogin } = update;
+    if (qr && !pairingPhoneNumber) {
       currentQr = qr;
       logger.info("QR code updated");
+    }
+    if (isNewLogin) {
+      currentPairingCode = null;
+      pairingPhoneNumber = null;
     }
     if (connection === "close") {
       const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+      sock = null;
+      currentQr = null;
       logger.warn({ statusCode, shouldReconnect }, "Connection closed");
       if (shouldReconnect) {
         startWhatsApp().catch((e) => logger.error(e));
       }
     } else if (connection === "open") {
       currentQr = null;
+      currentPairingCode = null;
+      pairingPhoneNumber = null;
       logger.info("WhatsApp connected");
     }
   });
 
-  sock.ev.on("messages.upsert", async ({ messages, type }) => {
+  socket.ev.on("messages.upsert", async ({ messages, type }) => {
+    if (sock !== socket) return;
     if (type !== "notify") return;
     for (const msg of messages) {
       if (!msg.message || msg.key.fromMe) continue;
@@ -114,7 +149,68 @@ export async function sendText(jid: string, text: string) {
   });
 }
 
+function waitForRegistrationChannel(socket: ReturnType<typeof makeWASocket>): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error("Timed out waiting for WhatsApp to start the pairing flow"));
+    }, 20_000);
+
+    function cleanup() {
+      clearTimeout(timeout);
+      socket.ev.off("connection.update", onUpdate);
+    }
+
+    function onUpdate(update: Partial<ConnectionState>) {
+      if (update.qr || update.connection === "open") {
+        cleanup();
+        resolve();
+      }
+    }
+
+    socket.ev.on("connection.update", onUpdate);
+  });
+}
+
+export async function pairWithPhoneNumber(phoneNumber: string): Promise<string> {
+  const normalized = normalizePhoneNumber(phoneNumber);
+
+  if (sock?.authState.creds.registered) {
+    throw new Error("WhatsApp is already paired. Stop and reset the session before pairing again.");
+  }
+
+  await stopWhatsApp();
+
+  pairingPhoneNumber = normalized;
+  currentPairingCode = null;
+
+  try {
+    const socket = await startWhatsApp();
+
+    // requestPairingCode sends an encrypted node, so wait until the noise
+    // handshake has completed (signalled by the first qr update).
+    await waitForRegistrationChannel(socket);
+
+    const code = await socket.requestPairingCode(normalized);
+
+    if (sock !== socket) {
+      throw new Error("WhatsApp connection closed while requesting the pairing code");
+    }
+
+    currentPairingCode = code;
+    logger.info({ phoneNumber: normalized }, "Pairing code generated");
+    return code;
+  } catch (error) {
+    await stopWhatsApp();
+    throw error;
+  }
+}
+
 export async function stopWhatsApp() {
-  sock?.end(undefined);
+  const current = sock;
   sock = null;
+  currentQr = null;
+  currentPairingCode = null;
+  pairingPhoneNumber = null;
+  await current?.end(undefined);
 }

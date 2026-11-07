@@ -22,7 +22,7 @@ app.get("/ready", (c) => {
 app.route("/auth", auth);
 app.route("/whatsapp", whatsapp);
 
-export default app;
+export { app };
 
 if (import.meta.main) {
   const port = Number(process.env.PORT ?? 4000);
