@@ -43,7 +43,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] **T-M2-11** Define GitHub tables: `github_installations`, `tracked_repositories`.
 - [x] **T-M2-12** Define Figma tables: `tracked_figma_files`.
 - [x] **T-M2-13** Define `reports`, `audit_logs`.
-- [ ] **T-M2-14** Add migrations + seed script for default roles/owner. (drizzle config added; run `db:generate` against live Postgres)
+- [x] **T-M2-14** Add migrations + seed script for default roles/owner. (drizzle config, migration generated/applied, seed script added)
 
 ### Auth & RBAC
 - [ ] **T-M2-15** Implement auth module (login/session/JWT or cookie).

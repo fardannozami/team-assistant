@@ -10,7 +10,8 @@
     "lint": "eslint . --max-warnings 0",
     "check-types": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "bun run src/seed.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.36.0",
@@ -20,6 +21,7 @@
   "devDependencies": {
     "@repo/eslint-config": "*",
     "@repo/typescript-config": "*",
+    "@types/node": "^26.6.6",
     "drizzle-kit": "^0.28.0",
     "eslint": "10.9.1",
     "typescript": "7.0.2"
