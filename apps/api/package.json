@@ -11,6 +11,9 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
+    "@repo/config": "*",
+    "@repo/database": "*",
+    "@repo/shared": "*",
     "@whiskeysockets/baileys": "^7.0.0-rc14",
     "hono": "4.6.14"
   },
