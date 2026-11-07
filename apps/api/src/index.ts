@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import pino from "pino";
+import { auth } from "./modules/auth/index.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 
@@ -13,9 +14,10 @@ app.get("/health", (c) => {
 });
 
 app.get("/ready", (c) => {
-  // Readiness: extend with DB/Redis checks when wired.
   return c.json({ status: "ready" });
 });
+
+app.route("/auth", auth);
 
 export default app;
 

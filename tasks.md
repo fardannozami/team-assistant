@@ -46,10 +46,10 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] **T-M2-14** Add migrations + seed script for default roles/owner. (drizzle config, migration generated/applied, seed script added)
 
 ### Auth & RBAC
-- [ ] **T-M2-15** Implement auth module (login/session/JWT or cookie).
-- [ ] **T-M2-16** Implement RBAC middleware (Owner/Admin/Manager/Employee).
-- [ ] **T-M2-17** Phone-number → employee identity mapping for WhatsApp senders.
-- [ ] **T-M2-18** Audit logging helper for administrative actions.
+- [x] **T-M2-15** Implement auth module (login/session/JWT or cookie).
+- [x] **T-M2-16** Implement RBAC middleware (Owner/Admin/Manager/Employee).
+- [x] **T-M2-17** Phone-number → employee identity mapping for WhatsApp senders.
+- [x] **T-M2-18** Audit logging helper for administrative actions.
 
 **Acceptance:** migrations run cleanly; RBAC enforced on protected routes; timestamps stored UTC.
 
