@@ -30,20 +30,20 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 ## M2 — Database and Authentication (2–3 days)
 
 ### Schema (Drizzle)
-- [ ] **T-M2-01** Define tables: `users`, `admins`, `roles`, `permissions`.
-- [ ] **T-M2-02** Define `employees`, `teams`, `team_members`.
-- [ ] **T-M2-03** Define WhatsApp tables: `whatsapp_sessions`, `whatsapp_messages`.
-- [ ] **T-M2-04** Define conversation tables: `conversations`, `conversation_messages`.
-- [ ] **T-M2-05** Define AI tables: `agent_configs`, `agent_memories`, `ai_usage_logs`.
-- [ ] **T-M2-06** Define standup tables: `standups`, `standup_answers`, `standup_sessions`.
-- [ ] **T-M2-07** Define scheduling tables: `schedules`, `scheduled_jobs`, `job_executions`.
-- [ ] **T-M2-08** Define holiday tables: `holidays`, `calendar_settings`, `calendar_exceptions`.
-- [ ] **T-M2-09** Define integration tables: `integrations`, `employee_integrations`, `integration_credentials`.
-- [ ] **T-M2-10** Define activity tables: `activity_events`, `daily_activity_summaries`.
-- [ ] **T-M2-11** Define GitHub tables: `github_installations`, `tracked_repositories`.
-- [ ] **T-M2-12** Define Figma tables: `tracked_figma_files`.
-- [ ] **T-M2-13** Define `reports`, `audit_logs`.
-- [ ] **T-M2-14** Add migrations + seed script for default roles/owner.
+- [x] **T-M2-01** Define tables: `users`, `admins`, `roles`, `permissions`.
+- [x] **T-M2-02** Define `employees`, `teams`, `team_members`.
+- [x] **T-M2-03** Define WhatsApp tables: `whatsapp_sessions`, `whatsapp_messages`.
+- [x] **T-M2-04** Define conversation tables: `conversations`, `conversation_messages`.
+- [x] **T-M2-05** Define AI tables: `agent_configs`, `agent_memories`, `ai_usage_logs`.
+- [x] **T-M2-06** Define standup tables: `standups`, `standup_answers`, `standup_sessions`.
+- [x] **T-M2-07** Define scheduling tables: `schedules`, `scheduled_jobs`, `job_executions`.
+- [x] **T-M2-08** Define holiday tables: `holidays`, `calendar_settings`, `calendar_exceptions`.
+- [x] **T-M2-09** Define integration tables: `integrations`, `employee_integrations`, `integration_credentials`.
+- [x] **T-M2-10** Define activity tables: `activity_events`, `daily_activity_summaries`.
+- [x] **T-M2-11** Define GitHub tables: `github_installations`, `tracked_repositories`.
+- [x] **T-M2-12** Define Figma tables: `tracked_figma_files`.
+- [x] **T-M2-13** Define `reports`, `audit_logs`.
+- [ ] **T-M2-14** Add migrations + seed script for default roles/owner. (drizzle config added; run `db:generate` against live Postgres)
 
 ### Auth & RBAC
 - [ ] **T-M2-15** Implement auth module (login/session/JWT or cookie).
