@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import pino from "pino";
 import { auth } from "./modules/auth/index.js";
+import { whatsapp } from "./modules/whatsapp/index.js";
+import { startWhatsApp } from "./modules/whatsapp/service.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 
@@ -18,11 +20,13 @@ app.get("/ready", (c) => {
 });
 
 app.route("/auth", auth);
+app.route("/whatsapp", whatsapp);
 
 export default app;
 
 if (import.meta.main) {
   const port = Number(process.env.PORT ?? 4000);
   logger.info({ port }, "Server running");
+  startWhatsApp().catch((e) => logger.error(e));
   Bun.serve({ fetch: app.fetch, port });
 }
