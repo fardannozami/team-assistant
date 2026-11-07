@@ -9,12 +9,12 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 ## M1 — Project Foundation and Infrastructure (1–2 days)
 
 ### Monorepo & workspace
-- [ ] **T-M1-01** Add `apps/worker` app (BullMQ worker entrypoint, jobs/processors/schedulers) per PRD §7.2.
-- [ ] **T-M1-02** Add `packages/database` (Drizzle ORM + schema + migrations).
-- [ ] **T-M1-03** Add `packages/shared` (Zod schemas, types, constants, time-zone helpers).
-- [ ] **T-M1-04** Add `packages/config` (env validation, shared eslint/tsconfig re-exports if needed).
-- [ ] **T-M1-05** Wire workspace dependencies (`@repo/*`) in `apps/api`, `apps/worker`, `apps/web`.
-- [ ] **T-M1-06** Configure Turborepo pipeline for `build`, `dev`, `lint`, `check-types`, `db:migrate`, `db:generate`.
+- [x] **T-M1-01** Add `apps/worker` app (BullMQ worker entrypoint, jobs/processors/schedulers) per PRD §7.2.
+- [x] **T-M1-02** Add `packages/database` (Drizzle ORM + schema + migrations).
+- [x] **T-M1-03** Add `packages/shared` (Zod schemas, types, constants, time-zone helpers).
+- [x] **T-M1-04** Add `packages/config` (env validation, shared eslint/tsconfig re-exports if needed).
+- [x] **T-M1-05** Wire workspace dependencies (`@repo/*`) in `apps/api`, `apps/worker`, `apps/web`.
+- [x] **T-M1-06** Configure Turborepo pipeline for `build`, `dev`, `lint`, `check-types`, `db:migrate`, `db:generate`.
 
 ### Infrastructure
 - [ ] **T-M1-07** Create `docker-compose.yml` with PostgreSQL, Redis, (optional) Nginx.
