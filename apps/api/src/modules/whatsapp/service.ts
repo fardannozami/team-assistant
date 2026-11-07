@@ -8,7 +8,8 @@ import pino from "pino";
 import { createDbClient } from "@repo/database";
 import { whatsappSessions, whatsappMessages, employees } from "@repo/database";
 import { eq } from "drizzle-orm";
-import { getEmployeeByPhone } from "../auth/index.js";
+import { getEmployeeByPhone, getRoleName } from "../auth/index.js";
+import { handleAdminMessage } from "./admin.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 const db = createDbClient(process.env.DATABASE_URL ?? "postgres://teamassistant:teamassistant@localhost:5432/teamassistant");
@@ -121,15 +122,19 @@ export async function startWhatsApp(): Promise<ReturnType<typeof makeWASocket>> 
         .onConflictDoNothing();
 
       const employee = await getEmployeeByPhone(phone);
+      const roleName = employee ? await getRoleName(employee.roleId) : null;
 
-      // admin command gating example: unknown senders cannot run admin commands
-      const isAdminCommand = /^\s*(MENU|HELP|EMPLOYEE|SCHEDULE|REPORT|HOLIDAY|PAUSE|RESUME)/i.test(body);
-      if (isAdminCommand && !employee) {
-        await sendText(from, "You are not a registered user.");
+      const reply = await handleAdminMessage({
+        phone,
+        body,
+        employee,
+        roleName,
+      });
+      if (reply) {
+        await sendText(from, reply);
         continue;
       }
 
-      // placeholder: echo / store conversation
       logger.info({ phone, body }, "Incoming message");
     }
   });

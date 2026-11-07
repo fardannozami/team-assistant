@@ -13,7 +13,19 @@
       "Shell(echo:*)",
       "Shell(curl -s -X POST localhost:4199/whatsapp/start echo)",
       "Shell(sleep:*)",
-      "Shell(curl -s localhost:4199/whatsapp/status)"
+      "Shell(curl -s localhost:4199/whatsapp/status)",
+      "Shell(cmd:*)",
+      "Shell(cmd mcp add --help 2>&1; echo \"=== list ===\"; cmd mcp list 2>&1)",
+      "Shell(which python3 pip3 uv uvx pipx 2>&1; python3 --version 2>&1; pip3 --version 2>&1 | head -1)",
+      "Shell(node --version)",
+      "Shell(python3 -m pip --version 2 >& 1)",
+      "Shell(python3 -c import sys; print(sys.version))",
+      "Shell(npm:*)",
+      "Shell(cmd mcp add --scope local synthelion -- uvx synthelion-mcp 2>&1; echo \"---\"; cmd mcp list 2>&1; echo \"---\"; cmd mcp get synthelion 2>&1)",
+      "Shell(cmd mcp remove synthelion 2>&1; cmd mcp add --scope local synthelion -- uvx --from synthelion synthelion-mcp 2>&1; echo ---; cmd mcp get synthelion 2>&1)",
+      "Shell(export:*)",
+      "Shell(uvx:*)",
+      "Shell(export PATH=\"$HOME/.local/bin:$PATH\"; timeout 300 uvx --with 'mcp<2' --from synthelion synthelion-mcp </dev/null >/tmp/synthelion-mcp-test.log 2>&1; echo \"exit=$?\"; tail -20 /tmp/synthelion-mcp-test.log)"
     ],
     "deny": [],
     "defaultMode": "default"

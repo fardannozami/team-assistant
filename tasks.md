@@ -74,13 +74,13 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ## M4 — Employee Management (1–2 days) — P0
 
-- [ ] **T-M4-01** CRUD endpoints for employees (add/edit/deactivate). (EMP-001..004)
-- [ ] **T-M4-02** Team management and membership. (EMP-005)
-- [ ] **T-M4-03** Role assignment. (EMP-006)
-- [ ] **T-M4-04** Employee directory listing. (EMP-007)
-- [ ] **T-M4-05** Standup history per employee. (EMP-008)
-- [ ] **T-M4-06** WhatsApp conversational flow for add-employee (multi-step + single-message input).
-- [ ] **T-M4-07** Phone number update flow.
+- [x] **T-M4-01** CRUD endpoints for employees (add/edit/deactivate). (EMP-001..004)
+- [x] **T-M4-02** Team management and membership. (EMP-005)
+- [x] **T-M4-03** Role assignment. (EMP-006)
+- [x] **T-M4-04** Employee directory listing. (EMP-007)
+- [x] **T-M4-05** Standup history per employee. (EMP-008)
+- [x] **T-M4-06** WhatsApp conversational flow for add-employee (multi-step + single-message input).
+- [x] **T-M4-07** Phone number update flow.
 
 **Acceptance:** admin can add employee via WhatsApp with confirmation; directory queryable via API.
 

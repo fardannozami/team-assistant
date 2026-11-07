@@ -51,6 +51,16 @@ export async function getEmployeeByPhone(phone: string) {
   return emp ?? null;
 }
 
+export async function getRoleName(roleId: string | null) {
+  if (!roleId) return null;
+  const [role] = await db
+    .select({ name: roles.name })
+    .from(roles)
+    .where(eq(roles.id, roleId))
+    .limit(1);
+  return role?.name ?? null;
+}
+
 export async function audit(actorId: string | null, action: string, resource?: string, resourceId?: string, metadata?: unknown) {
   await db.insert(auditLogs).values({ actorId: actorId ?? undefined, action, resource, resourceId, metadata: metadata as any });
 }

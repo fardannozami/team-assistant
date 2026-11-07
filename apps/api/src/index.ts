@@ -1,12 +1,24 @@
 import { Hono } from "hono";
 import pino from "pino";
 import { auth } from "./modules/auth/index.js";
+import { employeesApi } from "./modules/employees/index.js";
+import { rolesApi } from "./modules/roles/index.js";
+import { teamsApi } from "./modules/teams/index.js";
 import { whatsapp } from "./modules/whatsapp/index.js";
 import { startWhatsApp } from "./modules/whatsapp/service.js";
+import { HttpError } from "./lib/http-error.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 
 const app = new Hono();
+
+app.onError((err, c) => {
+  if (err instanceof HttpError) {
+    return c.json({ error: err.message }, err.status);
+  }
+  logger.error(err, "Unhandled request error");
+  return c.json({ error: "Internal server error" }, 500);
+});
 
 app.get("/", (c) => c.json({ message: "Hello from Hono!" }));
 
@@ -20,6 +32,9 @@ app.get("/ready", (c) => {
 });
 
 app.route("/auth", auth);
+app.route("/employees", employeesApi);
+app.route("/teams", teamsApi);
+app.route("/roles", rolesApi);
 app.route("/whatsapp", whatsapp);
 
 export { app };
