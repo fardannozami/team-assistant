@@ -15,6 +15,13 @@
       "when": 1794019814551,
       "tag": "0001_nasty_medusa",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794020718754,
+      "tag": "0002_furry_red_hulk",
+      "breakpoints": true
     }
   ]
 }

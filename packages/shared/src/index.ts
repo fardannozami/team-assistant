@@ -78,6 +78,38 @@ export const remindStandupSchema = z.object({
   date: standupDateSchema.optional(),
 });
 
+export const STANDUP_SCHEDULE_NAME = "standup";
+
+export const timeOfDaySchema = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Time must be HH:mm (24-hour)");
+
+export const weekdaysSchema = z
+  .array(z.number().int().min(0).max(6))
+  .min(1, "Pick at least one weekday (0=Sunday .. 6=Saturday)");
+
+export const timezoneNameSchema = z.string().trim().min(1).max(64);
+
+export const createScheduleSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(100),
+  timeOfDay: timeOfDaySchema,
+  weekdays: weekdaysSchema,
+  timezone: timezoneNameSchema.optional(),
+  reminderMinutes: z.number().int().min(0).max(1440).nullish(),
+});
+
+export const updateScheduleSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(100).optional(),
+  timeOfDay: timeOfDaySchema.optional(),
+  weekdays: weekdaysSchema.optional(),
+  timezone: timezoneNameSchema.optional(),
+  reminderMinutes: z.number().int().min(0).max(1440).nullable().optional(),
+  isActive: z.boolean().optional(),
+});
+
+export type CreateScheduleInput = z.infer<typeof createScheduleSchema>;
+export type UpdateScheduleInput = z.infer<typeof updateScheduleSchema>;
+
 export type StandupElement = (typeof CORE_STANDUP_ELEMENTS)[number];
 
 export function dateInTimezone(

@@ -11,6 +11,10 @@ import {
   updateEmployeePhone,
 } from "../employees/service.js";
 import { sendStandupPrompts } from "../standups/service.js";
+import {
+  listSchedules,
+  upsertStandupSchedule,
+} from "../schedules/service.js";
 
 type AdminSender = {
   id: string;
@@ -44,6 +48,9 @@ type CommandName =
   | "UPDATE_PHONE"
   | "EMPLOYEE_LIST"
   | "START_STANDUP"
+  | "SHOW_SCHEDULE"
+  | "SET_SCHEDULE"
+  | "SET_REMINDER"
   | "MENU"
   | "HELP";
 
@@ -52,12 +59,15 @@ const COMMAND_PATTERNS: { name: CommandName; re: RegExp }[] = [
   { name: "UPDATE_PHONE", re: /^(?:update|change|set)\s+(?:employee\s+)?(?:phone|whatsapp)\b/i },
   { name: "EMPLOYEE_LIST", re: /^employees?\s+list$/i },
   { name: "START_STANDUP", re: /^(?:start|trigger|run)\s+standup\b/i },
+  { name: "SHOW_SCHEDULE", re: /^(?:schedule|schedules)(?:\s+(?:show|list))?$/i },
+  { name: "SET_SCHEDULE", re: /^set\s+schedule\b/i },
+  { name: "SET_REMINDER", re: /^set\s+reminder\b/i },
   { name: "MENU", re: /^menu$/i },
   { name: "HELP", re: /^help$/i },
 ];
 
 const ADMIN_KEYWORD =
-  /^\s*(MENU|HELP|EMPLOYEE|ADD\s+EMPLOYEE|UPDATE\s+PHONE|CHANGE\s+PHONE|START\s+STANDUP|TRIGGER\s+STANDUP|SCHEDULE|REPORT|HOLIDAY|PAUSE|RESUME)\b/i;
+  /^\s*(MENU|HELP|EMPLOYEE|ADD\s+EMPLOYEE|UPDATE\s+PHONE|CHANGE\s+PHONE|START\s+STANDUP|TRIGGER\s+STANDUP|SET\s+(?:SCHEDULE|REMINDER)|SCHEDULE|REPORT|HOLIDAY|PAUSE|RESUME)\b/i;
 
 const YES = /^(yes|y|ya|iya|ok|oke|correct|benar|betul)$/i;
 const NO = /^(no|n|tidak|bukan|salah|batal|cancel)$/i;
@@ -72,8 +82,59 @@ const MENU_TEXT = [
   "ADD EMPLOYEE - add an employee",
   "UPDATE PHONE - change an employee's WhatsApp number",
   "START STANDUP - send today's standup prompts now",
+  "SCHEDULE - show the current standup schedule",
+  "SET SCHEDULE <HH:mm> [DAYS] - change when standup runs",
+  "SET REMINDER <minutes>|OFF - change the standup reminder",
   "CANCEL - abort the current step",
 ].join("\n");
+
+const DAY_INDEX: Record<string, number> = {
+  SUN: 0,
+  MON: 1,
+  TUE: 2,
+  WED: 3,
+  THU: 4,
+  FRI: 5,
+  SAT: 6,
+};
+
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function parseWeekdays(input: string): number[] | null {
+  const token = input.trim().toUpperCase();
+  if (!token) return null;
+
+  if (/^(DAILY|EVERYDAY|EVERY DAY)$/.test(token)) return [0, 1, 2, 3, 4, 5, 6];
+  if (/^(WEEKDAYS?|WORKDAYS?)$/.test(token)) return [1, 2, 3, 4, 5];
+
+  const days = new Set<number>();
+  for (const part of token.split(/[\s,]+/).filter(Boolean)) {
+    const range = part.match(/^([A-Z]{3})-([A-Z]{3})$/);
+    if (range) {
+      const start = DAY_INDEX[range[1]!];
+      const end = DAY_INDEX[range[2]!];
+      if (start === undefined || end === undefined) return null;
+      let cursor = start;
+      days.add(cursor);
+      while (cursor !== end) {
+        cursor = (cursor + 1) % 7;
+        days.add(cursor);
+      }
+      continue;
+    }
+    const day = DAY_INDEX[part];
+    if (day === undefined) return null;
+    days.add(day);
+  }
+  return days.size ? [...days].sort((a, b) => a - b) : null;
+}
+
+function formatWeekdays(days: number[]): string {
+  const sorted = [...days].sort((a, b) => a - b);
+  if (sorted.join(",") === "1,2,3,4,5") return "Mon-Fri";
+  if (sorted.join(",") === "0,1,2,3,4,5,6") return "every day";
+  return sorted.map((day) => DAY_NAMES[day]).join(", ");
+}
 
 function standupTriggerReply(result: {
   sent: number;
@@ -92,6 +153,85 @@ function standupTriggerReply(result: {
     return `Could not send standup prompts (${result.failed} failed). Is WhatsApp connected?`;
   }
   return "No prompts sent - every employee already has a standup session for today.";
+}
+
+async function showSchedules(): Promise<string> {
+  const rows = await listSchedules();
+  if (rows.length === 0) {
+    return "No schedules configured yet. Use SET SCHEDULE <HH:mm> [DAYS], e.g. SET SCHEDULE 09:00 MON-FRI.";
+  }
+  return rows
+    .map((schedule) => {
+      const weekdays = Array.isArray(schedule.weekdays)
+        ? (schedule.weekdays as number[])
+        : null;
+      const when = schedule.timeOfDay ?? schedule.cronExpression ?? "?";
+      const days = weekdays ? formatWeekdays(weekdays) : "custom cron";
+      const reminder =
+        schedule.reminderMinutes != null
+          ? `, reminder ${schedule.reminderMinutes} min after`
+          : "";
+      return `- ${schedule.name} (${schedule.isActive ? "active" : "disabled"}): ${when} ${days}, ${schedule.timezone}${reminder}`;
+    })
+    .join("\n");
+}
+
+async function setScheduleCommand(rest: string): Promise<string> {
+  const timeMatch = rest.match(/\b(\d{1,2}):(\d{2})\b/);
+  if (!timeMatch) {
+    return "Usage: SET SCHEDULE <HH:mm> [DAYS], e.g. SET SCHEDULE 08:45 MON-FRI";
+  }
+
+  const hour = Number(timeMatch[1]);
+  const minute = Number(timeMatch[2]);
+  if (hour > 23 || minute > 59) {
+    return "That time doesn't look valid. Use 24-hour HH:mm, e.g. 08:45.";
+  }
+  const timeOfDay = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+
+  const remainder = rest.replace(timeMatch[0], " ").trim();
+  let weekdays: number[] | undefined;
+  if (remainder) {
+    const parsed = parseWeekdays(remainder);
+    if (!parsed) {
+      return "I couldn't read those days. Use day names (MON TUE), a range (MON-FRI), DAILY, or WEEKDAYS.";
+    }
+    weekdays = parsed;
+  }
+
+  const schedule = await upsertStandupSchedule({ timeOfDay, weekdays });
+  const days = weekdays
+    ? formatWeekdays(weekdays)
+    : formatWeekdays((schedule.weekdays as number[]) ?? []);
+  const reminder =
+    schedule.reminderMinutes != null
+      ? `\nReminder is sent ${schedule.reminderMinutes} min after.`
+      : "";
+  return `The schedule has been saved.\nStandup will run ${days} at ${schedule.timeOfDay} in the ${schedule.timezone} time zone.${reminder}`;
+}
+
+async function setReminderCommand(rest: string): Promise<string> {
+  const token = rest.trim().toUpperCase();
+  if (!token) {
+    return "Usage: SET REMINDER <minutes> (minutes after standup) or SET REMINDER OFF";
+  }
+
+  if (/^(OFF|NONE|DISABLED?)$/.test(token)) {
+    await upsertStandupSchedule({ reminderMinutes: null });
+    return "Reminder disabled.";
+  }
+
+  if (!/^\d{1,4}$/.test(token)) {
+    return "Usage: SET REMINDER <minutes> (minutes after standup) or SET REMINDER OFF";
+  }
+
+  const minutes = Number(token);
+  if (minutes > 1440) {
+    return "Reminder must be at most 1440 minutes (24 hours).";
+  }
+
+  await upsertStandupSchedule({ reminderMinutes: minutes });
+  return `Reminder will be sent ${minutes} minutes after the standup.`;
 }
 
 const flows = new Map<string, { flow: PendingFlow; expiresAt: number }>();
@@ -429,6 +569,12 @@ export async function handleAdminMessage(args: {
         return MENU_TEXT;
       case "EMPLOYEE_LIST":
         return renderEmployeeList();
+      case "SHOW_SCHEDULE":
+        return showSchedules();
+      case "SET_SCHEDULE":
+        return setScheduleCommand(command.rest);
+      case "SET_REMINDER":
+        return setReminderCommand(command.rest);
       case "ADD_EMPLOYEE":
         return startAddFlow(args.phone, command.rest);
       case "UPDATE_PHONE":

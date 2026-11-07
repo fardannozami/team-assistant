@@ -3,6 +3,7 @@ import pino from "pino";
 import { auth } from "./modules/auth/index.js";
 import { employeesApi } from "./modules/employees/index.js";
 import { rolesApi } from "./modules/roles/index.js";
+import { schedulesApi } from "./modules/schedules/index.js";
 import { standupsApi } from "./modules/standups/index.js";
 import { teamsApi } from "./modules/teams/index.js";
 import { whatsapp } from "./modules/whatsapp/index.js";
@@ -36,6 +37,7 @@ app.route("/auth", auth);
 app.route("/employees", employeesApi);
 app.route("/teams", teamsApi);
 app.route("/roles", rolesApi);
+app.route("/schedules", schedulesApi);
 app.route("/standups", standupsApi);
 app.route("/whatsapp", whatsapp);
 

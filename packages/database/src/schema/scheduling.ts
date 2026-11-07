@@ -1,17 +1,34 @@
-import { pgTable, text, timestamp, uuid, jsonb, boolean, integer } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  jsonb,
+  boolean,
+  integer,
+  unique,
+} from "drizzle-orm/pg-core";
 
-export const schedules = pgTable("schedules", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  name: text("name").notNull(),
-  cronExpression: text("cron_expression"),
-  weekdays: jsonb("weekdays"), // number[]
-  timeOfDay: text("time_of_day"), // HH:mm
-  timezone: text("timezone").default("Asia/Jakarta").notNull(),
-  reminderMinutes: integer("reminder_minutes"),
-  isActive: boolean("is_active").default(true).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+export const schedules = pgTable(
+  "schedules",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: text("name").notNull(),
+    cronExpression: text("cron_expression"),
+    weekdays: jsonb("weekdays"), // number[], cron convention 0=Sunday .. 6=Saturday
+    timeOfDay: text("time_of_day"), // HH:mm
+    timezone: text("timezone").default("Asia/Jakarta").notNull(),
+    reminderMinutes: integer("reminder_minutes"),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [unique("schedules_name_uq").on(t.name)],
+);
 
 export const scheduledJobs = pgTable("scheduled_jobs", {
   id: uuid("id").defaultRandom().primaryKey(),
