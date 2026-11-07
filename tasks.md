@@ -58,7 +58,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 ## M3 — WhatsApp Integration (Baileys) (2–4 days) — P0
 
 - [ ] **T-M3-01** Create WhatsApp adapter module in `apps/api/src/modules/whatsapp` (or worker). (WA-001)
-- [ ] **T-M3-02** QR-code pairing flow + expose QR to dashboard/API. (WA-001)
+- [ ] **T-M3-02** QR-code pairing flow + expose QR to dashboard/API or pair with code. (WA-001)
 - [ ] **T-M3-03** Persist auth state to DB/filesystem and restore on restart. (WA-002)
 - [ ] **T-M3-04** Incoming message handler with sender phone extraction. (WA-003)
 - [ ] **T-M3-05** Outgoing message queue (async send). (WA-004, WA-010)
