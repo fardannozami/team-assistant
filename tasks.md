@@ -106,16 +106,16 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 ## M6 — Scheduler and Holiday Calendar (2–3 days) — P0
 
 ### Scheduling
-- [ ] **T-M6-01** Schedule CRUD (create/update/delete/disable). (SCH-001..003)
-- [ ] **T-M6-02** Configure active weekdays. (SCH-004)
-- [ ] **T-M6-03** Time zone support (default Asia/Jakarta). (SCH-005)
-- [ ] **T-M6-04** Reminder configuration. (SCH-006)
-- [ ] **T-M6-05** Manual trigger. (SCH-007)
-- [ ] **T-M6-06** Retry failed jobs. (SCH-008)
-- [ ] **T-M6-07** Job execution history. (SCH-009)
-- [ ] **T-M6-08** Prevent duplicate job execution (idempotency keys). (SCH-010)
-- [ ] **T-M6-09** BullMQ workers + Redis queue; reconcile jobs from DB on restart.
-- [ ] **T-M6-10** Natural-language schedule config via WhatsApp.
+- [x] **T-M6-01** Schedule CRUD (create/update/delete/disable). (SCH-001..003)
+- [x] **T-M6-02** Configure active weekdays. (SCH-004)
+- [x] **T-M6-03** Time zone support (default Asia/Jakarta). (SCH-005)
+- [x] **T-M6-04** Reminder configuration. (SCH-006)
+- [x] **T-M6-05** Manual trigger. (SCH-007)
+- [x] **T-M6-06** Retry failed jobs. (SCH-008)
+- [x] **T-M6-07** Job execution history. (SCH-009)
+- [x] **T-M6-08** Prevent duplicate job execution (idempotency keys). (SCH-010)
+- [x] **T-M6-09** BullMQ workers + Redis queue; reconcile jobs from DB on restart.
+- [x] **T-M6-10** Natural-language schedule config via WhatsApp.
 
 ### Holiday calendar
 - [ ] **T-M6-11** Sync Indonesian holiday data (SKB 3 Menteri source; API as delivery). (HOL-001)
@@ -227,12 +227,12 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 - [ ] Admin can pair WhatsApp bot.
 - [ ] Admins can add/deactivate employees.
-- [ ] Admins can configure standup schedules via WhatsApp.
-- [ ] Bot sends standup prompts automatically.
+- [x] Admins can configure standup schedules via WhatsApp.
+- [x] Bot sends standup prompts automatically.
 - [ ] AI collects all three core standup elements.
 - [ ] AI asks relevant follow-up questions.
 - [ ] Scheduler skips national holidays + configured joint-leave.
 - [ ] Admins can request daily report.
 - [ ] Data persisted in PostgreSQL.
-- [ ] Scheduled jobs recover after restart.
-- [ ] Job retries do not cause duplicate standup messages.
+- [x] Scheduled jobs recover after restart.
+- [x] Job retries do not cause duplicate standup messages.

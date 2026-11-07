@@ -85,6 +85,7 @@ const MENU_TEXT = [
   "SCHEDULE - show the current standup schedule",
   "SET SCHEDULE <HH:mm> [DAYS] - change when standup runs",
   "SET REMINDER <minutes>|OFF - change the standup reminder",
+  "Or say: schedule standup monday to friday at 9:00 am WIB",
   "CANCEL - abort the current step",
 ].join("\n");
 
@@ -99,6 +100,30 @@ const DAY_INDEX: Record<string, number> = {
 };
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const DAY_WORDS: { pattern: string; day: number }[] = [
+  { pattern: "sunday|sun|minggu", day: 0 },
+  { pattern: "monday|mon|senin", day: 1 },
+  { pattern: "tuesday|tue|selasa", day: 2 },
+  { pattern: "wednesday|wed|rabu", day: 3 },
+  { pattern: "thursday|thu|kamis", day: 4 },
+  { pattern: "friday|fri|jumat|jum'at", day: 5 },
+  { pattern: "saturday|sat|sabtu", day: 6 },
+];
+
+const DAY_PATTERN = DAY_WORDS.map((d) => `(?:${d.pattern})`).join("|");
+const DAY_RANGE_RE = new RegExp(
+  `\\b(${DAY_PATTERN})\\b\\s*(?:to|through|thru|sampai|-|–)\\s*\\b(${DAY_PATTERN})\\b`,
+  "i",
+);
+
+function dayFromToken(token: string): number | null {
+  const normalized = token.trim().toLowerCase();
+  for (const { pattern, day } of DAY_WORDS) {
+    if (new RegExp(`^(?:${pattern})$`).test(normalized)) return day;
+  }
+  return null;
+}
 
 function parseWeekdays(input: string): number[] | null {
   const token = input.trim().toUpperCase();
@@ -134,6 +159,100 @@ function formatWeekdays(days: number[]): string {
   if (sorted.join(",") === "1,2,3,4,5") return "Mon-Fri";
   if (sorted.join(",") === "0,1,2,3,4,5,6") return "every day";
   return sorted.map((day) => DAY_NAMES[day]).join(", ");
+}
+
+function savedScheduleReply(schedule: {
+  timeOfDay: string | null;
+  weekdays: unknown;
+  timezone: string;
+  reminderMinutes: number | null;
+}): string {
+  const days = Array.isArray(schedule.weekdays)
+    ? formatWeekdays(schedule.weekdays as number[])
+    : "custom days";
+  const reminder =
+    schedule.reminderMinutes != null
+      ? `\nReminder is sent ${schedule.reminderMinutes} min after.`
+      : "";
+  return `The schedule has been saved.\nStandup will run ${days} at ${schedule.timeOfDay} in the ${schedule.timezone} time zone.${reminder}`;
+}
+
+function parseNaturalTime(text: string): string | null {
+  const withMinutes = text.match(/\b(\d{1,2})[:.](\d{2})\s*(am|pm)?\b/i);
+  if (withMinutes) {
+    let hour = Number(withMinutes[1]);
+    const minute = Number(withMinutes[2]);
+    const suffix = withMinutes[3]?.toLowerCase();
+    if (suffix === "pm" && hour < 12) hour += 12;
+    if (suffix === "am" && hour === 12) hour = 0;
+    if (hour <= 23 && minute <= 59) {
+      return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+    }
+  }
+
+  const hourOnly = text.match(/\b(\d{1,2})\s*(am|pm)\b/i);
+  if (hourOnly) {
+    let hour = Number(hourOnly[1]);
+    const suffix = hourOnly[2]?.toLowerCase();
+    if (suffix === "pm" && hour < 12) hour += 12;
+    if (suffix === "am" && hour === 12) hour = 0;
+    if (hour <= 23) return `${String(hour).padStart(2, "0")}:00`;
+  }
+
+  return null;
+}
+
+/**
+ * Narrow natural-language schedule parsing (PRD §5.4 example):
+ * "Schedule standup from Monday to Friday at 9:00 AM WIB".
+ * The M7 agent replaces this with full LLM understanding.
+ */
+function parseNaturalSchedule(text: string): {
+  timeOfDay: string;
+  weekdays: number[];
+  timezone?: string;
+} | null {
+  if (!/\b(standup|jadwal)\b/i.test(text)) return null;
+
+  const timeOfDay = parseNaturalTime(text);
+  if (!timeOfDay) return null;
+
+  let weekdays: number[] = [];
+  const range = text.match(DAY_RANGE_RE);
+  if (range) {
+    const start = range[1] ? dayFromToken(range[1]) : null;
+    const end = range[2] ? dayFromToken(range[2]) : null;
+    if (start === null || end === null) return null;
+    const days = new Set<number>([start]);
+    let cursor = start;
+    while (cursor !== end) {
+      cursor = (cursor + 1) % 7;
+      days.add(cursor);
+    }
+    weekdays = [...days].sort((a, b) => a - b);
+  } else if (/\b(every\s*day|daily|setiap hari|tiap hari)\b/i.test(text)) {
+    weekdays = [0, 1, 2, 3, 4, 5, 6];
+  } else {
+    const found = new Set<number>();
+    const dayRe = new RegExp(`\\b(${DAY_PATTERN})\\b`, "gi");
+    for (const match of text.matchAll(dayRe)) {
+      const day = match[1] ? dayFromToken(match[1]) : null;
+      if (day !== null) found.add(day);
+    }
+    weekdays = [...found].sort((a, b) => a - b);
+  }
+
+  if (weekdays.length === 0) return null;
+
+  const timezone = /\bWIB\b|\bAsia\/Jakarta\b/i.test(text)
+    ? "Asia/Jakarta"
+    : /\bWITA\b/i.test(text)
+      ? "Asia/Makassar"
+      : /\bWIT\b/i.test(text)
+        ? "Asia/Jayapura"
+        : undefined;
+
+  return { timeOfDay, weekdays, timezone };
 }
 
 function standupTriggerReply(result: {
@@ -200,14 +319,7 @@ async function setScheduleCommand(rest: string): Promise<string> {
   }
 
   const schedule = await upsertStandupSchedule({ timeOfDay, weekdays });
-  const days = weekdays
-    ? formatWeekdays(weekdays)
-    : formatWeekdays((schedule.weekdays as number[]) ?? []);
-  const reminder =
-    schedule.reminderMinutes != null
-      ? `\nReminder is sent ${schedule.reminderMinutes} min after.`
-      : "";
-  return `The schedule has been saved.\nStandup will run ${days} at ${schedule.timeOfDay} in the ${schedule.timezone} time zone.${reminder}`;
+  return savedScheduleReply(schedule);
 }
 
 async function setReminderCommand(rest: string): Promise<string> {
@@ -603,6 +715,12 @@ export async function handleAdminMessage(args: {
     return pending.kind === "add"
       ? continueAddFlow(args.phone, pending, text, args.employee)
       : continuePhoneFlow(args.phone, pending, text, args.employee);
+  }
+
+  const natural = parseNaturalSchedule(text);
+  if (natural) {
+    const schedule = await upsertStandupSchedule(natural, args.employee.userId);
+    return savedScheduleReply(schedule);
   }
 
   return null;

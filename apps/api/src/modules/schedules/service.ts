@@ -151,6 +151,7 @@ export async function upsertStandupSchedule(
   patch: {
     timeOfDay?: string;
     weekdays?: number[];
+    timezone?: string;
     reminderMinutes?: number | null;
     isActive?: boolean;
   },
@@ -168,6 +169,7 @@ export async function upsertStandupSchedule(
         name: STANDUP_SCHEDULE_NAME,
         timeOfDay: patch.timeOfDay ?? "09:00",
         weekdays: patch.weekdays ?? [1, 2, 3, 4, 5],
+        timezone: patch.timezone,
         reminderMinutes: patch.reminderMinutes ?? null,
       },
       actorId,
@@ -179,6 +181,7 @@ export async function upsertStandupSchedule(
     {
       timeOfDay: patch.timeOfDay,
       weekdays: patch.weekdays,
+      timezone: patch.timezone,
       reminderMinutes: patch.reminderMinutes,
       isActive: patch.isActive,
     },
