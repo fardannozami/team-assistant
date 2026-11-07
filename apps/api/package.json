@@ -15,7 +15,8 @@
     "@repo/database": "*",
     "@repo/shared": "*",
     "@whiskeysockets/baileys": "^7.0.0-rc14",
-    "hono": "4.6.14"
+    "hono": "4.6.14",
+    "pino": "^10.4.0"
   },
   "devDependencies": {
     "@repo/eslint-config": "*",

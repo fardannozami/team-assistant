@@ -17,11 +17,11 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] **T-M1-06** Configure Turborepo pipeline for `build`, `dev`, `lint`, `check-types`, `db:migrate`, `db:generate`.
 
 ### Infrastructure
-- [ ] **T-M1-07** Create `docker-compose.yml` with PostgreSQL, Redis, (optional) Nginx.
-- [ ] **T-M1-08** Add `docker/` with Dockerfiles for api, worker, web.
-- [ ] **T-M1-09** Add `.env.example` documenting all required secrets/vars.
-- [ ] **T-M1-10** Implement structured logging (pino) and request IDs in Hono.
-- [ ] **T-M1-11** Add health endpoints (`/health`, readiness including DB/Redis).
+- [x] **T-M1-07** Create `docker-compose.yml` with PostgreSQL, Redis, (optional) Nginx.
+- [x] **T-M1-08** Add `docker/` with Dockerfiles for api, worker, web.
+- [x] **T-M1-09** Add `.env.example` documenting all required secrets/vars.
+- [x] **T-M1-10** Implement structured logging (pino) and request IDs in Hono.
+- [x] **T-M1-11** Add health endpoints (`/health`, readiness including DB/Redis).
 
 **Acceptance:** `bun install` at root; `docker compose up` brings up DB+Redis; `bun run dev` starts api+worker+web.
 
