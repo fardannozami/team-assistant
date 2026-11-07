@@ -10,6 +10,7 @@ import { whatsappSessions, whatsappMessages, employees } from "@repo/database";
 import { eq } from "drizzle-orm";
 import { getEmployeeByPhone, getRoleName } from "../auth/index.js";
 import { handleAdminMessage } from "./admin.js";
+import { handleStandupMessage } from "../standups/engine.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 const db = createDbClient(process.env.DATABASE_URL ?? "postgres://teamassistant:teamassistant@localhost:5432/teamassistant");
@@ -133,6 +134,14 @@ export async function startWhatsApp(): Promise<ReturnType<typeof makeWASocket>> 
       if (reply) {
         await sendText(from, reply);
         continue;
+      }
+
+      if (employee) {
+        const standupReply = await handleStandupMessage({ employee, body });
+        if (standupReply) {
+          await sendText(from, standupReply);
+          continue;
+        }
       }
 
       logger.info({ phone, body }, "Incoming message");

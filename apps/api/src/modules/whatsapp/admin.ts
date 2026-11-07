@@ -10,6 +10,7 @@ import {
   listEmployees,
   updateEmployeePhone,
 } from "../employees/service.js";
+import { sendStandupPrompts } from "../standups/service.js";
 
 type AdminSender = {
   id: string;
@@ -42,6 +43,7 @@ type CommandName =
   | "ADD_EMPLOYEE"
   | "UPDATE_PHONE"
   | "EMPLOYEE_LIST"
+  | "START_STANDUP"
   | "MENU"
   | "HELP";
 
@@ -49,12 +51,13 @@ const COMMAND_PATTERNS: { name: CommandName; re: RegExp }[] = [
   { name: "ADD_EMPLOYEE", re: /^add\s+employee\b/i },
   { name: "UPDATE_PHONE", re: /^(?:update|change|set)\s+(?:employee\s+)?(?:phone|whatsapp)\b/i },
   { name: "EMPLOYEE_LIST", re: /^employees?\s+list$/i },
+  { name: "START_STANDUP", re: /^(?:start|trigger|run)\s+standup\b/i },
   { name: "MENU", re: /^menu$/i },
   { name: "HELP", re: /^help$/i },
 ];
 
 const ADMIN_KEYWORD =
-  /^\s*(MENU|HELP|EMPLOYEE|ADD\s+EMPLOYEE|UPDATE\s+PHONE|CHANGE\s+PHONE|SCHEDULE|REPORT|HOLIDAY|PAUSE|RESUME)\b/i;
+  /^\s*(MENU|HELP|EMPLOYEE|ADD\s+EMPLOYEE|UPDATE\s+PHONE|CHANGE\s+PHONE|START\s+STANDUP|TRIGGER\s+STANDUP|SCHEDULE|REPORT|HOLIDAY|PAUSE|RESUME)\b/i;
 
 const YES = /^(yes|y|ya|iya|ok|oke|correct|benar|betul)$/i;
 const NO = /^(no|n|tidak|bukan|salah|batal|cancel)$/i;
@@ -68,8 +71,28 @@ const MENU_TEXT = [
   "EMPLOYEE LIST - list active employees",
   "ADD EMPLOYEE - add an employee",
   "UPDATE PHONE - change an employee's WhatsApp number",
+  "START STANDUP - send today's standup prompts now",
   "CANCEL - abort the current step",
 ].join("\n");
+
+function standupTriggerReply(result: {
+  sent: number;
+  skipped: number;
+  failed: number;
+}) {
+  if (result.sent > 0) {
+    const parts = [`Standup prompts sent to ${result.sent} employee(s).`];
+    if (result.skipped > 0) {
+      parts.push(`${result.skipped} already had a session.`);
+    }
+    if (result.failed > 0) parts.push(`${result.failed} failed to send.`);
+    return parts.join(" ");
+  }
+  if (result.failed > 0) {
+    return `Could not send standup prompts (${result.failed} failed). Is WhatsApp connected?`;
+  }
+  return "No prompts sent - every employee already has a standup session for today.";
+}
 
 const flows = new Map<string, { flow: PendingFlow; expiresAt: number }>();
 
@@ -410,6 +433,23 @@ export async function handleAdminMessage(args: {
         return startAddFlow(args.phone, command.rest);
       case "UPDATE_PHONE":
         return startPhoneFlow(args.phone, command.rest);
+      case "START_STANDUP": {
+        if (command.rest) {
+          const matches = await findEmployeesByIdentifier(command.rest);
+          if (matches.length === 0) {
+            return "No employee found with that name or phone number.";
+          }
+          if (matches.length > 1 || !matches[0]) {
+            return "Multiple employees match. Reply with the exact name or WhatsApp number.";
+          }
+          const result = await sendStandupPrompts({
+            employeeId: matches[0].id,
+          });
+          return standupTriggerReply(result);
+        }
+        const result = await sendStandupPrompts();
+        return standupTriggerReply(result);
+      }
     }
   }
 

@@ -65,6 +65,33 @@ export const teamMemberSchema = z.object({
   employeeId: z.string().uuid(),
 });
 
+export const standupDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format");
+
+export const triggerStandupSchema = z.object({
+  employeeId: z.string().uuid().optional(),
+  date: standupDateSchema.optional(),
+});
+
+export const remindStandupSchema = z.object({
+  date: standupDateSchema.optional(),
+});
+
+export type StandupElement = (typeof CORE_STANDUP_ELEMENTS)[number];
+
+export function dateInTimezone(
+  timezone: string = DEFAULT_TIMEZONE,
+  at: Date = new Date(),
+): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(at);
+}
+
 export type CreateEmployeeInput = z.infer<typeof createEmployeeSchema>;
 export type UpdateEmployeeInput = z.infer<typeof updateEmployeeSchema>;
 export type UpdateEmployeePhoneInput = z.infer<

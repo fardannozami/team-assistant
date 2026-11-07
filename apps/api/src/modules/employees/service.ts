@@ -14,6 +14,7 @@ import type {
 import { normalizePhoneNumber } from "@repo/shared";
 import { audit } from "../auth/index.js";
 import { HttpError } from "../../lib/http-error.js";
+import { isUniqueViolation } from "../../lib/db.js";
 
 const db = createDbClient(
   process.env.DATABASE_URL ??
@@ -51,14 +52,6 @@ function baseEmployeeQuery() {
     .from(employees)
     .leftJoin(teams, eq(employees.teamId, teams.id))
     .leftJoin(roles, eq(employees.roleId, roles.id));
-}
-
-function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    (error as { code?: string }).code === "23505"
-  );
 }
 
 async function assertTeamExists(teamId: string | null | undefined) {

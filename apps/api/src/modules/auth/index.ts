@@ -46,6 +46,21 @@ export function requireRole(...allowed: string[]) {
   };
 }
 
+const INTERNAL_API_TOKEN = process.env.INTERNAL_API_TOKEN ?? "dev-internal-token";
+
+/** Allows internal service callers (e.g. the scheduler worker) in addition to JWT roles. */
+export function requireInternalOrRole(...allowed: string[]) {
+  return async (c: any, next: any) => {
+    const internalToken = c.req.header("x-internal-token");
+    if (internalToken && internalToken === INTERNAL_API_TOKEN) {
+      c.set("user", { sub: null, role: "internal" });
+      await next();
+      return;
+    }
+    return requireRole(...allowed)(c, next);
+  };
+}
+
 export async function getEmployeeByPhone(phone: string) {
   const [emp] = await db.select().from(employees).where(eq(employees.phone, phone)).limit(1);
   return emp ?? null;

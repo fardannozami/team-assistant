@@ -88,16 +88,16 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ## M5 — Daily Standup Engine (2–3 days) — P0
 
-- [ ] **T-M5-01** Standup session model (per employee per date, dedup). (STD-010)
-- [ ] **T-M5-02** Send standup prompts automatically (triggered by scheduler). (STD-001)
-- [ ] **T-M5-03** Collect responses across multiple messages. (STD-003)
-- [ ] **T-M5-04** Free-form natural language parsing into 3 core elements. (STD-002, STD-004)
-- [ ] **T-M5-05** Blocker detection and recording. (STD-005)
-- [ ] **T-M5-06** Persist standup answers by date. (STD-006)
-- [ ] **T-M5-07** Retrieve standup history. (STD-007)
-- [ ] **T-M5-08** Reminder sending for incomplete standups. (STD-008)
-- [ ] **T-M5-09** Manual trigger by admin. (STD-009)
-- [ ] **T-M5-10** Hybrid AI conversation: ask contextual follow-ups, avoid re-asking answered items.
+- [x] **T-M5-01** Standup session model (per employee per date, dedup). (STD-010)
+- [x] **T-M5-02** Send standup prompts automatically (triggered by scheduler). (STD-001)
+- [x] **T-M5-03** Collect responses across multiple messages. (STD-003)
+- [x] **T-M5-04** Free-form natural language parsing into 3 core elements. (STD-002, STD-004)
+- [x] **T-M5-05** Blocker detection and recording. (STD-005)
+- [x] **T-M5-06** Persist standup answers by date. (STD-006)
+- [x] **T-M5-07** Retrieve standup history. (STD-007)
+- [x] **T-M5-08** Reminder sending for incomplete standups. (STD-008)
+- [x] **T-M5-09** Manual trigger by admin. (STD-009)
+- [x] **T-M5-10** Hybrid AI conversation: ask contextual follow-ups, avoid re-asking answered items.
 
 **Acceptance:** all three core elements collected; blockers stored; no duplicate sessions.
 
