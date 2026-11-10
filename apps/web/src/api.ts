@@ -162,10 +162,6 @@ export interface WhatsAppStatus {
   phone: string | null;
 }
 
-export interface WhatsAppQr {
-  qr: string | null;
-}
-
 export type EmployeeFilter = "all" | true | false;
 
 export interface EmployeeFilters {
@@ -446,8 +442,6 @@ export const reportsApi = {
 
 export const whatsappApi = {
   status: () => request<WhatsAppStatus>("/whatsapp/status"),
-
-  qr: () => request<WhatsAppQr>("/whatsapp/qr"),
 
   start: () =>
     request<{ ok: boolean }>("/whatsapp/start", {

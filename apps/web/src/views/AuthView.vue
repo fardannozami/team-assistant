@@ -1,55 +1,66 @@
 <template>
-  <div class="w-full max-w-[420px] p-11 bg-panel border border-border rounded-lg shadow-lg reveal-slow">
-    <div class="flex items-center gap-2.5 font-extrabold text-[20px] tracking-tight mb-[30px]">
-      <div class="w-8 h-8 rounded-[10px] bg-accent text-white text-[15px] grid place-items-center shadow-[0_0_0_5px_rgba(91,107,245,0.45)]">TA</div>
-      <div class="font-extrabold text-[20px] tracking-tight">Team Assistant</div>
+  <div class="flex items-center justify-center min-h-screen px-6">
+    <div class="w-full max-w-[780px]">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-0 items-center">
+        <!-- Brand panel -->
+        <div>
+          <div class="flex items-center gap-2.5 mb-6">
+            <div class="w-10 h-10 rounded-xl bg-accent text-white text-[17px] font-display font-extrabold grid place-items-center shadow-accent">TA</div>
+            <div class="font-display font-extrabold text-[20px] tracking-tight text-text">Team Assistant</div>
+          </div>
+          <h1 class="text-[44px] font-display font-extrabold tracking-tight text-text mb-2 lg:mb-6">Welcome back.</h1>
+          <p class="text-text-muted text-lg mb-10 lg:mb-14">Sign in to your administrator account to open the dashboard.</p>
+          <p class="text-[13px] text-text-dim">Team Assistant admin dashboard · API base: {{ apiBase }}</p>
+        </div>
+
+        <!-- Sign-in form -->
+        <div class="bg-panel border border-border rounded-2xl shadow-soft-lg p-8 lg:p-12 reveal-slow">
+          <h2 class="text-[24px] font-display font-extrabold tracking-tight text-text mb-1">Sign in</h2>
+          <p class="text-text-muted text-sm mb-10">Use your administrator account.</p>
+
+          <div v-if="error" class="mb-6 px-4 py-3.5 rounded-xl border border-danger/30 bg-danger/5 text-danger text-[12px] font-extrabold slide-in">{{ error }}</div>
+
+          <form @submit.prevent="handleSubmit" class="flex flex-col gap-5">
+            <div>
+              <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Email address</label>
+              <input
+                v-model="email"
+                name="email"
+                type="email"
+                autocomplete="email"
+                placeholder="you@company.com"
+                :disabled="loading"
+                @input="error = ''"
+                class="w-full px-4 py-3.5 rounded-xl border text-sm placeholder-text-dim transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none bg-panel border-border"
+                :class="{ 'border-danger': error, 'border-border': !error }"
+              />
+            </div>
+            <div>
+              <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Password</label>
+              <input
+                v-model="password"
+                name="password"
+                type="password"
+                autocomplete="current-password"
+                placeholder="••••••••"
+                :disabled="loading"
+                @input="error = ''"
+                class="w-full px-4 py-3.5 rounded-xl border text-sm placeholder-text-dim transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none bg-panel border-border"
+                :class="{ 'border-danger': error, 'border-border': !error }"
+              />
+            </div>
+            <button
+              type="submit"
+              :disabled="loading"
+              class="inline-flex items-center justify-center gap-2.5 px-4 py-4 rounded-xl text-[15px] font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover hover:shadow-[0_0_0_12px_rgba(63,68,226,0.45)] active:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+            >
+              <span v-if="loading" class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full spin-slow" aria-hidden="true"></span>
+              {{ loading ? "Signing in…" : "Sign in" }}
+            </button>
+          </form>
+        </div>
+      </div>
     </div>
-    <h1 class="text-[30px] font-display font-extrabold tracking-tight mb-1.5">Sign in</h1>
-    <p class="text-text-muted text-sm mb-[30px]">Use your administrator account to open the dashboard.</p>
-
-    <form @submit.prevent="handleSubmit" class="flex flex-col gap-5">
-      <div class="mb-[18px]">
-        <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-muted mb-2">Email address</label>
-        <input
-          v-model="email"
-          name="email"
-          type="email"
-          autocomplete="email"
-          placeholder="you@company.com"
-          :disabled="loading"
-          @input="error = ''"
-          class="w-full px-3.5 py-[11px] rounded-sm border text-sm placeholder-text-dim transition-all duration-200 ease-in focus:ring-4 focus:-translate-y-1 bg-[#0b1020]"
-          :class="{ 'border-border focus:ring-accent/50': !error, 'border-danger focus:ring-danger/40': error }"
-        />
-      </div>
-      <div class="mb-[18px]">
-        <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-muted mb-2">Password</label>
-        <input
-          v-model="password"
-          name="password"
-          type="password"
-          autocomplete="current-password"
-          placeholder="••••••••"
-          :disabled="loading"
-          @input="error = ''"
-          class="w-full px-3.5 py-[11px] rounded-sm border text-sm placeholder-text-dim transition-all duration-200 ease-in focus:ring-4 focus:-translate-y-1 bg-[#0b1020]"
-          :class="{ 'border-border focus:ring-accent/50': !error, 'border-danger focus:ring-danger/40': error }"
-        />
-      </div>
-      <p v-if="error" class="text-danger text-[11px] font-extrabold mt-2 slide-in">{{ error }}</p>
-      <button
-        class="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-sm text-[12px] font-extrabold tracking-tight bg-accent text-white shadow-[0_0_0_4px_rgba(91,107,245,0.45)] transition-all duration-200 ease-in hover:bg-accent-hover hover:shadow-[0_0_0_10px_rgba(91,107,245,0.45)] active:shadow-[0_0_0_4px_rgba(91,107,245,0.45)] whitespace-nowrap leading-none disabled:opacity-45"
-        type="submit"
-        :disabled="loading"
-      >
-        <span v-if="loading" class="w-[18px] h-[18px] border-[2.5px] border-white/25 border-t-white rounded-full spin-slow" aria-hidden="true"></span>
-        {{ loading ? "Signing in…" : "Sign in" }}
-      </button>
-    </form>
-
-    <p class="mt-[30px] pt-5.5 border-t border-border text-[12px] text-text-muted text-center">
-      Team Assistant admin dashboard &middot; API base: {{ apiBase }}
-    </p>
   </div>
 </template>
 

@@ -1,35 +1,37 @@
 <template>
-  <div class="flex items-baseline justify-between mt-6 mb-3.5 gap-4 flex-wrap">
+  <header class="flex items-baseline justify-between gap-3 flex-wrap mb-7">
     <div>
-      <h2 class="text-[24px] font-display font-extrabold tracking-tight">Employees</h2>
-      <p class="text-text-muted text-sm mt-1.5">Directory of team members and their WhatsApp contacts.</p>
+      <h2 class="text-[26px] font-display font-extrabold tracking-tight text-text">Employees</h2>
+      <p class="text-text-muted text-sm mt-1">
+        Directory of team members and their WhatsApp contacts.
+      </p>
     </div>
     <button
-      class="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-sm text-[12px] font-extrabold tracking-tight bg-accent text-white shadow-[0_0_0_4px_rgba(91,107,245,0.45)] transition-all duration-200 ease-in hover:bg-accent-hover hover:shadow-[0_0_0_10px_rgba(91,107,245,0.45)] active:shadow-[0_0_0_4px_rgba(91,107,245,0.45)] whitespace-nowrap leading-none disabled:opacity-50 disabled:cursor-not-allowed"
       @click="showAddForm = true"
       :disabled="loading"
+      class="inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover hover:shadow-[0_0_0_12px_rgba(63,68,226,0.45)] active:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
     >
       Add employee
     </button>
-  </div>
+  </header>
 
-  <div v-if="error" class="flex items-center gap-3 px-4 py-3 rounded-sm text-sm mb-4 bg-red-300/10 text-red-300 border border-red-300/35 slide-in">{{ error }}</div>
+  <div v-if="error" class="mb-5 px-4 py-3.5 rounded-xl border border-danger/30 bg-danger/5 text-danger text-[12px] font-extrabold slide-in">{{ error }}</div>
 
-  <div class="flex items-center gap-3 mb-4 flex-wrap">
-    <div class="mb-[18px]">
-      <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-muted mb-2">Search name or phone</label>
+  <div class="flex items-center gap-3 mb-5 flex-wrap">
+    <div class="min-w-[250px]">
+      <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Search name or phone</label>
       <input
         v-model="searchQuery"
         type="search"
         placeholder="Search…"
         @input="loadEmployees"
-        class="w-full px-3.5 py-[11px] rounded-sm border text-sm placeholder-text-dim transition-all duration-200 ease-in focus:ring-4 focus:-translate-y-1 bg-[#0b1020] border-border focus:ring-accent/50 focus:border-border-focus"
+        class="w-full px-4 py-3.5 rounded-xl border text-sm placeholder-text-dim transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none bg-panel border-border"
       />
     </div>
     <select
       v-model="activeFilter"
-      class="w-full px-3.5 py-[11px] pr-7 rounded-sm border border-border text-sm cursor-pointer bg-[#0b1020] transition-all duration-200 ease-in focus:ring-4 focus:-translate-y-1 focus:ring-accent/50 focus:border-border-focus"
       @change="loadEmployees"
+      class="px-4 py-3.5 rounded-xl border border-border text-sm cursor-pointer bg-panel transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none"
     >
       <option :value="null">All employees</option>
       <option :value="true">Active only</option>
@@ -37,76 +39,74 @@
     </select>
   </div>
 
-  <div v-if="loading && !employees.length" class="flex flex-col items-center gap-2.5 py-[52px] px-5 text-text-muted fade-in-fast">
-    <span class="w-[36px] h-[36px] border-[3px] border-accent/20 border-t-accent rounded-full spin-slow"></span> Loading employees…
+  <div v-if="loading && !employees.length" class="flex flex-col items-center gap-2.5 py-24 text-center text-text-muted fade-in-fast">
+    <span class="w-10 h-10 border-2 border-accent/20 border-t-accent rounded-full spin-slow" aria-hidden="true"></span>
+    <span class="text-sm font-extrabold tracking-tight">Loading employees…</span>
   </div>
 
-  <div v-if="!loading && !error && !employees.length" class="flex flex-col items-center justify-center py-[64px] px-5 text-text-muted fade-in">
-    <p class="text-[17px] font-extrabold text-text mt-3.5 mb-1.5">No employees found</p>
-    <p>Add your first team member to get started.</p>
+  <div v-if="!loading && !error && !employees.length" class="flex flex-col items-center justify-center py-24 text-center fade-in">
+    <div class="w-14 h-14 rounded-full border border-border bg-panel-hover flex items-center justify-center text-text-dim mb-4" aria-hidden="true">—</div>
+    <h3 class="text-[18px] font-extrabold tracking-tight text-text mb-1">No employees found</h3>
+    <p class="text-text-muted text-sm">Add your first team member to get started.</p>
   </div>
 
-  <div class="overflow-x-auto border border-border rounded-sm">
+  <div class="border border-border rounded-xl overflow-hidden shadow-soft mb-7">
     <table class="w-full border-collapse text-[13px]">
       <thead>
-        <tr>
-          <th class="text-left px-4 py-3 text-[11px] font-extrabold tracking-wider uppercase text-text-muted border-b border-border">Name</th>
-          <th class="text-left px-4 py-3 text-[11px] font-extrabold tracking-wider uppercase text-text-muted border-b border-border">Phone</th>
-          <th class="text-left px-4 py-3 text-[11px] font-extrabold tracking-wider uppercase text-text-muted border-b border-border">Team</th>
-          <th class="text-left px-4 py-3 text-[11px] font-extrabold tracking-wider uppercase text-text-muted border-b border-border w-[16%]">Role</th>
-          <th class="text-left px-4 py-3 text-[11px] font-extrabold tracking-wider uppercase text-text-muted border-b border-border w-[14%]">Status</th>
-          <th class="text-left px-4 py-3 text-[11px] font-extrabold tracking-wider uppercase text-text-muted border-b border-border w-[22%]">Actions</th>
+        <tr class="text-text-dim">
+          <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Name</th>
+          <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Phone</th>
+          <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Team</th>
+          <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[16%]">Role</th>
+          <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[16%]">Status</th>
+          <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[26%]">Actions</th>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="e in employees" :key="e.id">
-          <td class="px-4 py-3.5 border-b border-border align-middle text-text hover:bg-panel-hover">{{ e.name }}</td>
-          <td class="px-4 py-3.5 border-b border-border align-middle text-text hover:bg-panel-hover font-mono text-[13px] text-text-dim">{{ e.phone }}</td>
-          <td class="px-4 py-3.5 border-b border-border align-middle text-text hover:bg-panel-hover">{{ e.teamName || "—" }}</td>
-          <td class="px-4 py-3.5 border-b border-border align-middle text-text hover:bg-panel-hover">
-            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-extrabold tracking-tight uppercase border transition-all duration-200 ease-in hover:-translate-y-1" :class="roleBadgeUtils(e.roleName)">
-              {{ e.roleName || "—" }}
-            </span>
+        <tr v-for="e in employees" :key="e.id" class="hover:bg-panel-hover transition-colors duration-200 ease-in">
+          <td class="px-5 py-4 border-b border-border align-middle text-text">{{ e.name }}</td>
+          <td class="px-5 py-4 border-b border-border align-middle text-text font-mono text-[13px] text-text-dim">{{ e.phone }}</td>
+          <td class="px-5 py-4 border-b border-border align-middle text-text">{{ e.teamName || "—" }}</td>
+          <td class="px-5 py-4 border-b border-border align-middle">
+            <span class="badge" :class="roleBadgeUtils(e.roleName)">{{ e.roleName || "—" }}</span>
           </td>
-          <td class="px-4 py-3.5 border-b border-border align-middle text-text hover:bg-panel-hover">
-            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-extrabold tracking-tight uppercase border transition-all duration-200 ease-in hover:-translate-y-1" :class="e.isActive ? 'bg-success/10 text-success border border-success/30' : 'bg-text-muted/10 text-text-muted border border-border'">
-              {{ e.isActive ? "Active" : "Inactive" }}
-            </span>
+          <td class="px-5 py-4 border-b border-border align-middle">
+            <span class="badge" :class="e.isActive ? 'bg-success/8 text-success border-success/20' : 'bg-text-muted/10 text-text-dim border border-border'">{{ e.isActive ? "Active" : "Inactive" }}</span>
           </td>
-          <td class="px-4 py-3.5 border-b border-border align-middle text-text hover:bg-panel-hover flex gap-2.5 items-end mt-2">
-            <div v-if="editingRoleId === e.id" class="flex flex-wrap gap-2 items-center">
+          <td class="px-5 py-4 border-b border-border align-middle text-text flex gap-2 items-end">
+            <div v-if="editingRoleId === e.id" class="flex items-center gap-2">
               <select
                 v-model="roleDrafts[e.id]"
-                class="w-[170px] px-3 py-2 pr-7 rounded-sm border border-border bg-[#0b1020] text-text text-[13px] cursor-pointer transition-all duration-200 ease-in focus:border-border-focus focus:ring-4 focus:ring-accent/50 focus:-translate-y-1"
+                class="px-3 py-2 pr-7 rounded-xl border border-border text-[13px] cursor-pointer bg-panel transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none w-[180px]"
                 @change="saveRole(e.id)"
               >
                 <option :value="null">No role</option>
                 <option v-for="r in roles" :key="r.id" :value="r.id">{{ r.name }}</option>
               </select>
               <button
-                class="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-sm text-[12px] font-extrabold tracking-tight border border-border bg-panel-hover text-text transition-all duration-200 ease-in hover:border-text-muted hover:bg-panel hover:text-text whitespace-nowrap leading-none disabled:opacity-50 disabled:cursor-not-allowed"
+                class="px-3 py-2 rounded-xl border border-border text-[12px] font-extrabold text-text transition-colors duration-200 ease-in hover:bg-panel-hover"
                 @click="editingRoleId = null"
               >
                 Cancel
               </button>
               <button
-                class="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-sm text-[12px] font-extrabold tracking-tight bg-accent text-white shadow-[0_0_0_4px_rgba(91,107,245,0.45)] transition-all duration-200 ease-in hover:bg-accent-hover hover:shadow-[0_0_0_10px_rgba(91,107,245,0.45)] active:shadow-[0_0_0_4px_rgba(91,107,245,0.45)] whitespace-nowrap leading-none disabled:opacity-50 disabled:cursor-not-allowed"
                 :disabled="savingRoleId === e.id"
+                class="px-3.5 py-2 rounded-xl text-[12px] font-extrabold bg-accent text-white hover:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap transition-colors duration-200 ease-in"
                 @click="saveRole(e.id)"
               >
                 {{ savingRoleId === e.id ? "…" : "Save" }}
               </button>
             </div>
-            <div v-else>
+            <div v-else class="flex items-center gap-2">
               <button
-                class="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-sm text-[12px] font-extrabold tracking-tight border border-border bg-panel-hover text-text transition-all duration-200 ease-in hover:border-text-muted hover:bg-panel hover:text-text whitespace-nowrap leading-none disabled:opacity-50 disabled:cursor-not-allowed"
+                class="px-3 py-2 rounded-xl border border-border text-[12px] font-extrabold text-text transition-colors duration-200 ease-in hover:bg-panel-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
                 @click="toggleActive(e)"
                 :disabled="savingId === e.id"
               >
                 {{ savingId === e.id ? "…" : e.isActive ? "Deactivate" : "Activate" }}
               </button>
               <button
-                class="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-sm text-[12px] font-extrabold tracking-tight border border-border bg-panel-hover text-text transition-all duration-200 ease-in hover:border-text-muted hover:bg-panel hover:text-text whitespace-nowrap leading-none disabled:opacity-50 disabled:cursor-not-allowed"
+                class="px-3 py-2 rounded-xl border border-border text-[12px] font-extrabold text-text transition-colors duration-200 ease-in hover:bg-panel-hover"
                 @click="editingRoleId = e.id"
               >
                 Change role
@@ -115,7 +115,7 @@
           </td>
         </tr>
         <tr v-if="!employees.length && !loading && !error">
-          <td colspan="7" class="px-4 py-3.5 border-b border-border align-middle text-text text-center text-text-muted">
+          <td colspan="6" class="px-5 py-4 border-b border-border align-middle text-center text-text-muted">
             No employees yet. Add one to get started.
           </td>
         </tr>
@@ -123,54 +123,56 @@
     </table>
   </div>
 
-  <div v-if="showAddForm" class="bg-panel border border-border rounded p-6 shadow transition-all duration-200 ease-in hover:border-border-focus hover:-translate-y-[2px] hover:shadow-lg">
-    <div class="text-[13px] font-extrabold tracking-wider uppercase text-text-muted mb-[18px]">Add employee</div>
-    <form @submit.prevent="createEmployee" class="flex flex-col gap-4 grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] items-end">
-      <div class="mb-[18px]">
-        <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-muted mb-2">Full name</label>
+  <div v-if="showAddForm" class="border border-border rounded-xl shadow-soft-lg p-6 mb-7 reveal">
+    <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-4">Add employee</div>
+    <form @submit.prevent="createEmployee" class="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-4 items-end">
+      <div>
+        <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Full name</label>
         <input
           v-model="empName"
           type="text"
           placeholder="Budi Santoso"
           required
           @input="createError = ''"
-          class="w-full px-3.5 py-[11px] rounded-sm border text-sm placeholder-text-dim transition-all duration-200 ease-in focus:ring-4 focus:-translate-y-1 bg-[#0b1020] border-border focus:ring-accent/50 focus:border-border-focus"
-          :class="{ 'border-danger focus:ring-danger/40': createError, 'border-border focus:ring-accent/50': !createError }"
+          class="w-full px-4 py-3.5 rounded-xl border text-sm placeholder-text-dim transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none bg-panel border-border"
+          :class="{ 'border-danger': createError, 'border-border': !createError }"
         />
       </div>
-      <div class="mb-[18px]">
-        <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-muted mb-2">WhatsApp number</label>
+      <div>
+        <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">WhatsApp number</label>
         <input
           v-model="empPhone"
           type="tel"
           placeholder="+62 812-3456-7890"
           required
           @input="createError = ''"
-          class="w-full px-3.5 py-[11px] rounded-sm border text-sm placeholder-text-dim transition-all duration-200 ease-in focus:ring-4 focus:-translate-y-1 bg-[#0b1020] border-border focus:ring-accent/50 focus:border-border-focus"
-          :class="{ 'border-danger focus:ring-danger/40': createError, 'border-border focus:ring-accent/50': !createError }"
+          class="w-full px-4 py-3.5 rounded-xl border text-sm placeholder-text-dim transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none bg-panel border-border"
+          :class="{ 'border-danger': createError, 'border-border': !createError }"
         />
       </div>
-      <div class="mb-[18px]">
-        <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-muted mb-2">Role</label>
-        <select v-model="empRoleId" @input="createError = ''"
-          class="w-full px-3.5 py-[11px] pr-7 rounded-sm border border-border text-sm cursor-pointer bg-[#0b1020] transition-all duration-200 ease-in focus:ring-4 focus:-translate-y-1 focus:ring-accent/50 focus:border-border-focus"
+      <div>
+        <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Role</label>
+        <select
+          v-model="empRoleId"
+          @input="createError = ''"
+          class="w-full px-4 py-3.5 pr-7 rounded-xl border border-border text-sm cursor-pointer bg-panel transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none"
         >
           <option :value="null">Default role</option>
           <option v-for="r in roles" :key="r.id" :value="r.id">{{ r.name }}</option>
         </select>
       </div>
-      <p v-if="createError" class="text-danger text-[11px] font-extrabold mt-2 slide-in">{{ createError }}</p>
-      <div class="flex gap-2.5 items-end mt-2">
+      <p v-if="createError" class="col-span-full text-danger text-[11px] font-extrabold mt-1.5 slide-in">{{ createError }}</p>
+      <div class="flex gap-2 items-end">
         <button
-          class="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-sm text-[12px] font-extrabold tracking-tight bg-accent text-white shadow-[0_0_0_4px_rgba(91,107,245,0.45)] transition-all duration-200 ease-in hover:bg-accent-hover hover:shadow-[0_0_0_10px_rgba(91,107,245,0.45)] active:shadow-[0_0_0_4px_rgba(91,107,245,0.45)] whitespace-nowrap leading-none disabled:opacity-50 disabled:cursor-not-allowed"
           type="submit"
           :disabled="creating"
+          class="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
         >
           Create employee
         </button>
         <button
-          class="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-sm text-[12px] font-extrabold tracking-tight border border-border bg-panel-hover text-text transition-all duration-200 ease-in hover:border-text-muted hover:bg-panel hover:text-text whitespace-nowrap leading-none disabled:opacity-50 disabled:cursor-not-allowed"
           type="button"
+          class="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-[13px] font-extrabold tracking-tight border border-border text-text transition-colors duration-200 ease-in hover:bg-panel-hover"
           @click="showAddForm = false"
         >
           Cancel
@@ -179,34 +181,38 @@
     </form>
   </div>
 
-  <div class="bg-panel border border-border rounded p-6 shadow transition-all duration-200 ease-in hover:border-border-focus hover:-translate-y-[2px] hover:shadow-lg mt-[14px]">
-    <div class="text-[13px] font-extrabold tracking-wider uppercase text-text-muted mb-[18px]">Update phone number</div>
-    <form @submit.prevent="updatePhone" class="flex flex-col gap-4 grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] items-end">
-      <div class="mb-[18px]">
-        <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-muted mb-2">Employee</label>
-        <select v-model="phoneEmployeeId" class="w-full px-3.5 py-[11px] pr-7 rounded-sm border border-border text-sm cursor-pointer bg-[#0b1020] transition-all duration-200 ease-in focus:ring-4 focus:-translate-y-1 focus:ring-accent/50 focus:border-border-focus" required>
+  <div class="border border-border rounded-xl shadow-soft-lg p-6 reveal">
+    <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-4">Update phone number</div>
+    <form @submit.prevent="updatePhone" class="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-4 items-end">
+      <div>
+        <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Employee</label>
+        <select
+          v-model="phoneEmployeeId"
+          class="w-full px-4 py-3.5 pr-7 rounded-xl border border-border text-sm cursor-pointer bg-panel transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none"
+          required
+        >
           <option :value="null">Select an employee</option>
           <option v-for="e in employees" :key="e.id" :value="e.id">{{ e.name }} — {{ e.phone }}</option>
         </select>
       </div>
-      <div class="mb-[18px]">
-        <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-muted mb-2">New WhatsApp number</label>
+      <div>
+        <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">New WhatsApp number</label>
         <input
           v-model="phoneNumber"
           type="tel"
           placeholder="+62 812…"
           required
           @input="phoneError = ''"
-          class="w-full px-3.5 py-[11px] rounded-sm border text-sm placeholder-text-dim transition-all duration-200 ease-in focus:ring-4 focus:-translate-y-1 bg-[#0b1020] border-border focus:ring-accent/50 focus:border-border-focus"
-          :class="{ 'border-danger focus:ring-danger/40': phoneError, 'border-border focus:ring-accent/50': !phoneError }"
+          class="w-full px-4 py-3.5 rounded-xl border text-sm placeholder-text-dim transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none bg-panel border-border"
+          :class="{ 'border-danger': phoneError, 'border-border': !phoneError }"
         />
       </div>
-      <p v-if="phoneError" class="text-danger text-[11px] font-extrabold mt-2 slide-in">{{ phoneError }}</p>
-      <div class="flex gap-2.5 items-end mt-2">
+      <p v-if="phoneError" class="col-span-full text-danger text-[11px] font-extrabold mt-1.5 slide-in">{{ phoneError }}</p>
+      <div class="flex gap-2 items-end">
         <button
-          class="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-sm text-[12px] font-extrabold tracking-tight bg-accent text-white shadow-[0_0_0_4px_rgba(91,107,245,0.45)] transition-all duration-200 ease-in hover:bg-accent-hover hover:shadow-[0_0_0_10px_rgba(91,107,245,0.45)] active:shadow-[0_0_0_4px_rgba(91,107,245,0.45)] whitespace-nowrap leading-none disabled:opacity-50 disabled:cursor-not-allowed"
           type="submit"
           :disabled="!phoneEmployeeId || !phoneNumber || updatingPhone"
+          class="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
         >
           Update phone
         </button>
@@ -361,10 +367,10 @@ async function saveRole(id: string) {
 }
 
 function roleBadgeUtils(name: string | null) {
-  if (!name) return "bg-text-muted/10 text-text-muted border border-border";
+  if (!name) return "bg-text-muted/10 text-text-dim border border-border";
   const n = name.toLowerCase();
-  if (n.includes("owner")) return "bg-fuchsia-400/10 text-fuchsia-400 border border-fuchsia-400/30";
-  if (n.includes("admin")) return "bg-danger/10 text-danger border border-danger/35";
-  return "bg-accent/10 text-accent border border-accent/30";
+  if (n.includes("owner")) return "bg-accent/8 text-accent border-accent/20";
+  if (n.includes("admin")) return "bg-danger/8 text-danger border-danger/20";
+  return "bg-success/8 text-success border-success/20";
 }
 </script>

@@ -1,24 +1,26 @@
 <template>
   <div class="app">
     <div
-      class="fixed top-[22px] right-[22px] flex flex-col gap-3 z-[60] pointer-events-none"
+      class="fixed top-[26px] right-[26px] flex flex-col gap-3 z-[60] pointer-events-none"
       role="region"
       aria-label="Notifications"
     >
       <div
         v-for="t in toasts"
         :key="t.id"
-        class="pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-sm border border-border bg-panel text-text shadow-lg min-w-[250px] toast-in"
+        class="pointer-events-auto flex items-start gap-3 px-4 py-3.5 rounded-xl border border-border bg-panel text-text shadow-soft-lg min-w-[260px] toast-in"
         :class="{
-          'border-l-4 border-danger': t.type === 'error',
-          'border-l-4 border-success': t.type === 'success',
+          'border-l-3 border-danger': t.type === 'error',
+          'border-l-3 border-success': t.type === 'success',
+          'border-l-3 border-accent': t.type === 'info',
         }"
         @click.self="dismissToast(t.id)"
       >
-        {{ t.message }}
+        <p class="text-sm leading-relaxed">{{ t.message }}</p>
         <button
-          class="w-6 h-6 rounded-[6px] border border-border text-text-muted text-[18px] leading-none grid place-items-center ml-2 shrink-0 hover:bg-panel-hover hover:text-text"
+          class="ml-auto shrink-0 w-6 h-6 rounded-lg border border-border text-text-dim text-[18px] leading-none grid place-items-center transition-colors hover:bg-panel-hover hover:text-text"
           @click.stop="dismissToast(t.id)"
+          aria-label="Dismiss"
         >
           ×
         </button>
@@ -26,75 +28,76 @@
     </div>
 
     <div v-if="token" class="relative z-1 flex flex-col h-screen">
-      <nav class="fixed inset-x-0 top-0 z-20 h-16 flex items-center justify-between px-[26px] bg-bg/72 border-b border-border backdrop-blur-lg" aria-label="Main navigation">
-        <div class="flex items-center gap-2.5 font-extrabold text-sm tracking-tight">
-          <div class="w-8 h-8 rounded-[10px] bg-accent text-white text-[15px] grid place-items-center shadow-[0_0_0_5px_rgba(91,107,245,0.45)]">TA</div>
-          <div class="hidden sm:block font-extrabold text-sm tracking-tight">Team Assistant</div>
-        </div>
-
-        <div class="flex border-b border-border ml-[34px] overflow-x-auto">
-          <button
-            v-for="tab in tabs"
-            :key="tab.id"
-            class="h-16 flex items-center px-5 text-[12px] font-extrabold tracking-wider uppercase border-b-2 border-transparent whitespace-nowrap transition-colors duration-200 ease-in hover:text-text hover:bg-white/5"
-            :class="{
-              'text-accent border-accent bg-accent/7': currentTab === tab.id,
-            }"
-            @click="currentTab = tab.id"
-          >
-            {{ tab.label }}
-          </button>
-        </div>
-
-        <div class="flex items-center gap-3 shrink-0">
-          <button
-            class="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-sm text-[12px] font-extrabold tracking-tight border border-border bg-panel-hover text-text transition-all duration-200 ease-in hover:border-text-muted hover:bg-panel hover:text-text hover:-translate-y-1 active:scale-95 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none whitespace-nowrap leading-none"
-            @click="refreshView"
-            title="Refresh"
-            aria-label="Refresh"
-          >
-            <span aria-hidden="true">↻</span>
-          </button>
-          <div
-            class="inline-flex items-center gap-2 text-[12px] font-extrabold tracking-wider uppercase text-text-muted px-2.5 py-1 rounded-full border border-border bg-panel-hover"
-            :class="{
-              'bg-success/10 text-success border-success/30': apiOk === true,
-              'bg-danger/10 text-danger border-danger/35': apiOk === false,
-            }"
-            :title="apiStatusTitle"
-          >
-            <span
-              class="w-2 h-2 rounded-full bg-text-muted shadow-[0_0_0_3px_rgba(148,163,184,0.2)]"
-              :class="{
-                'bg-success shadow-[0_0_0_3px_rgba(52,211,153,0.4)]': apiOk === true,
-                'bg-danger shadow-[0_0_0_3px_rgba(233,90,107,0.4)]': apiOk === false,
-              }"
-            ></span>
-            {{
-              apiOk === null
-                ? "Checking API…"
-                : apiOk === true
-                ? "API online"
-                : "API offline"
-            }}
+      <nav class="fixed inset-x-0 top-0 z-20 h-20 border-b border-border bg-panel shadow-soft" aria-label="Main navigation">
+        <div class="flex h-20 items-center justify-between px-6">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-accent text-white text-[17px] font-display font-extrabold grid place-items-center shadow-accent">TA</div>
+            <div class="hidden sm:block font-display font-extrabold text-[18px] tracking-tight text-text">Team Assistant</div>
           </div>
-          <span class="text-[12px] font-extrabold tracking-tight text-text-muted px-2.5">{{ currentRole }}</span>
-          <button
-            class="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-sm text-[12px] font-extrabold tracking-tight border border-danger/40 bg-danger/10 text-danger transition-all duration-200 ease-in hover:bg-danger/35 hover:border-danger hover:-translate-y-1 active:scale-95 focus:outline-none whitespace-nowrap leading-none"
-            @click="handleLogout"
-          >
-            Sign out
-          </button>
+
+          <div class="flex flex-1 min-w-0 gap-1 overflow-x-auto">
+            <button
+              v-for="tab in tabs"
+              :key="tab.id"
+              class="flex-shrink-0 h-20 flex items-center px-4 text-[13px] font-extrabold tracking-tight uppercase text-text-dim whitespace-nowrap border-b-2 border-transparent transition-colors duration-200 ease-in hover:bg-accent/4 hover:text-accent"
+              :class="{
+                'text-accent border-accent bg-accent/4': currentTab === tab.id,
+              }"
+              :aria-current="currentTab === tab.id ? 'page' : undefined"
+              @click="currentTab = tab.id"
+            >
+              {{ tab.label }}
+            </button>
+          </div>
+
+          <div class="flex items-center gap-3 shrink-0">
+            <button
+              class="flex-shrink-0 inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-xl text-[12px] font-extrabold tracking-tight border border-border bg-panel-hover text-text transition-all duration-200 ease-in hover:border-text-muted hover:bg-panel-hover hover:text-text hover:-translate-y-1 active:scale-95 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none whitespace-nowrap leading-none"
+              @click="refreshView"
+              title="Refresh"
+              aria-label="Refresh"
+            >
+              <span aria-hidden="true">↻</span>
+            </button>
+            <div
+              class="inline-flex items-center gap-2 rounded-full border px-2.5 py-0.5 text-[11px] font-extrabold tracking-tight uppercase transition-colors duration-200 ease-in"
+              :class="{
+                'bg-success/8 text-success border-success/20': apiOk === true,
+                'bg-danger/8 text-danger border-danger/20': apiOk === false,
+                'bg-panel-hover text-text-dim border border-border': apiOk === null,
+              }"
+              :title="apiStatusTitle"
+            >
+              <span
+                class="w-2 h-2 rounded-full"
+                :class="{
+                  'bg-success shadow-[0_0_0_3px_rgba(46,158,127,0.4)]': apiOk === true,
+                  'bg-danger shadow-[0_0_0_3px_rgba(199,74,92,0.4)]': apiOk === false,
+                  'bg-text-muted': apiOk === null,
+                }"
+              ></span>
+              {{
+                apiOk === null
+                  ? "Checking API…"
+                  : apiOk === true
+                  ? "API online"
+                  : "API offline"
+              }}
+            </div>
+            <span class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim px-2">{{ currentRole }}</span>
+            <button
+              class="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-xl text-[12px] font-extrabold tracking-tight border border-danger/20 bg-danger/6 text-danger transition-all duration-200 ease-in hover:bg-danger/10 hover:border-danger/40 hover:-translate-y-1 active:scale-95 focus:outline-none whitespace-nowrap leading-none"
+              @click="handleLogout"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </nav>
 
-      <div class="flex-1 pt-16 pb-10 overflow-y-auto">
-        <div class="max-w-[1240px] mx-auto px-[26px]">
-          <section
-            :key="`${currentTab}-${refreshKey}`"
-            class="flex flex-col gap-4.5 reveal"
-            aria-live="polite"
-          >
+      <div class="flex-1 pt-20 pb-12 overflow-y-auto">
+        <div class="max-w-[1280px] mx-auto px-6">
+          <section :key="`${currentTab}-${refreshKey}`" class="flex flex-col gap-6 reveal" aria-live="polite">
             <component :is="currentComponent" />
           </section>
         </div>

@@ -1,7 +1,8 @@
 /* ------------------------------------------------------------
    Team Assistant — Admin Dashboard
-   Tailwind CSS foundation with a small custom layer for tokens,
-   the glass mesh background, scrollbar and keyframe animations.
+   Light, elegant design system: warm off-white background,
+   white surfaces, deep ink text, one refined indigo accent.
+   No dark themes, no dark backgrounds, no gradient meshes.
 ------------------------------------------------------------ */
 
 @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap");
@@ -10,7 +11,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ---------- design tokens (referenced by components & utilities) ---------- */
+/* ---------- design tokens ---------- */
 :root {
   --font-body: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI Variable", "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans",
@@ -26,8 +27,8 @@
 
 /* ---------- base ---------- */
 html {
-  background: #070910;
-  color: #f1f5f9;
+  background: #f7f6f2;
+  color: #1c1c1c;
   font-family: var(--font-body);
   line-height: 1.6;
   font-feature-settings: "liga" 1, "calt" 1;
@@ -61,70 +62,51 @@ textarea {
   outline: none;
 }
 
-/* ---------- form elements (dark-mode polish) ---------- */
+/* ---------- form elements ---------- */
 select {
   padding-right: 28px;
   cursor: pointer;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2357554f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
   background-size: 16px;
 }
 
-/* ---------- gradient mesh behind the app (glass) ---------- */
+/* ---------- accessibility ---------- */
+:focus-visible {
+  outline: 2px solid #3f44e2;
+  outline-offset: 2px;
+}
+
+/* ---------- subtle light atmosphere (respects reduced motion) ---------- */
 .app {
   position: relative;
   min-height: 100vh;
   overflow-x: hidden;
 }
-.app::before,
-.app::after {
+.app::before {
   content: "";
   position: fixed;
-  border-radius: 50%;
-  filter: blur(80px);
-  z-index: 0;
-  opacity: 0.35;
-  animation: drift 18s ease-in-out infinite alternate;
-}
-.app::before {
-  top: -14%;
-  left: -12%;
-  width: 640px;
-  height: 640px;
-  background: radial-gradient(
-    circle at 35% 35%,
-    rgba(91, 107, 245, 0.45),
-    transparent 70%
-  );
-}
-.app::after {
-  bottom: -12%;
-  right: -14%;
+  top: -10%;
+  left: -8%;
   width: 760px;
   height: 760px;
+  border-radius: 50%;
+  filter: blur(140px);
   background: radial-gradient(
-    circle at 65% 65%,
-    rgba(126, 58, 237, 0.35),
-    transparent 70%
+    circle at 35% 35%,
+    rgba(112, 99, 74, 0.08),
+    transparent 60%
   );
-  animation-delay: -8s;
-  animation-duration: 22s;
-}
-@keyframes drift {
-  from {
-    transform: translate3d(0, 0, 0);
-  }
-  to {
-    transform: translate3d(40px, 70px, 0);
-  }
+  z-index: -1;
+  animation: drift 24s ease-in-out infinite alternate;
 }
 
 /* ---------- animations ---------- */
 @keyframes revealUp {
   from {
     opacity: 0;
-    transform: translate3d(0, 18px, 0);
+    transform: translate3d(0, 16px, 0);
   }
   to {
     opacity: 1;
@@ -134,7 +116,7 @@ select {
 @keyframes slideIn {
   from {
     opacity: 0;
-    transform: translate3d(0, 10px, 0);
+    transform: translate3d(0, 8px, 0);
   }
   to {
     opacity: 1;
@@ -157,18 +139,26 @@ select {
 @keyframes toastIn {
   from {
     opacity: 0;
-    transform: translate3d(30px, -14px, 0) scale(0.96);
+    transform: translate3d(20px, -12px, 0) scale(0.97);
   }
   to {
     opacity: 1;
     transform: translate3d(0, 0, 0) scale(1);
   }
 }
+@keyframes drift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(30px, 50px, 0);
+  }
+}
 .reveal {
-  animation: revealUp 0.65s var(--ease-out) both;
+  animation: revealUp 0.7s var(--ease-out) both;
 }
 .reveal-slow {
-  animation: revealUp 0.8s var(--ease-out) both;
+  animation: revealUp 0.9s var(--ease-out) both;
 }
 .slide-in {
   animation: slideIn 0.4s var(--ease-out) both;
@@ -180,7 +170,7 @@ select {
   animation: fadeIn 0.4s var(--ease-out) both;
 }
 .spin-slow {
-  animation: spin 0.9s linear infinite;
+  animation: spin 1s linear infinite;
 }
 .toast-in {
   animation: toastIn 0.5s var(--ease-out) both;
@@ -191,7 +181,7 @@ table tbody tr:last-child td {
   border-bottom: none;
 }
 
-/* ---------- scrollbar ---------- */
+/* ---------- scrollbar (light) ---------- */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -200,11 +190,33 @@ table tbody tr:last-child td {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.15);
+  background: #c9c7bd;
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.3);
+  background: #b9b6aa;
+}
+
+/* ---------- reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .app::before {
+    animation: none;
+  }
+  .reveal,
+  .reveal-slow,
+  .slide-in,
+  .fade-in,
+  .fade-in-fast,
+  .spin-slow,
+  .toast-in {
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

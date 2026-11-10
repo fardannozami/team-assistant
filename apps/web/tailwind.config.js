@@ -7,30 +7,32 @@ export default {
   ],
   theme: {
     extend: {
-      /* ---- color (carried over from the design tokens) ---- */
+      /* ---- color (light palette carried from design tokens) ---- */
       colors: {
         transparent: "transparent",
         current: "currentColor",
-        bg: "#070910",
-        panel: "#0f1322",
-        "panel-hover": "#141b2e",
-        border: "#1e293b",
-        "border-focus": "#5b6bf5",
-        text: "#f1f5f9",
-        "text-muted": "#94a3b8",
-        "text-dim": "#64748b",
-        accent: "#5b6bf5",
-        "accent-hover": "#4657e8",
-        danger: "#e95a6b",
-        "danger-hover": "#c44656",
-        success: "#34d399",
-        warning: "#fbbf24",
+        bg: "#f7f6f2",
+        panel: "#ffffff",
+        "panel-hover": "#f0efe6",
+        border: "#e3e1d8",
+        "border-focus": "#3f44e2",
+        text: "#1c1c1c",
+        "text-muted": "#7a7870",
+        "text-dim": "#57554f",
+        accent: "#3f44e2",
+        "accent-hover": "#3238c9",
+        danger: "#c74a5c",
+        "danger-hover": "#a83d4e",
+        success: "#2e9e7f",
+        "success-hover": "#27856a",
+        warning: "#c4942e",
+        "warning-hover": "#a87d28",
       },
       /* ---- radius ---- */
       borderRadius: {
-        sm: "12px",
-        DEFAULT: "18px",
-        lg: "26px",
+        sm: "10px",
+        DEFAULT: "16px",
+        lg: "24px",
         full: "9999px",
       },
       /* ---- type ---- */
@@ -41,8 +43,9 @@ export default {
       },
       /* ---- shadow ---- */
       boxShadow: {
-        shadow: "0 30px 60px -15px rgba(0, 0, 0, 0.55)",
-        lg: "0 40px 90px -20px rgba(0, 0, 0, 0.62)",
+        soft: "0 18px 36px -12px rgba(20, 22, 28, 0.07)",
+        "soft-lg": "0 28px 56px -18px rgba(20, 22, 28, 0.09)",
+        accent: "0 0 0 5px rgba(63, 68, 226, 0.25)",
       },
       /* ---- motion ---- */
       transitionTimingFunction: {
