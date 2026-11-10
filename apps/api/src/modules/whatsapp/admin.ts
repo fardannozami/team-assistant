@@ -79,19 +79,19 @@ const NO = /^(no|n|tidak|bukan|salah|batal|cancel)$/i;
 
 const FLOW_TTL_MS = 10 * 60 * 1000;
 const INVALID_PHONE =
-  "That phone number doesn't look valid. Send it with the country code, e.g. 628123456789.";
+  "Nomor itu sepertinya tidak valid. Kirim dengan kode negara, contoh 628123456789.";
 
 const MENU_TEXT = [
-  "Admin menu:",
-  "EMPLOYEE LIST - list active employees",
-  "ADD EMPLOYEE - add an employee",
-  "UPDATE PHONE - change an employee's WhatsApp number",
-  "START STANDUP - send today's standup prompts now",
-  "SCHEDULE - show the current standup schedule",
-  "SET SCHEDULE <HH:mm> [DAYS] - change when standup runs",
-  "SET REMINDER <minutes>|OFF - change the standup reminder",
-  "Or say: schedule standup monday to friday at 9:00 am WIB",
-  "CANCEL - abort the current step",
+  "Menu admin:",
+  "EMPLOYEE LIST - daftar karyawan aktif",
+  "ADD EMPLOYEE - tambah karyawan",
+  "UPDATE PHONE - ubah nomor WhatsApp karyawan",
+  "START STANDUP - kirim prompt standup hari ini sekarang",
+  "SCHEDULE - lihat jadwal standup",
+  "SET SCHEDULE <HH:mm> [HARI] - ubah waktu standup",
+  "SET REMINDER <menit>|OFF - ubah pengingat standup",
+  "Atau ketik: jadwalkan standup senin sampai jumat jam 9 pagi WIB",
+  "CANCEL - batalkan langkah saat ini",
 ].join("\n");
 
 const DAY_INDEX: Record<string, number> = {
@@ -177,9 +177,9 @@ function savedScheduleReply(schedule: {
     : "custom days";
   const reminder =
     schedule.reminderMinutes != null
-      ? `\nReminder is sent ${schedule.reminderMinutes} min after.`
+      ? `\nPengingat dikirim ${schedule.reminderMinutes} menit setelahnya.`
       : "";
-  return `The schedule has been saved.\nStandup will run ${days} at ${schedule.timeOfDay} in the ${schedule.timezone} time zone.${reminder}`;
+  return `Jadwal tersimpan.\nStandup berjalan ${days} pukul ${schedule.timeOfDay} (${schedule.timezone}).${reminder}`;
 }
 
 function parseNaturalTime(text: string): string | null {
@@ -266,23 +266,23 @@ function standupTriggerReply(result: {
   failed: number;
 }) {
   if (result.sent > 0) {
-    const parts = [`Standup prompts sent to ${result.sent} employee(s).`];
+    const parts = [`Prompt standup terkirim ke ${result.sent} karyawan.`];
     if (result.skipped > 0) {
-      parts.push(`${result.skipped} already had a session.`);
+      parts.push(`${result.skipped} sudah punya sesi.`);
     }
-    if (result.failed > 0) parts.push(`${result.failed} failed to send.`);
+    if (result.failed > 0) parts.push(`${result.failed} gagal terkirim.`);
     return parts.join(" ");
   }
   if (result.failed > 0) {
-    return `Could not send standup prompts (${result.failed} failed). Is WhatsApp connected?`;
+    return `Gagal mengirim prompt standup (${result.failed} gagal). Apakah WhatsApp sudah terhubung?`;
   }
-  return "No prompts sent - every employee already has a standup session for today.";
+  return "Tidak ada prompt terkirim - semua karyawan sudah punya sesi standup hari ini.";
 }
 
 async function showSchedules(): Promise<string> {
   const rows = await listSchedules();
   if (rows.length === 0) {
-    return "No schedules configured yet. Use SET SCHEDULE <HH:mm> [DAYS], e.g. SET SCHEDULE 09:00 MON-FRI.";
+    return "Belum ada jadwal. Gunakan SET SCHEDULE <HH:mm> [HARI], contoh SET SCHEDULE 09:00 MON-FRI.";
   }
   return rows
     .map((schedule) => {
@@ -303,13 +303,13 @@ async function showSchedules(): Promise<string> {
 async function setScheduleCommand(rest: string): Promise<string> {
   const timeMatch = rest.match(/\b(\d{1,2}):(\d{2})\b/);
   if (!timeMatch) {
-    return "Usage: SET SCHEDULE <HH:mm> [DAYS], e.g. SET SCHEDULE 08:45 MON-FRI";
+    return "Format: SET SCHEDULE <HH:mm> [HARI], contoh SET SCHEDULE 08:45 MON-FRI";
   }
 
   const hour = Number(timeMatch[1]);
   const minute = Number(timeMatch[2]);
   if (hour > 23 || minute > 59) {
-    return "That time doesn't look valid. Use 24-hour HH:mm, e.g. 08:45.";
+    return "Jam itu tidak valid. Gunakan format 24 jam HH:mm, contoh 08:45.";
   }
   const timeOfDay = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 
@@ -318,7 +318,7 @@ async function setScheduleCommand(rest: string): Promise<string> {
   if (remainder) {
     const parsed = parseWeekdays(remainder);
     if (!parsed) {
-      return "I couldn't read those days. Use day names (MON TUE), a range (MON-FRI), DAILY, or WEEKDAYS.";
+      return "Hari tidak terbaca. Gunakan nama hari (MON TUE), rentang (MON-FRI), DAILY, atau WEEKDAYS.";
     }
     weekdays = parsed;
   }
@@ -330,25 +330,25 @@ async function setScheduleCommand(rest: string): Promise<string> {
 async function setReminderCommand(rest: string): Promise<string> {
   const token = rest.trim().toUpperCase();
   if (!token) {
-    return "Usage: SET REMINDER <minutes> (minutes after standup) or SET REMINDER OFF";
+    return "Format: SET REMINDER <menit> (setelah standup) atau SET REMINDER OFF";
   }
 
   if (/^(OFF|NONE|DISABLED?)$/.test(token)) {
     await upsertStandupSchedule({ reminderMinutes: null });
-    return "Reminder disabled.";
+    return "Pengingat dimatikan.";
   }
 
   if (!/^\d{1,4}$/.test(token)) {
-    return "Usage: SET REMINDER <minutes> (minutes after standup) or SET REMINDER OFF";
+    return "Format: SET REMINDER <menit> (setelah standup) atau SET REMINDER OFF";
   }
 
   const minutes = Number(token);
   if (minutes > 1440) {
-    return "Reminder must be at most 1440 minutes (24 hours).";
+    return "Pengingat maksimal 1440 menit (24 jam).";
   }
 
   await upsertStandupSchedule({ reminderMinutes: minutes });
-  return `Reminder will be sent ${minutes} minutes after the standup.`;
+  return `Pengingat akan dikirim ${minutes} menit setelah standup.`;
 }
 
 const flows = new Map<string, { flow: PendingFlow; expiresAt: number }>();
@@ -431,16 +431,16 @@ function isNo(text: string) {
 }
 
 function addConfirmation(name: string, phone: string) {
-  return `I am about to add ${name} (${phone}). Is this correct? Reply YES or NO.`;
+  return `Saya akan menambahkan ${name} (${phone}). Sudah benar? Balas YA atau TIDAK.`;
 }
 
 function phoneConfirmation(employeeName: string, phone: string) {
-  return `I am about to update ${employeeName}'s WhatsApp number to ${phone}. Is this correct? Reply YES or NO.`;
+  return `Saya akan mengubah nomor WhatsApp ${employeeName} menjadi ${phone}. Sudah benar? Balas YA atau TIDAK.`;
 }
 
 async function renderEmployeeList() {
   const rows = await listEmployees({ active: true });
-  if (rows.length === 0) return "No active employees found.";
+  if (rows.length === 0) return "Tidak ada karyawan aktif.";
 
   const lines = rows.slice(0, 50).map((employee, index) => {
     const details = [employee.phone];
@@ -450,8 +450,8 @@ async function renderEmployeeList() {
   });
 
   const suffix =
-    rows.length > 50 ? `\nShowing 50 of ${rows.length} employees.` : "";
-  return [`Active employees (${rows.length}):`, ...lines].join("\n") + suffix;
+    rows.length > 50 ? `\nMenampilkan 50 dari ${rows.length} karyawan.` : "";
+  return [`Karyawan aktif (${rows.length}):`, ...lines].join("\n") + suffix;
 }
 
 async function startAddFlow(phone: string, rest: string): Promise<string> {
@@ -472,16 +472,16 @@ async function startAddFlow(phone: string, rest: string): Promise<string> {
 
   if (parsedPhone) {
     setFlow(phone, { kind: "add", step: "name", phone: parsedPhone });
-    return "What is the employee's name?";
+    return "Siapa nama karyawannya?";
   }
 
   if (name) {
     setFlow(phone, { kind: "add", step: "phone", name });
-    return `What is ${name}'s WhatsApp number (with country code)?`;
+    return `Berapa nomor WhatsApp ${name} (dengan kode negara)?`;
   }
 
   setFlow(phone, { kind: "add", step: "name" });
-  return "What is the employee's name?";
+  return "Siapa nama karyawannya?";
 }
 
 async function startPhoneFlow(phone: string, rest: string): Promise<string> {
@@ -493,7 +493,7 @@ async function startPhoneFlow(phone: string, rest: string): Promise<string> {
     if (!currentPhone || !newPhone) return INVALID_PHONE;
 
     const target = await findEmployeeByPhone(currentPhone);
-    if (!target) return "No employee found with that phone number.";
+    if (!target) return "Karyawan dengan nomor itu tidak ditemukan.";
 
     setFlow(phone, {
       kind: "phone",
@@ -510,7 +510,7 @@ async function startPhoneFlow(phone: string, rest: string): Promise<string> {
     if (!currentPhone) return INVALID_PHONE;
 
     const target = await findEmployeeByPhone(currentPhone);
-    if (!target) return "No employee found with that phone number.";
+    if (!target) return "Karyawan dengan nomor itu tidak ditemukan.";
 
     setFlow(phone, {
       kind: "phone",
@@ -522,7 +522,7 @@ async function startPhoneFlow(phone: string, rest: string): Promise<string> {
   }
 
   setFlow(phone, { kind: "phone", step: "employee" });
-  return "Which employee? Send their name or current WhatsApp number.";
+  return "Karyawan yang mana? Kirim nama atau nomor WhatsApp saat ini.";
 }
 
 async function continueAddFlow(
@@ -533,12 +533,12 @@ async function continueAddFlow(
 ): Promise<string> {
   if (flow.step === "name") {
     const name = text.trim();
-    if (!name) return "What is the employee's name?";
+    if (!name) return "Siapa nama karyawannya?";
 
     const existingPhone = toValidPhone(flow.phone);
     if (!existingPhone) {
       setFlow(phone, { kind: "add", step: "phone", name });
-      return `What is ${name}'s WhatsApp number (with country code)?`;
+      return `Berapa nomor WhatsApp ${name} (dengan kode negara)?`;
     }
 
     setFlow(phone, {
@@ -572,7 +572,7 @@ async function continueAddFlow(
       );
       return created
         ? `Employee successfully added.\n${created.name} - ${created.phone}`
-        : "Employee successfully added.";
+        : "Karyawan berhasil ditambahkan.";
     } catch (error) {
       if (error instanceof HttpError) return error.message;
       throw error;
@@ -581,7 +581,7 @@ async function continueAddFlow(
 
   if (isNo(text)) {
     clearFlow(phone);
-    return "Cancelled.";
+    return "Dibatalkan.";
   }
 
   return `Reply YES to confirm adding ${flow.name} (${flow.phone}), or NO to cancel.`;
@@ -607,7 +607,7 @@ async function continuePhoneFlow(
     }
 
     const target = matches[0];
-    if (!target) return "No employee found with that name or phone number.";
+    if (!target) return "Karyawan dengan nama atau nomor itu tidak ditemukan.";
 
     setFlow(phone, {
       kind: "phone",
@@ -636,7 +636,7 @@ async function continuePhoneFlow(
     clearFlow(phone);
     try {
       await updateEmployeePhone(flow.employeeId, flow.phone, sender.userId);
-      return "WhatsApp number updated.";
+      return "Nomor WhatsApp diperbarui.";
     } catch (error) {
       if (error instanceof HttpError) return error.message;
       throw error;
@@ -645,7 +645,7 @@ async function continuePhoneFlow(
 
   if (isNo(text)) {
     clearFlow(phone);
-    return "Cancelled.";
+    return "Dibatalkan.";
   }
 
   return `Reply YES to update ${flow.employeeName}'s number to ${flow.phone}, or NO to cancel.`;
@@ -665,17 +665,17 @@ export async function handleAdminMessage(args: {
 
   if (!args.employee) {
     const looksAdmin = command || pending || ADMIN_KEYWORD.test(text);
-    return looksAdmin ? "You are not a registered user." : null;
+    return looksAdmin ? "Kamu bukan pengguna terdaftar." : null;
   }
 
   if (!isAdminRole(args.roleName)) {
     const looksAdmin = command || pending || ADMIN_KEYWORD.test(text);
-    return looksAdmin ? "You are not an administrator." : null;
+    return looksAdmin ? "Kamu bukan administrator." : null;
   }
 
   if (/^(cancel|batal|stop)$/i.test(text)) {
     clearFlow(args.phone);
-    return "Cancelled.";
+    return "Dibatalkan.";
   }
 
   if (command) {
@@ -708,10 +708,10 @@ export async function handleAdminMessage(args: {
         if (command.rest) {
           const matches = await findEmployeesByIdentifier(command.rest);
           if (matches.length === 0) {
-            return "No employee found with that name or phone number.";
+            return "Karyawan dengan nama atau nomor itu tidak ditemukan.";
           }
           if (matches.length > 1 || !matches[0]) {
-            return "Multiple employees match. Reply with the exact name or WhatsApp number.";
+            return "Ada beberapa karyawan yang cocok. Kirim nama lengkap atau nomor WhatsApp yang tepat.";
           }
           const result = await sendStandupPrompts({
             employeeId: matches[0].id,

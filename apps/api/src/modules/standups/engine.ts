@@ -12,7 +12,7 @@ const db = createDbClient(
 );
 
 const ELEMENT_KEYWORDS: Record<StandupElement, RegExp[]> = {
-  yesterday: [/\byesterday\b/i, /\bkemarin\b/i],
+  yesterday: [/\byesterday\b/i, /\bkemarin\b/i, /\bkemaren\b/i],
   today: [
     /\btoday\b/i,
     /\bhari ini\b/i,
@@ -20,6 +20,7 @@ const ELEMENT_KEYWORDS: Record<StandupElement, RegExp[]> = {
     /\bplan\b/i,
     /\brencana\b/i,
     /\bakan\b/i,
+    /\bsekarang\b/i,
   ],
   blockers: [
     /\bblockers?\b/i,
@@ -34,27 +35,27 @@ const ELEMENT_KEYWORDS: Record<StandupElement, RegExp[]> = {
 };
 
 const NO_BLOCKER =
-  /^(tidak\s+ada|ga[k]?\s+ada|nggak\s+ada|none|no\s+blockers?|nothing|belum\s+ada|aman)\.?$/i;
+  /^(tidak\s+ada(\s+(kendala|blocker|masalah))?|ga[k]?\s+ada(\s+(kendala|blocker))?|nggak\s+ada(\s+(kendala|blocker))?|none|no\s+blockers?|nothing|belum\s+ada|aman|lancar)\.?$/i;
 
 export const STANDUP_QUESTIONS: Record<StandupElement, string> = {
-  yesterday: "What did you work on yesterday?",
-  today: "What are you planning to work on today?",
-  blockers: "Any blockers or issues? (reply 'none' if everything is fine)",
+  yesterday: "Apa yang kamu kerjakan kemarin?",
+  today: "Apa rencanamu hari ini?",
+  blockers: "Ada kendala atau blocker? (balas 'tidak ada' jika aman)",
 };
 
 export function standupPromptText(date: string): string {
   return [
-    `Daily standup for ${date}:`,
+    `Standup harian untuk ${date}:`,
     `1. ${STANDUP_QUESTIONS.yesterday}`,
     `2. ${STANDUP_QUESTIONS.today}`,
     `3. ${STANDUP_QUESTIONS.blockers}`,
-    "Reply in one message or several - I will collect your answers as you go.",
+    "Balas dalam satu pesan atau beberapa pesan - jawabanmu akan saya catat.",
   ].join("\n");
 }
 
 export function standupReminderText(date: string): string {
   return [
-    `Reminder: you have not sent your standup for ${date} yet.`,
+    `Pengingat: kamu belum mengirim standup untuk ${date}.`,
     `${STANDUP_QUESTIONS.yesterday}`,
     `${STANDUP_QUESTIONS.today}`,
     `${STANDUP_QUESTIONS.blockers}`,
@@ -85,16 +86,33 @@ function parseStandupText(
   marks.sort((a, b) => a.index - b.index);
 
   const parsed: Partial<Record<StandupElement, string>> = {};
+
+  // Line-based fallback: if the user sends 2-3 separate lines without
+  // explicit keywords, treat them as yesterday / today / blockers in order.
+  const lines = text
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (marks.length === 0 && lines.length >= 2) {
+    if (lines[0]) parsed.yesterday = lines[0];
+    if (lines[1]) parsed.today = lines[1];
+    if (lines[2]) parsed.blockers = lines[2];
+    return parsed;
+  }
   for (let i = 0; i < marks.length; i++) {
     const start = marks[i]!.end;
     const stop = i + 1 < marks.length ? marks[i + 1]!.index : text.length;
-    const value = text
+    const element = marks[i]!.element;
+    const rawValue = text
       .slice(start, stop)
       .replace(/^[\s:,\-]+/, "")
       .replace(/[\s,;]+$/, "")
       .trim();
+    let value = rawValue;
+    if (!value && element === "blockers" && NO_BLOCKER.test(text)) {
+      value = "none";
+    }
     if (!value) continue;
-    const element = marks[i]!.element;
     parsed[element] = parsed[element] ? `${parsed[element]} ${value}` : value;
   }
   return parsed;
@@ -199,7 +217,10 @@ export async function handleStandupMessage(args: {
 
   const date = args.date ?? dateInTimezone();
   const session = await getStandupSession(args.employee.id, date);
-  if (!session || session.status === "completed") return null;
+  if (!session) return null;
+  if (session.status === "completed") {
+    return `Standup untuk ${date} sudah tercatat. Terima kasih!`;
+  }
 
   const standupRow = await getOrCreateStandupRow(
     session.id,
@@ -242,15 +263,18 @@ export async function handleStandupMessage(args: {
     const answerFor = (key: StandupElement) =>
       final.find((a) => a.questionKey === key)?.answer ?? "-";
     return [
-      `Standup recorded for ${date}.`,
-      `Yesterday: ${answerFor("yesterday")}`,
-      `Today: ${answerFor("today")}`,
-      `Blockers: ${answerFor("blockers")}`,
-      "Thank you!",
+      `Standup tercatat untuk ${date}.`,
+      `Kemarin: ${answerFor("yesterday")}`,
+      `Hari ini: ${answerFor("today")}`,
+      `Kendala: ${answerFor("blockers")}`,
+      "Terima kasih!",
     ].join("\n");
   }
 
   const got = CORE_STANDUP_ELEMENTS.filter((key) => answered.has(key));
-  const gotPrefix = got.length ? `Got ${got.join(" and ")}. ` : "";
+  const gotLabel = got
+    .map((key) => (key === "yesterday" ? "kemarin" : key === "today" ? "hari ini" : "kendala"))
+    .join(" dan ");
+  const gotPrefix = got.length ? `Diterima ${gotLabel}. ` : "";
   return `${gotPrefix}${STANDUP_QUESTIONS[stillMissing[0]!]}`;
 }

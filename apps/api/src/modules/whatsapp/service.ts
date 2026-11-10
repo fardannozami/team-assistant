@@ -136,7 +136,18 @@ export async function startWhatsApp(): Promise<ReturnType<typeof makeWASocket>> 
       processedMessageIds.add(id);
 
       const from = msg.key.remoteJid ?? "";
-      const phone = from.replace(/@s\.whatsapp\.net$/, "");
+      const altJid = (msg.key as any).remoteJidAlt ?? (msg.key as any).participantAlt;
+      let phone = altJid ? String(altJid).replace(/@s\.whatsapp\.net$/, "") : from.replace(/@s\.whatsapp\.net$/, "");
+      if (phone.includes("@lid") || String(from).endsWith("@lid")) {
+        const lid = String(from).endsWith("@lid") ? from : phone;
+        try {
+          const resolved = await (sock as any)?.signalRepository?.lidMapping?.getPNForLID?.(lid);
+          if (resolved) phone = String(resolved).replace(/@s\.whatsapp\.net$/, "");
+        } catch (e) {
+          logger.warn({ lid, error: e }, "Failed to resolve LID to PN");
+        }
+      }
+      phone = String(phone).replace(/@lid$/, "").replace(/:\d+$/, "").trim();
       const body =
         msg.message.conversation ||
         msg.message.extendedTextMessage?.text ||
@@ -154,38 +165,51 @@ export async function startWhatsApp(): Promise<ReturnType<typeof makeWASocket>> 
         })
         .onConflictDoNothing();
 
-      const employee = await getEmployeeByPhone(phone);
-      const roleName = employee ? await getRoleName(employee.roleId) : null;
+      try {
+        const employee = await getEmployeeByPhone(phone);
+        const roleName = employee ? await getRoleName(employee.roleId) : null;
 
-      const reply = await handleAdminMessage({
-        phone,
-        body,
-        employee,
-        roleName,
-      });
-      if (reply) {
-        await sendText(from, reply);
-        continue;
-      }
+        if (!employee) {
+          logger.warn({ phone }, "Incoming message from unknown number");
+        }
 
-      if (employee) {
-        const standupReply = await handleStandupMessage({ employee, body });
-        if (standupReply) {
-          await sendText(from, standupReply);
+        const reply = await handleAdminMessage({
+          phone,
+          body,
+          employee,
+          roleName,
+        });
+        if (reply) {
+          await sendText(from, reply);
           continue;
         }
 
-        // M7: AI agent is the last fallback for registered employees.
-        // Imported lazily to avoid circular dependencies.
-        const { handleAiMessage } = await import("../ai/service.js");
-        const aiReply = await handleAiMessage({ phone, body, employee, roleName });
-        if (aiReply) {
-          await sendText(from, aiReply);
-          continue;
-        }
-      }
+        if (employee) {
+          const standupReply = await handleStandupMessage({ employee, body });
+          if (standupReply) {
+            await sendText(from, standupReply);
+            continue;
+          }
 
-      logger.info({ phone, body }, "Incoming message");
+          // M7: AI agent is the last fallback for registered employees.
+          // Imported lazily to avoid circular dependencies.
+          const { handleAiMessage } = await import("../ai/service.js");
+          const aiReply = await handleAiMessage({ phone, body, employee, roleName });
+          if (aiReply) {
+            await sendText(from, aiReply);
+            continue;
+          }
+
+          logger.info(
+            { phone, body },
+            "Employee message had no open standup session and no AI reply",
+          );
+        }
+
+        logger.info({ phone, body }, "Incoming message");
+      } catch (error) {
+        logger.error({ phone, body, error }, "Failed to handle incoming message");
+      }
     }
   });
 

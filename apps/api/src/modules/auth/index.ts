@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { sign, verify } from "hono/jwt";
 import { createDbClient } from "@repo/database";
 import { users, roles, employees, auditLogs } from "@repo/database";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 const db = createDbClient(process.env.DATABASE_URL ?? "postgres://teamassistant:teamassistant@localhost:5432/teamassistant");
 const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-change-me";
@@ -61,8 +61,25 @@ export function requireInternalOrRole(...allowed: string[]) {
   };
 }
 
+function phoneVariants(input: string): string[] {
+  const digits = ((input ?? "").split(":")[0] ?? "").replace(/\D/g, "");
+  if (!digits) return [];
+  const variants = new Set<string>([digits]);
+  // WhatsApp JIDs use the international form without a leading zero/plus.
+  if (digits.startsWith("0")) variants.add(`62${digits.slice(1)}`);
+  if (digits.startsWith("62")) variants.add(`0${digits.slice(2)}`);
+  if (digits.startsWith("8")) variants.add(`62${digits}`);
+  return [...variants];
+}
+
 export async function getEmployeeByPhone(phone: string) {
-  const [emp] = await db.select().from(employees).where(eq(employees.phone, phone)).limit(1);
+  const variants = phoneVariants(phone);
+  if (variants.length === 0) return null;
+  const [emp] = await db
+    .select()
+    .from(employees)
+    .where(inArray(employees.phone, variants))
+    .limit(1);
   return emp ?? null;
 }
 

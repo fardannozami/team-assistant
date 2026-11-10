@@ -17,7 +17,8 @@ export function isAdminRole(role: string | null | undefined): boolean {
 }
 
 export function normalizePhoneNumber(input: string): string {
-  return (input ?? "").replace(/\D/g, "");
+  const withoutDevice = ((input ?? "").split(":")[0] ?? "");
+  return withoutDevice.replace(/\D/g, "");
 }
 
 export const phoneNumberSchema = z

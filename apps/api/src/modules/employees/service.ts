@@ -6,7 +6,7 @@ import {
   standups,
   teams,
 } from "@repo/database";
-import { and, desc, eq, ilike, or, type SQL } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, type SQL } from "drizzle-orm";
 import type {
   CreateEmployeeInput,
   UpdateEmployeeInput,
@@ -106,8 +106,12 @@ export async function getEmployee(id: string) {
 export async function findEmployeeByPhone(phone: string) {
   const normalized = normalizePhoneNumber(phone);
   if (!normalized) return null;
+  const variants = new Set<string>([normalized]);
+  if (normalized.startsWith("0")) variants.add(`62${normalized.slice(1)}`);
+  if (normalized.startsWith("62")) variants.add(`0${normalized.slice(2)}`);
+  if (normalized.startsWith("8")) variants.add(`62${normalized}`);
   const [employee] = await baseEmployeeQuery()
-    .where(eq(employees.phone, normalized))
+    .where(inArray(employees.phone, [...variants]))
     .limit(1);
   return employee ?? null;
 }
