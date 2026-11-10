@@ -40,12 +40,12 @@
   <!-- Pair with phone number -->
   <section>
     <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-3">Pair with phone number</div>
-    <p class="text-text-muted text-sm mb-5">
+    <p v-if="!status.connected && !status.registered" class="text-text-muted text-sm mb-5">
       Enter your WhatsApp number with country code (for example
       <span class="font-mono text-[14px] text-text">+62 812-3456-7890</span>). A pairing code will be sent to that number.
     </p>
 
-    <form @submit.prevent="pairPhone" class="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-4 items-end mb-6">
+    <form v-if="!status.connected && !status.registered" @submit.prevent="pairPhone" class="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-4 items-end mb-6">
       <div>
         <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Phone number</label>
         <input
@@ -68,6 +68,20 @@
         {{ pairing ? "Sending…" : "Send pairing code" }}
       </button>
     </form>
+
+    <div v-if="status.connected || status.registered" class="mb-6">
+      <button
+        type="button"
+        :disabled="disconnecting"
+        @click="disconnect"
+        class="inline-flex items-center justify-center gap-2.5 px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight bg-danger text-white transition-all duration-200 ease-in hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+      >
+        {{ disconnecting ? "Disconnecting…" : "Disconnect / unpair" }}
+      </button>
+      <p class="mt-2 text-text-muted text-xs">
+        This stops the bot and clears the active WhatsApp session.
+      </p>
+    </div>
 
     <div v-if="code" class="p-5 rounded-xl border border-border bg-panel-hover text-center">
       <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Pairing code</div>
@@ -101,6 +115,7 @@ const error = ref("");
 
 const pairPhoneNumber = ref("");
 const pairing = ref(false);
+const disconnecting = ref(false);
 const pairError = ref("");
 const pairingCode = ref<string | null>(null);
 
@@ -145,6 +160,20 @@ async function pairPhone() {
     pairError.value = err instanceof ApiError ? err.message : "Failed to send pairing code.";
   } finally {
     pairing.value = false;
+  }
+}
+
+async function disconnect() {
+  disconnecting.value = true;
+  try {
+    await whatsappApi.stop();
+    pairingCode.value = null;
+    showToast("WhatsApp disconnected.", "success");
+    await fetchStatus();
+  } catch (err) {
+    pairError.value = err instanceof ApiError ? err.message : "Failed to disconnect.";
+  } finally {
+    disconnecting.value = false;
   }
 }
 
