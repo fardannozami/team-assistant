@@ -223,8 +223,27 @@ export async function handleStandupMessage(args: {
   const date = args.date ?? dateInTimezone();
   const session = await getStandupSession(args.employee.id, date);
   if (!session) return null;
+
+  // Allow editing an already-completed standup by re-sending answers.
   if (session.status === "completed") {
-    return `Standup untuk ${date} sudah tercatat. Terima kasih 😊`;
+    const parsed = parseStandupText(text);
+    if (Object.keys(parsed).length === 0) {
+      return `Standup untuk ${date} sudah tercatat. Untuk mengubah, kirim ulang jawaban (kemarin/hari ini/kendala).`;
+    }
+    const standupRow = await getOrCreateStandupRow(session.id, args.employee.id, date);
+    for (const [key, value] of Object.entries(parsed) as [StandupElement, string][]) {
+      const normalized = key === "blockers" && NO_BLOCKER.test(value) ? "none" : value;
+      await upsertAnswer(standupRow.id, key, normalized);
+    }
+    const final = await getAnswers(standupRow.id);
+    const answerFor = (key: StandupElement) =>
+      final.find((a) => a.questionKey === key)?.answer ?? "-";
+    return [
+      `Standup untuk ${date} diperbarui 😊`,
+      `Kemarin: ${answerFor("yesterday")}`,
+      `Hari ini: ${answerFor("today")}`,
+      `Kendala: ${answerFor("blockers")}`,
+    ].join("\n");
   }
 
   const standupRow = await getOrCreateStandupRow(
