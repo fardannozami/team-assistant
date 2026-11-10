@@ -17,7 +17,7 @@ const db = createDbClient(
     "postgres://teamassistant:teamassistant@localhost:5432/teamassistant",
 );
 
-const MAX_ITERATIONS = 4;
+const MAX_ITERATIONS = 2;
 const PENDING_TTL_MS = 10 * 60 * 1000;
 
 const YES = /^(yes|y|ya|iya|ok|oke|correct|benar|betul)$/i;
@@ -220,6 +220,7 @@ export async function handleAiMessage(
   args: AiMessageArgs,
 ): Promise<string | null> {
   if (!isAiConfigured()) return null;
+  if (process.env.AI_ENABLED === "false") return null;
   const body = (args.body ?? "").trim();
   if (!body) return null;
 
@@ -248,7 +249,7 @@ export async function handleAiMessage(
       employee: args.employee,
       roleName: args.roleName,
     });
-    const history = await getConversationHistory(args.employee.id, 10);
+    const history = await getConversationHistory(args.employee.id, 5);
 
     const messages: ChatMessage[] = [
       { role: "system", content: system },

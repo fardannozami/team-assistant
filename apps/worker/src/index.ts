@@ -32,6 +32,8 @@ const ENV_REMINDER_CRON =
   process.env.STANDUP_REMINDER_CRON ?? "30 10 * * 1-5";
 const ENV_REMINDER_TZ =
   process.env.STANDUP_REMINDER_TIMEZONE ?? "Asia/Jakarta";
+const ENV_DAILY_REPORT_CRON = process.env.DAILY_REPORT_CRON ?? "0 17 * * 1-5";
+const ENV_DAILY_REPORT_TZ = process.env.DAILY_REPORT_TIMEZONE ?? "Asia/Jakarta";
 
 const JOB_ATTEMPTS = Number(process.env.SCHEDULER_JOB_ATTEMPTS ?? 3);
 const JOB_BACKOFF_MS = Number(process.env.SCHEDULER_BACKOFF_MS ?? 30_000);
@@ -39,11 +41,12 @@ const RECONCILE_INTERVAL_MS = Number(
   process.env.SCHEDULER_RECONCILE_MS ?? 60_000,
 );
 
-const OWNED_PREFIXES = ["standup-prompts", "standup-reminders"];
+const OWNED_PREFIXES = ["standup-prompts", "standup-reminders", "daily-report"];
 
 const API_PATHS: Record<string, string> = {
   "standup-prompts": "/standups/trigger",
   "standup-reminders": "/standups/reminders",
+  "daily-report": "/reports/daily/notify",
 };
 
 function splitJobName(name: string): {
@@ -123,6 +126,12 @@ async function desiredRepeatables(): Promise<DesiredRepeatable[]> {
       tz: ENV_REMINDER_TZ,
     });
   }
+
+  desired.push({
+    name: "daily-report:env",
+    pattern: ENV_DAILY_REPORT_CRON,
+    tz: ENV_DAILY_REPORT_TZ,
+  });
 
   return desired;
 }
