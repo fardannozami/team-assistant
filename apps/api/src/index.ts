@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import pino from "pino";
 import { auth } from "./modules/auth/index.js";
 import { employeesApi } from "./modules/employees/index.js";
@@ -6,6 +7,7 @@ import { rolesApi } from "./modules/roles/index.js";
 import { schedulesApi } from "./modules/schedules/index.js";
 import { standupsApi } from "./modules/standups/index.js";
 import { holidaysApi } from "./modules/holidays/index.js";
+import { reportsApi } from "./modules/reports/index.js";
 import { teamsApi } from "./modules/teams/index.js";
 import { whatsapp } from "./modules/whatsapp/index.js";
 import { startWhatsApp } from "./modules/whatsapp/service.js";
@@ -14,6 +16,16 @@ import { HttpError } from "./lib/http-error.js";
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 
 const app = new Hono();
+
+app.use(
+  "*",
+  cors({
+    origin: (origin) => origin ?? "*",
+    allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization", "x-internal-token"],
+    credentials: true,
+  }),
+);
 
 app.onError((err, c) => {
   if (err instanceof HttpError) {
@@ -41,6 +53,7 @@ app.route("/roles", rolesApi);
 app.route("/schedules", schedulesApi);
 app.route("/standups", standupsApi);
 app.route("/holidays", holidaysApi);
+app.route("/reports", reportsApi);
 app.route("/whatsapp", whatsapp);
 
 export { app };

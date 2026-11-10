@@ -181,19 +181,19 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 ## M10 — Reporting and Dashboard (3–5 days) — P1
 
 ### Reports
-- [ ] **T-M10-01** Daily report generation (submitted/not, summaries, blockers, GitHub/Figma activity). (REP)
-- [ ] **T-M10-02** Weekly report (progress, active projects, repeated blockers, PRs awaiting review, in-progress work).
-- [ ] **T-M10-03** WhatsApp `REPORT TODAY` / `REPORT WEEKLY` commands.
-- [ ] **T-M10-04** Report delivery under 1 minute.
+- [x] **T-M10-01** Daily report generation (submitted/not, summaries, blockers, GitHub/Figma activity). (REP)
+- [x] **T-M10-02** Weekly report (progress, active projects, repeated blockers, PRs awaiting review, in-progress work).
+- [x] **T-M10-03** WhatsApp `REPORT TODAY` / `REPORT WEEKLY` commands.
+- [x] **T-M10-04** Report delivery under 1 minute.
 
 ### Vue 3 dashboard
-- [ ] **T-M10-05** Dashboard scaffold (Vue 3 + Vite) with auth.
-- [ ] **T-M10-06** Employee management UI.
-- [ ] **T-M10-07** Schedule management UI.
-- [ ] **T-M10-08** Holiday calendar UI.
+- [x] **T-M10-05** Dashboard scaffold (Vue 3 + Vite) with auth.
+- [x] **T-M10-06** Employee management UI.
+- [x] **T-M10-07** Schedule management UI.
+- [x] **T-M10-08** Holiday calendar UI.
 - [ ] **T-M10-09** Integrations management UI.
-- [ ] **T-M10-10** Analytics: standup completion rate, response rate, blocker trends, PR/review activity, activity by project, standup history.
-- [ ] **T-M10-11** Standup history views.
+- [x] **T-M10-10** Analytics: standup completion rate, response rate, blocker trends, PR/review activity, activity by project, standup history.
+- [x] **T-M10-11** Standup history views.
 - [ ] **T-M10-12** Audit log viewer.
 
 **Acceptance:** no employee ranking by raw activity; dashboard usable for admin + analytics.

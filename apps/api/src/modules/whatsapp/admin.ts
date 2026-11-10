@@ -11,6 +11,7 @@ import {
   updateEmployeePhone,
 } from "../employees/service.js";
 import { sendStandupPrompts } from "../standups/service.js";
+import { generateDailyReport, generateWeeklyReport } from "../reports/service.js";
 import {
   listSchedules,
   upsertStandupSchedule,
@@ -49,6 +50,8 @@ type CommandName =
   | "EMPLOYEE_LIST"
   | "START_STANDUP"
   | "SHOW_SCHEDULE"
+  | "REPORT_TODAY"
+  | "REPORT_WEEKLY"
   | "SET_SCHEDULE"
   | "SET_REMINDER"
   | "MENU"
@@ -60,6 +63,8 @@ const COMMAND_PATTERNS: { name: CommandName; re: RegExp }[] = [
   { name: "EMPLOYEE_LIST", re: /^employees?\s+list$/i },
   { name: "START_STANDUP", re: /^(?:start|trigger|run)\s+standup\b/i },
   { name: "SHOW_SCHEDULE", re: /^(?:schedule|schedules)(?:\s+(?:show|list))?$/i },
+  { name: "REPORT_TODAY", re: /^report\s+today\b/i },
+  { name: "REPORT_WEEKLY", re: /^report\s+weekly\b/i },
   { name: "SET_SCHEDULE", re: /^set\s+schedule\b/i },
   { name: "SET_REMINDER", re: /^set\s+reminder\b/i },
   { name: "MENU", re: /^menu$/i },
@@ -691,6 +696,14 @@ export async function handleAdminMessage(args: {
         return startAddFlow(args.phone, command.rest);
       case "UPDATE_PHONE":
         return startPhoneFlow(args.phone, command.rest);
+      case "REPORT_TODAY": {
+        const r = await generateDailyReport();
+        return r.text;
+      }
+      case "REPORT_WEEKLY": {
+        const r = await generateWeeklyReport();
+        return r.text;
+      }
       case "START_STANDUP": {
         if (command.rest) {
           const matches = await findEmployeesByIdentifier(command.rest);
