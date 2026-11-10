@@ -1,3 +1,4 @@
+import { rm } from "node:fs/promises";
 import makeWASocket, {
   DisconnectReason,
   useMultiFileAuthState,
@@ -232,8 +233,8 @@ function waitForRegistrationChannel(socket: ReturnType<typeof makeWASocket>): Pr
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       cleanup();
-      reject(new Error("Timed out waiting for WhatsApp to start the pairing flow"));
-    }, 20_000);
+      resolve();
+    }, 5_000);
 
     function cleanup() {
       clearTimeout(timeout);
@@ -297,4 +298,10 @@ export async function stopWhatsApp() {
   currentPairingCode = null;
   pairingPhoneNumber = null;
   await current?.end(undefined);
+  // Remove persisted session so the next start/pairing begins fresh.
+  try {
+    await rm("data/whatsapp-session", { recursive: true, force: true });
+  } catch {
+    // ignore
+  }
 }

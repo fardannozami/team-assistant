@@ -29,7 +29,7 @@
       </div>
       <div v-if="code" class="flex items-center gap-3 px-4 py-4 rounded-xl border border-border bg-panel-hover">
         <span class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim">Pairing code</span>
-        <span class="font-mono text-[14px] font-extrabold tracking-tight text-text border border-border bg-panel px-2.5 py-1 rounded-lg">{{ code }}</span>
+        <span class="font-mono text-[14px] font-extrabold tracking-tight text-text border border-border bg-panel px-2.5 py-1 rounded-lg">{{ codeDisplay }}</span>
       </div>
     </div>
     <p v-if="status.phone" class="mt-3 text-text-muted text-sm">
@@ -85,7 +85,7 @@
 
     <div v-if="code" class="p-5 rounded-xl border border-border bg-panel-hover text-center">
       <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Pairing code</div>
-      <span class="font-mono text-[20px] font-extrabold tracking-tight text-text inline-block mb-3 border border-border bg-panel px-3 py-1.5 rounded-lg">{{ code }}</span>
+      <span class="font-mono text-[20px] font-extrabold tracking-tight text-text inline-block mb-3 border border-border bg-panel px-3 py-1.5 rounded-lg">{{ codeDisplay }}</span>
       <ol class="text-sm text-text-muted text-left list-disc list-inside space-y-1.5 max-w-[460px] mx-auto">
         <li>Open WhatsApp on your phone.</li>
         <li>Go to <span class="font-semibold text-text">Linked devices</span>.</li>
@@ -120,6 +120,11 @@ const pairError = ref("");
 const pairingCode = ref<string | null>(null);
 
 const code = computed(() => status.value.pairingCode ?? pairingCode.value);
+const codeDisplay = computed(() => {
+  const c = code.value;
+  if (!c) return null;
+  return c.length === 8 ? `${c.slice(0, 4)}-${c.slice(4)}` : c;
+});
 
 let statusTimer: number | null = null;
 
