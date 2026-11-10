@@ -15,7 +15,7 @@ const db = createDbClient(
 );
 
 const HOLIDAY_API_URL =
-  process.env.HOLIDAY_API_URL ?? "https://date.nager.at/api/v3/PublicHolidays";
+  process.env.HOLIDAY_API_URL ?? "https://tanggalmerah.upset.dev/api/holidays";
 
 export async function getCalendarSettings() {
   const [row] = await db.select().from(calendarSettings).limit(1);
@@ -89,34 +89,31 @@ export async function syncHolidays(
   year: number = new Date().getFullYear(),
   actorId?: string | null,
 ) {
-  const url = `${HOLIDAY_API_URL}/${year}/ID`;
+  const url = `${HOLIDAY_API_URL}?year=${year}`;
   let data: any[] = [];
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Holiday API failed: ${res.status}`);
-    data = (await res.json()) as any[];
+    const body = (await res.json()) as any;
+    data = Array.isArray(body) ? body : (body.data ?? []);
   } catch (err) {
     // Retain last successful dataset: do not wipe.
     throw new HttpError(400, `Failed to sync holidays: ${(err as Error).message}`);
   }
 
-  // Remove existing national holidays for that year before re-inserting.
+  // Replace both national and joint rows for that year with fresh data.
   await db
     .delete(holidays)
-    .where(
-      and(
-        eq(holidays.type, "national"),
-        gte(holidays.date, `${year}-01-01`),
-        lte(holidays.date, `${year}-12-31`),
-      ),
-    );
+    .where(and(gte(holidays.date, `${year}-01-01`), lte(holidays.date, `${year}-12-31`)));
 
   const inserted = [];
   for (const entry of data) {
     const date = entry.date;
     const name = entry.localName ?? entry.name ?? "Holiday";
     const isJoint =
-      /cuti bersama/i.test(name) || (Array.isArray(entry.types) && entry.types.includes("Joint"));
+      entry.type === "leave" ||
+      /cuti bersama/i.test(name) ||
+      (Array.isArray(entry.types) && entry.types.includes("Joint"));
     const type = isJoint ? "joint" : "national";
     const [row] = await db
       .insert(holidays)
