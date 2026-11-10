@@ -5,6 +5,7 @@ import { employeesApi } from "./modules/employees/index.js";
 import { rolesApi } from "./modules/roles/index.js";
 import { schedulesApi } from "./modules/schedules/index.js";
 import { standupsApi } from "./modules/standups/index.js";
+import { holidaysApi } from "./modules/holidays/index.js";
 import { teamsApi } from "./modules/teams/index.js";
 import { whatsapp } from "./modules/whatsapp/index.js";
 import { startWhatsApp } from "./modules/whatsapp/service.js";
@@ -39,6 +40,7 @@ app.route("/teams", teamsApi);
 app.route("/roles", rolesApi);
 app.route("/schedules", schedulesApi);
 app.route("/standups", standupsApi);
+app.route("/holidays", holidaysApi);
 app.route("/whatsapp", whatsapp);
 
 export { app };

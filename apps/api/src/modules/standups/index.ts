@@ -24,7 +24,7 @@ standupsApi.post("/trigger", canManage, async (c) => {
     triggerStandupSchema,
     await c.req.json().catch(() => ({})),
   );
-  return c.json(await sendStandupPrompts(input));
+  return c.json(await sendStandupPrompts({ ...input, force: input.force }));
 });
 
 standupsApi.post("/reminders", canManage, async (c) => {

@@ -118,14 +118,14 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] **T-M6-10** Natural-language schedule config via WhatsApp.
 
 ### Holiday calendar
-- [ ] **T-M6-11** Sync Indonesian holiday data (SKB 3 Menteri source; API as delivery). (HOL-001)
-- [ ] **T-M6-12** Store holiday data locally; retain last successful dataset. (HOL-002)
-- [ ] **T-M6-13** Distinguish national vs joint leave. (HOL-003)
-- [ ] **T-M6-14** Independent config for joint-leave behavior. (HOL-004)
-- [ ] **T-M6-15** Skip standup on excluded dates. (HOL-005)
-- [ ] **T-M6-16** Manual date exceptions. (HOL-006)
-- [ ] **T-M6-17** Display upcoming holidays. (HOL-007)
-- [ ] **T-M6-18** Notify admins before holidays. (HOL-008)
+- [x] **T-M6-11** Sync Indonesian holiday data (SKB 3 Menteri source; API as delivery). (HOL-001)
+- [x] **T-M6-12** Store holiday data locally; retain last successful dataset. (HOL-002)
+- [x] **T-M6-13** Distinguish national vs joint leave. (HOL-003)
+- [x] **T-M6-14** Independent config for joint-leave behavior. (HOL-004)
+- [x] **T-M6-15** Skip standup on excluded dates. (HOL-005)
+- [x] **T-M6-16** Manual date exceptions. (HOL-006)
+- [x] **T-M6-17** Display upcoming holidays. (HOL-007)
+- [x] **T-M6-18** Notify admins before holidays. (HOL-008)
 
 **Acceptance:** schedules configurable via chat; jobs recover after restart; no duplicate standup messages; holiday skip 100% against validated data.
 
@@ -231,7 +231,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] Bot sends standup prompts automatically.
 - [ ] AI collects all three core standup elements.
 - [ ] AI asks relevant follow-up questions.
-- [ ] Scheduler skips national holidays + configured joint-leave.
+- [x] Scheduler skips national holidays + configured joint-leave.
 - [ ] Admins can request daily report.
 - [ ] Data persisted in PostgreSQL.
 - [x] Scheduled jobs recover after restart.

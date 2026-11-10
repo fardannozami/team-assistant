@@ -72,6 +72,7 @@ export const standupDateSchema = z
 export const triggerStandupSchema = z.object({
   employeeId: z.string().uuid().optional(),
   date: standupDateSchema.optional(),
+  force: z.boolean().optional(),
 });
 
 export const remindStandupSchema = z.object({

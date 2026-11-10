@@ -32,10 +32,26 @@ export async function sendStandupPrompts(
     employeeId?: string;
     date?: string;
     send?: SendFn;
+    force?: boolean;
   } = {},
 ) {
   const send = options.send ?? sendText;
   const date = options.date ?? dateInTimezone();
+
+  if (!options.force) {
+    const { isExcludedDate } = await import("../holidays/service.js");
+    const check = await isExcludedDate(date);
+    if (check.excluded) {
+      return {
+        date,
+        sent: 0,
+        skipped: 0,
+        failed: 0,
+        excluded: true,
+        reason: check.reason,
+      };
+    }
+  }
 
   let targets;
   if (options.employeeId) {
