@@ -86,6 +86,7 @@ import {
   type Toast,
 } from "./api";
 import AuthView from "./views/AuthView.vue";
+import WhatsAppView from "./views/WhatsAppView.vue";
 import EmployeesView from "./views/EmployeesView.vue";
 import SchedulesView from "./views/SchedulesView.vue";
 import HolidaysView from "./views/HolidaysView.vue";
@@ -93,6 +94,7 @@ import StandupsView from "./views/StandupsView.vue";
 import ReportsView from "./views/ReportsView.vue";
 
 const tabs = [
+  { id: "whatsapp", label: "WhatsApp" },
   { id: "employees", label: "Employees" },
   { id: "schedules", label: "Schedules" },
   { id: "holidays", label: "Holidays" },
@@ -101,6 +103,7 @@ const tabs = [
 ];
 
 const views: Record<string, any> = {
+  whatsapp: WhatsAppView,
   employees: EmployeesView,
   schedules: SchedulesView,
   holidays: HolidaysView,

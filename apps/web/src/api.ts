@@ -150,6 +150,22 @@ export interface Employee {
   updatedAt: string;
 }
 
+export interface Role {
+  id: string;
+  name: string;
+}
+
+export interface WhatsAppStatus {
+  connected: boolean;
+  registered: boolean;
+  pairingCode: string | null;
+  phone: string | null;
+}
+
+export interface WhatsAppQr {
+  qr: string | null;
+}
+
 export type EmployeeFilter = "all" | true | false;
 
 export interface EmployeeFilters {
@@ -314,6 +330,12 @@ export const employeesApi = {
       method: "PATCH",
       body: JSON.stringify({ phone }),
     }),
+
+  updateRole: (id: string, roleId: string | null) =>
+    request<Employee>(`/employees/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ roleId }),
+    }),
 };
 
 export const schedulesApi = {
@@ -420,6 +442,33 @@ export const reportsApi = {
   ),
 
   weekly: () => request<WeeklyReport>("/reports/weekly"),
+};
+
+export const whatsappApi = {
+  status: () => request<WhatsAppStatus>("/whatsapp/status"),
+
+  qr: () => request<WhatsAppQr>("/whatsapp/qr"),
+
+  start: () =>
+    request<{ ok: boolean }>("/whatsapp/start", {
+      method: "POST",
+    }),
+
+  stop: () =>
+    request<{ ok: boolean }>("/whatsapp/stop", {
+      method: "POST",
+    }),
+
+  pair: (phoneNumber: string) =>
+    request<{ pairingCode: string }>("/whatsapp/pair", {
+      method: "POST",
+      body: JSON.stringify({ phoneNumber }),
+    }),
+};
+
+export const rolesApi = {
+  list: () =>
+    request<{ roles: Role[] }>("/roles").then((r) => r.roles),
 };
 
 export async function apiHealth(): Promise<boolean> {
