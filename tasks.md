@@ -226,6 +226,15 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ---
 
+## M13 — Employee Role Defaults
+
+- [x] **T-M13-01** Assign the Employee role when creating employees without an explicit role.
+- [x] **T-M13-02** Validate API and WhatsApp employee-creation flows with API lint, typecheck, and build.
+
+**Acceptance:** newly created employees default to the Employee role; explicitly provided roles remain unchanged.
+
+---
+
 ## Cross-cutting constraints (apply to all tasks)
 
 - All timestamps stored UTC, displayed in configured TZ (default Asia/Jakarta).

@@ -127,7 +127,17 @@ export async function createEmployee(
   actorId?: string | null,
 ) {
   await assertTeamExists(input.teamId);
-  await assertRoleExists(input.roleId);
+
+  const [defaultRole] = input.roleId
+    ? []
+    : await db
+        .select({ id: roles.id })
+        .from(roles)
+        .where(eq(roles.name, "Employee"))
+        .limit(1);
+  const roleId = input.roleId ?? defaultRole?.id ?? null;
+  if (!roleId) throw new HttpError(400, "Default Employee role not found");
+  await assertRoleExists(roleId);
 
   let createdId: string;
   try {
@@ -137,7 +147,7 @@ export async function createEmployee(
         name: input.name,
         phone: input.phone,
         teamId: input.teamId ?? null,
-        roleId: input.roleId ?? null,
+        roleId,
       })
       .returning({ id: employees.id });
     if (!created) throw new Error("Failed to create employee");
@@ -156,7 +166,7 @@ export async function createEmployee(
     name: input.name,
     phone: input.phone,
     teamId: input.teamId ?? null,
-    roleId: input.roleId ?? null,
+    roleId,
   });
 
   return getEmployee(createdId);
