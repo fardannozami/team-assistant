@@ -115,6 +115,11 @@ function parseStandupText(
     if (!value) continue;
     parsed[element] = parsed[element] ? `${parsed[element]} ${value}` : value;
   }
+  // If a blocker keyword was found but no answer text followed it, treat
+  // phrases like "tidak ada blocker" as an explicit "none".
+  if (!parsed.blockers && /blocker/i.test(text) && /tidak\s+ada/i.test(text)) {
+    parsed.blockers = "none";
+  }
   return parsed;
 }
 
@@ -219,7 +224,7 @@ export async function handleStandupMessage(args: {
   const session = await getStandupSession(args.employee.id, date);
   if (!session) return null;
   if (session.status === "completed") {
-    return `Standup untuk ${date} sudah tercatat. Terima kasih!`;
+    return `Standup untuk ${date} sudah tercatat. Terima kasih 😊`;
   }
 
   const standupRow = await getOrCreateStandupRow(
@@ -267,7 +272,7 @@ export async function handleStandupMessage(args: {
       `Kemarin: ${answerFor("yesterday")}`,
       `Hari ini: ${answerFor("today")}`,
       `Kendala: ${answerFor("blockers")}`,
-      "Terima kasih!",
+      "Terima kasih 😊",
     ].join("\n");
   }
 
