@@ -133,15 +133,15 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ## M7 — AI Conversational Agent (3–5 days) — P0
 
-- [ ] **T-M7-01** LLM provider client (OpenAI-compatible) with tool calling.
-- [ ] **T-M7-02** Agent context assembly (sender identity, role, profile, history, standups, activity, config) with RBAC filtering.
-- [ ] **T-M7-03** Indonesian language understanding + conversational style.
-- [ ] **T-M7-04** Implement tools: `get_employee`, `get_standup_history`, `create_standup`, `get_schedule`, `create_schedule`, `update_schedule`, `get_team_activity`, `generate_daily_report`, `generate_weekly_report`.
-- [ ] **T-M7-05** Backend authorization + validation on every tool call (LLM never trusted).
-- [ ] **T-M7-06** Confirmation flow for mutating actions (summarize + confirm).
-- [ ] **T-M7-07** Conversation state/memory persistence (`agent_memories`).
-- [ ] **T-M7-08** Usage logging and token budgets (`ai_usage_logs`).
-- [ ] **T-M7-09** Admin command shortcuts mapping (MENU, HELP, etc.) → structured actions.
+- [x] **T-M7-01** LLM provider client (OpenAI-compatible) with tool calling.
+- [x] **T-M7-02** Agent context assembly (sender identity, role, profile, history, standups, activity, config) with RBAC filtering.
+- [x] **T-M7-03** Indonesian language understanding + conversational style.
+- [x] **T-M7-04** Implement tools: `get_employee`, `get_standup_history`, `create_standup`, `get_schedule`, `create_schedule`, `update_schedule`, `get_team_activity`, `generate_daily_report`, `generate_weekly_report`.
+- [x] **T-M7-05** Backend authorization + validation on every tool call (LLM never trusted).
+- [x] **T-M7-06** Confirmation flow for mutating actions (summarize + confirm).
+- [x] **T-M7-07** Conversation state/memory persistence (`agent_memories`).
+- [x] **T-M7-08** Usage logging and token budgets (`ai_usage_logs`).
+- [x] **T-M7-09** Admin command shortcuts mapping (MENU, HELP, etc.) → structured actions.
 
 **Acceptance:** AI collects standup elements contextually; tool calls authorized; mutating actions confirmed.
 
@@ -225,14 +225,14 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ## MVP Definition of Done (PRD §12)
 
-- [ ] Admin can pair WhatsApp bot.
-- [ ] Admins can add/deactivate employees.
+- [x] Admin can pair WhatsApp bot.
+- [x] Admins can add/deactivate employees.
 - [x] Admins can configure standup schedules via WhatsApp.
 - [x] Bot sends standup prompts automatically.
-- [ ] AI collects all three core standup elements.
-- [ ] AI asks relevant follow-up questions.
+- [x] AI collects all three core standup elements.
+- [x] AI asks relevant follow-up questions.
 - [x] Scheduler skips national holidays + configured joint-leave.
-- [ ] Admins can request daily report.
-- [ ] Data persisted in PostgreSQL.
+- [x] Admins can request daily report.
+- [x] Data persisted in PostgreSQL.
 - [x] Scheduled jobs recover after restart.
 - [x] Job retries do not cause duplicate standup messages.

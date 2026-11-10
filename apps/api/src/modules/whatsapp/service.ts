@@ -142,6 +142,15 @@ export async function startWhatsApp(): Promise<ReturnType<typeof makeWASocket>> 
           await sendText(from, standupReply);
           continue;
         }
+
+        // M7: AI agent is the last fallback for registered employees.
+        // Imported lazily to avoid circular dependencies.
+        const { handleAiMessage } = await import("../ai/service.js");
+        const aiReply = await handleAiMessage({ phone, body, employee, roleName });
+        if (aiReply) {
+          await sendText(from, aiReply);
+          continue;
+        }
       }
 
       logger.info({ phone, body }, "Incoming message");
