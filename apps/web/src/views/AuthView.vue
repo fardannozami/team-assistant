@@ -2,33 +2,33 @@
   <div class="flex items-center justify-center min-h-screen px-6">
     <div class="w-full max-w-[780px]">
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-0 items-center">
-        <!-- Brand panel -->
+        <!-- Panel merek -->
         <div>
           <div class="flex items-center gap-2.5 mb-6">
             <div class="w-10 h-10 rounded-xl bg-accent text-white text-[17px] font-display font-extrabold grid place-items-center shadow-accent">TA</div>
             <div class="font-display font-extrabold text-[20px] tracking-tight text-text">Team Assistant</div>
           </div>
-          <h1 class="text-[44px] font-display font-extrabold tracking-tight text-text mb-2 lg:mb-6">Welcome back.</h1>
-          <p class="text-text-muted text-lg mb-10 lg:mb-14">Sign in to your administrator account to open the dashboard.</p>
-          <p class="text-[13px] text-text-dim">Team Assistant admin dashboard · API base: {{ apiBase }}</p>
+          <h1 class="text-[44px] font-display font-extrabold tracking-tight text-text mb-2 lg:mb-6">Selamat datang kembali.</h1>
+          <p class="text-text-muted text-lg mb-10 lg:mb-14">Masuk ke akun administrator untuk membuka panel tim.</p>
+          <p class="text-[13px] text-text-dim">Kelola standup dan aktivitas tim Anda.</p>
         </div>
 
-        <!-- Sign-in form -->
+        <!-- Form masuk -->
         <div class="bg-panel border border-border rounded-2xl shadow-soft-lg p-8 lg:p-12 reveal-slow">
-          <h2 class="text-[24px] font-display font-extrabold tracking-tight text-text mb-1">Sign in</h2>
-          <p class="text-text-muted text-sm mb-10">Use your administrator account.</p>
+          <h2 class="text-[24px] font-display font-extrabold tracking-tight text-text mb-1">Masuk</h2>
+          <p class="text-text-muted text-sm mb-10">Gunakan akun administrator Anda.</p>
 
           <div v-if="error" class="mb-6 px-4 py-3.5 rounded-xl border border-danger/30 bg-danger/5 text-danger text-[12px] font-extrabold slide-in">{{ error }}</div>
 
           <form @submit.prevent="handleSubmit" class="flex flex-col gap-5">
             <div>
-              <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Email address</label>
+              <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Alamat email</label>
               <input
                 v-model="email"
                 name="email"
                 type="email"
                 autocomplete="email"
-                placeholder="you@company.com"
+                placeholder="nama@perusahaan.com"
                 :disabled="loading"
                 @input="error = ''"
                 class="w-full px-4 py-3.5 rounded-xl border text-sm placeholder-text-dim transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none bg-panel border-border"
@@ -36,7 +36,7 @@
               />
             </div>
             <div>
-              <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Password</label>
+              <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Kata sandi</label>
               <input
                 v-model="password"
                 name="password"
@@ -55,7 +55,7 @@
               class="inline-flex items-center justify-center gap-2.5 px-4 py-4 rounded-xl text-[15px] font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover hover:shadow-[0_0_0_12px_rgba(63,68,226,0.45)] active:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
             >
               <span v-if="loading" class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full spin-slow" aria-hidden="true"></span>
-              {{ loading ? "Signing in…" : "Sign in" }}
+              {{ loading ? "Sedang masuk…" : "Masuk" }}
             </button>
           </form>
         </div>
@@ -86,7 +86,7 @@ async function handleSubmit() {
     emit("login");
   } catch (err) {
     error.value =
-      err instanceof ApiError ? err.message : "Unexpected error. Please try again.";
+      err instanceof ApiError ? err.message : "Terjadi kesalahan. Silakan coba lagi.";
   } finally {
     loading.value = false;
   }

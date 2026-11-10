@@ -3,51 +3,50 @@
     <div>
       <h2 class="text-[26px] font-display font-extrabold tracking-tight text-text">WhatsApp</h2>
       <p class="text-text-muted text-sm mt-1">
-        Connect the Team Assistant bot to WhatsApp so it can message employees
-        and receive replies.
+        Hubungkan bot Team Assistant ke WhatsApp agar dapat mengirim pesan dan menerima balasan dari anggota tim.
       </p>
     </div>
   </header>
 
   <div v-if="error" class="mb-5 px-4 py-3.5 rounded-xl border border-danger/30 bg-danger/5 text-danger text-[12px] font-extrabold slide-in">{{ error }}</div>
 
-  <!-- Connection status -->
+  <!-- Status koneksi -->
   <section class="mb-7">
-    <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-3">Connection status</div>
+    <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-3">Status koneksi</div>
     <div class="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-3">
       <div class="flex items-center gap-3 px-4 py-4 rounded-xl border border-border bg-panel-hover">
         <span class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim">Bot</span>
         <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-[11px] font-extrabold tracking-tight uppercase border" :class="status.connected ? 'bg-success/8 text-success border-success/20' : 'bg-text-muted/10 text-text-dim border border-border'">
-          {{ status.connected ? "Connected" : "Disconnected" }}
+          {{ status.connected ? "Terhubung" : "Terputus" }}
         </span>
       </div>
       <div class="flex items-center gap-3 px-4 py-4 rounded-xl border border-border bg-panel-hover">
-        <span class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim">Registered</span>
+        <span class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim">Terdaftar</span>
         <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-[11px] font-extrabold tracking-tight uppercase border" :class="status.registered ? 'bg-success/8 text-success border-success/20' : 'bg-text-muted/10 text-text-dim border border-border'">
-          {{ status.registered ? "Registered" : "Not registered" }}
+          {{ status.registered ? "Terdaftar" : "Belum terdaftar" }}
         </span>
       </div>
       <div v-if="code" class="flex items-center gap-3 px-4 py-4 rounded-xl border border-border bg-panel-hover">
-        <span class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim">Pairing code</span>
+        <span class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim">Kode penautan</span>
         <span class="font-mono text-[14px] font-extrabold tracking-tight text-text border border-border bg-panel px-2.5 py-1 rounded-lg">{{ codeDisplay }}</span>
       </div>
     </div>
     <p v-if="status.phone" class="mt-3 text-text-muted text-sm">
-      Linked number: <span class="font-mono text-[14px] text-text">{{ status.phone }}</span>
+      Nomor tertaut: <span class="font-mono text-[14px] text-text">{{ status.phone }}</span>
     </p>
   </section>
 
-  <!-- Pair with phone number -->
+  <!-- Tautkan dengan nomor telepon -->
   <section>
-    <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-3">Pair with phone number</div>
+    <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-3">Tautkan dengan nomor telepon</div>
     <p v-if="!status.connected && !status.registered" class="text-text-muted text-sm mb-5">
-      Enter your WhatsApp number with country code (for example
-      <span class="font-mono text-[14px] text-text">+62 812-3456-7890</span>). A pairing code will be sent to that number.
+      Masukkan nomor WhatsApp beserta kode negara (contoh
+      <span class="font-mono text-[14px] text-text">+62 812-3456-7890</span>). Kode penautan akan dikirim ke nomor tersebut.
     </p>
 
     <form v-if="!status.connected && !status.registered" @submit.prevent="pairPhone" class="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-4 items-end mb-6">
       <div>
-        <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Phone number</label>
+        <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Nomor telepon</label>
         <input
           v-model="pairPhoneNumber"
           type="tel"
@@ -65,7 +64,7 @@
         class="inline-flex items-center justify-center gap-2.5 px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover hover:shadow-[0_0_0_12px_rgba(63,68,226,0.45)] active:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
       >
         <span v-if="pairing" class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full spin-slow" aria-hidden="true"></span>
-        {{ pairing ? "Sending…" : "Send pairing code" }}
+        {{ pairing ? "Mengirim…" : "Kirim kode penautan" }}
       </button>
     </form>
 
@@ -76,21 +75,21 @@
         @click="disconnect"
         class="inline-flex items-center justify-center gap-2.5 px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight bg-danger text-white transition-all duration-200 ease-in hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
       >
-        {{ disconnecting ? "Disconnecting…" : "Disconnect / unpair" }}
+        {{ disconnecting ? "Memutuskan koneksi…" : "Putuskan koneksi" }}
       </button>
       <p class="mt-2 text-text-muted text-xs">
-        This stops the bot and clears the active WhatsApp session.
+        Bot akan berhenti dan sesi WhatsApp aktif akan dihapus.
       </p>
     </div>
 
     <div v-if="code" class="p-5 rounded-xl border border-border bg-panel-hover text-center">
-      <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Pairing code</div>
+      <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Kode penautan</div>
       <span class="font-mono text-[20px] font-extrabold tracking-tight text-text inline-block mb-3 border border-border bg-panel px-3 py-1.5 rounded-lg">{{ codeDisplay }}</span>
       <ol class="text-sm text-text-muted text-left list-disc list-inside space-y-1.5 max-w-[460px] mx-auto">
-        <li>Open WhatsApp on your phone.</li>
-        <li>Go to <span class="font-semibold text-text">Linked devices</span>.</li>
-        <li>Tap <span class="font-semibold text-text">Link with phone number</span>.</li>
-        <li>Enter your phone number and the pairing code shown above.</li>
+        <li>Buka WhatsApp di ponsel Anda.</li>
+        <li>Pilih <span class="font-semibold text-text">Perangkat tertaut</span>.</li>
+        <li>Ketuk <span class="font-semibold text-text">Tautkan dengan nomor telepon</span>.</li>
+        <li>Masukkan nomor telepon dan kode penautan di atas.</li>
       </ol>
     </div>
   </section>
@@ -151,7 +150,7 @@ async function fetchStatus() {
 async function pairPhone() {
   pairError.value = "";
   if (!pairPhoneNumber.value.trim()) {
-    pairError.value = "Enter a phone number.";
+    pairError.value = "Masukkan nomor telepon.";
     return;
   }
 
@@ -159,10 +158,10 @@ async function pairPhone() {
   try {
     const res = await whatsappApi.pair(pairPhoneNumber.value.trim());
     pairingCode.value = res.pairingCode ?? null;
-    showToast("Pairing code sent to your number.", "success");
+    showToast("Kode penautan dikirim ke nomor Anda.", "success");
     await fetchStatus();
   } catch (err) {
-    pairError.value = err instanceof ApiError ? err.message : "Failed to send pairing code.";
+    pairError.value = err instanceof ApiError ? err.message : "Gagal mengirim kode penautan.";
   } finally {
     pairing.value = false;
   }
@@ -173,10 +172,10 @@ async function disconnect() {
   try {
     await whatsappApi.stop();
     pairingCode.value = null;
-    showToast("WhatsApp disconnected.", "success");
+    showToast("WhatsApp berhasil diputuskan.", "success");
     await fetchStatus();
   } catch (err) {
-    pairError.value = err instanceof ApiError ? err.message : "Failed to disconnect.";
+    pairError.value = err instanceof ApiError ? err.message : "Gagal memutuskan koneksi.";
   } finally {
     disconnecting.value = false;
   }

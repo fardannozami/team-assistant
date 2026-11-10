@@ -213,6 +213,19 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ---
 
+## M12 — Frontend UI/UX Modernization
+
+- [x] **T-M12-01** Add Indonesian home view with data-backed conversational summary and next actions.
+- [x] **T-M12-02** Simplify responsive navigation with mobile bottom bar and secondary menu.
+- [x] **T-M12-03** Make employee, standup, schedule, holiday, and report views usable on mobile.
+- [x] **T-M12-04** Turn employee and schedule create/edit forms into guided steps.
+- [x] **T-M12-05** Localize all frontend screens and interaction messages to Indonesian.
+- [~] **T-M12-06** Run frontend lint, typecheck, and production build; verify key flows (typecheck/build pass; lint blocked by existing TypeScript parser configuration; browser CLI unavailable).
+
+**Acceptance:** all existing frontend capabilities remain available; primary flows work on mobile and desktop; Indonesian UI is consistent.
+
+---
+
 ## Cross-cutting constraints (apply to all tasks)
 
 - All timestamps stored UTC, displayed in configured TZ (default Asia/Jakarta).

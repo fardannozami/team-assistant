@@ -5,6 +5,7 @@
 
 ## Product design
 - Wants operational settings (e.g., standup prompt/reminder schedule times) to be admin-configurable at runtime, with built-in env values kept as defaults/fallback when the admin hasn't set them — not env-file-only. Confidence: 0.6
+- Prefers frontend experiences that are simple and mobile-friendly, with conversational or step-by-step (“next”) flows where appropriate. Confidence: 0.9
 
 ## Tooling
 - When adding MCP servers, chose local scope (project-private config, nothing committed to the repo) over project or user scope. Confidence: 0.6

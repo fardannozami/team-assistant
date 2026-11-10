@@ -39,6 +39,17 @@ html {
 body {
   min-height: 100vh;
 }
+.mobile-nav {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+.table-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.table-scroll table {
+  min-width: 680px;
+}
 a {
   color: inherit;
   text-decoration: none;
