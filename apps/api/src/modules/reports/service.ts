@@ -1,5 +1,5 @@
-import { createDbClient, employees, standupAnswers, standupSessions, standups } from "@repo/database";
-import { and, desc, eq, gte, lte } from "drizzle-orm";
+import { createDbClient, employees, roles, standupAnswers, standupSessions, standups } from "@repo/database";
+import { and, eq, gte, isNull, lte, notInArray, or } from "drizzle-orm";
 import { dateInTimezone, DEFAULT_TIMEZONE } from "@repo/shared";
 
 const db = createDbClient(
@@ -21,9 +21,16 @@ export async function generateDailyReport(date?: string) {
     })
     .from(standupSessions)
     .innerJoin(employees, eq(standupSessions.employeeId, employees.id))
+    .leftJoin(roles, eq(employees.roleId, roles.id))
     .leftJoin(standups, eq(standups.sessionId, standupSessions.id))
     .leftJoin(standupAnswers, eq(standupAnswers.standupId, standups.id))
-    .where(and(eq(standupSessions.date, d), eq(employees.isActive, true)));
+    .where(
+      and(
+        eq(standupSessions.date, d),
+        eq(employees.isActive, true),
+        or(isNull(roles.name), notInArray(roles.name, ["Owner", "Admin"])),
+      ),
+    );
 
   const byEmployee = new Map<
     string,
@@ -42,7 +49,13 @@ export async function generateDailyReport(date?: string) {
   const allEmployees = await db
     .select({ id: employees.id, name: employees.name })
     .from(employees)
-    .where(eq(employees.isActive, true));
+    .leftJoin(roles, eq(employees.roleId, roles.id))
+    .where(
+      and(
+        eq(employees.isActive, true),
+        or(isNull(roles.name), notInArray(roles.name, ["Owner", "Admin"])),
+      ),
+    );
 
   const submitted = [...byEmployee.entries()]
     .filter(([, v]) => v.status === "completed")
