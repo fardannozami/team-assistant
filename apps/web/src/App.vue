@@ -1,40 +1,54 @@
 <template>
   <div class="app">
-    <div class="toasts" role="region" aria-label="Notifications">
+    <div
+      class="fixed top-[22px] right-[22px] flex flex-col gap-3 z-[60] pointer-events-none"
+      role="region"
+      aria-label="Notifications"
+    >
       <div
         v-for="t in toasts"
         :key="t.id"
-        class="toast"
-        :class="`toast--${t.type}`"
+        class="pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-sm border border-border bg-panel text-text shadow-lg min-w-[250px] toast-in"
+        :class="{
+          'border-l-4 border-danger': t.type === 'error',
+          'border-l-4 border-success': t.type === 'success',
+        }"
         @click.self="dismissToast(t.id)"
       >
         {{ t.message }}
-        <button class="toast-dismiss" @click.stop="dismissToast(t.id)">×</button>
+        <button
+          class="w-6 h-6 rounded-[6px] border border-border text-text-muted text-[18px] leading-none grid place-items-center ml-2 shrink-0 hover:bg-panel-hover hover:text-text"
+          @click.stop="dismissToast(t.id)"
+        >
+          ×
+        </button>
       </div>
     </div>
 
-    <div v-if="token" class="shell">
-      <nav class="top-nav" aria-label="Main navigation">
-        <div class="brand">
-          <div class="brand-mark">TA</div>
-          <div class="brand-name">Team Assistant</div>
+    <div v-if="token" class="relative z-1 flex flex-col h-screen">
+      <nav class="fixed inset-x-0 top-0 z-20 h-16 flex items-center justify-between px-[26px] bg-bg/72 border-b border-border backdrop-blur-lg" aria-label="Main navigation">
+        <div class="flex items-center gap-2.5 font-extrabold text-sm tracking-tight">
+          <div class="w-8 h-8 rounded-[10px] bg-accent text-white text-[15px] grid place-items-center shadow-[0_0_0_5px_rgba(91,107,245,0.45)]">TA</div>
+          <div class="hidden sm:block font-extrabold text-sm tracking-tight">Team Assistant</div>
         </div>
 
-        <div class="tabs">
+        <div class="flex border-b border-border ml-[34px] overflow-x-auto">
           <button
             v-for="tab in tabs"
             :key="tab.id"
-            class="tab"
-            :class="{ 'tab--active': currentTab === tab.id }"
+            class="h-16 flex items-center px-5 text-[12px] font-extrabold tracking-wider uppercase border-b-2 border-transparent whitespace-nowrap transition-colors duration-200 ease-in hover:text-text hover:bg-white/5"
+            :class="{
+              'text-accent border-accent bg-accent/7': currentTab === tab.id,
+            }"
             @click="currentTab = tab.id"
           >
             {{ tab.label }}
           </button>
         </div>
 
-        <div class="nav-actions">
+        <div class="flex items-center gap-3 shrink-0">
           <button
-            class="btn btn--ghost btn--sm"
+            class="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-sm text-[12px] font-extrabold tracking-tight border border-border bg-panel-hover text-text transition-all duration-200 ease-in hover:border-text-muted hover:bg-panel hover:text-text hover:-translate-y-1 active:scale-95 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none whitespace-nowrap leading-none"
             @click="refreshView"
             title="Refresh"
             aria-label="Refresh"
@@ -42,25 +56,43 @@
             <span aria-hidden="true">↻</span>
           </button>
           <div
-            class="health"
-            :class="{ 'health--online': apiOk === true, 'health--offline': apiOk === false }"
+            class="inline-flex items-center gap-2 text-[12px] font-extrabold tracking-wider uppercase text-text-muted px-2.5 py-1 rounded-full border border-border bg-panel-hover"
+            :class="{
+              'bg-success/10 text-success border-success/30': apiOk === true,
+              'bg-danger/10 text-danger border-danger/35': apiOk === false,
+            }"
             :title="apiStatusTitle"
           >
-            <span class="dot"></span>
-            {{ apiOk === null ? "Checking API…" : apiOk === true ? "API online" : "API offline" }}
+            <span
+              class="w-2 h-2 rounded-full bg-text-muted shadow-[0_0_0_3px_rgba(148,163,184,0.2)]"
+              :class="{
+                'bg-success shadow-[0_0_0_3px_rgba(52,211,153,0.4)]': apiOk === true,
+                'bg-danger shadow-[0_0_0_3px_rgba(233,90,107,0.4)]': apiOk === false,
+              }"
+            ></span>
+            {{
+              apiOk === null
+                ? "Checking API…"
+                : apiOk === true
+                ? "API online"
+                : "API offline"
+            }}
           </div>
-          <span class="user-chip">{{ currentRole }}</span>
-          <button class="btn btn--danger btn--sm" @click="handleLogout">
+          <span class="text-[12px] font-extrabold tracking-tight text-text-muted px-2.5">{{ currentRole }}</span>
+          <button
+            class="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-sm text-[12px] font-extrabold tracking-tight border border-danger/40 bg-danger/10 text-danger transition-all duration-200 ease-in hover:bg-danger/35 hover:border-danger hover:-translate-y-1 active:scale-95 focus:outline-none whitespace-nowrap leading-none"
+            @click="handleLogout"
+          >
             Sign out
           </button>
         </div>
       </nav>
 
-      <div class="shell-body">
-        <div class="page">
+      <div class="flex-1 pt-16 pb-10 overflow-y-auto">
+        <div class="max-w-[1240px] mx-auto px-[26px]">
           <section
             :key="`${currentTab}-${refreshKey}`"
-            class="page-body reveal"
+            class="flex flex-col gap-4.5 reveal"
             aria-live="polite"
           >
             <component :is="currentComponent" />
@@ -69,7 +101,7 @@
       </div>
     </div>
 
-    <div v-else class="login-page">
+    <div v-else class="flex items-center justify-center min-h-screen px-6 relative z-1">
       <AuthView @login="handleLogin" />
     </div>
   </div>
@@ -166,9 +198,3 @@ function refreshView() {
   refreshKey.value += 1;
 }
 </script>
-
-<style scoped>
-.toast-dismiss {
-  line-height: 1;
-}
-</style>
