@@ -183,14 +183,14 @@ export async function reconcileSchedules(): Promise<void> {
   );
 }
 
-async function callApi(path: string) {
+async function callApi(path: string, payload: Record<string, unknown> = {}) {
   const response = await fetch(`${API_URL}${path}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       "x-internal-token": INTERNAL_API_TOKEN,
     },
-    body: JSON.stringify({}),
+    body: JSON.stringify(payload),
   });
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
@@ -254,7 +254,7 @@ async function processSchedulerJob(job: Job): Promise<SchedulerJobResult> {
     .returning({ id: jobExecutions.id });
 
   try {
-    const result = await callApi(apiPath);
+    const result = await callApi(apiPath, manual ? { resend: true } : {});
     if (execution) {
       await db
         .update(jobExecutions)

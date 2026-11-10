@@ -33,6 +33,7 @@ export async function sendStandupPrompts(
     date?: string;
     send?: SendFn;
     force?: boolean;
+    resend?: boolean;
   } = {},
 ) {
   const send = options.send ?? sendText;
@@ -60,7 +61,15 @@ export async function sendStandupPrompts(
     if (!employee.isActive) throw new HttpError(400, "Employee is not active");
     targets = [employee];
   } else {
-    targets = await listEmployees({ active: true });
+    const active = await listEmployees({ active: true });
+    const includeAdmins = process.env.STANDUP_INCLUDE_ADMINS === "true";
+    targets = includeAdmins
+      ? active
+      : active.filter(
+          (employee) =>
+            !employee.roleName ||
+            !["Owner", "Admin"].includes(employee.roleName),
+        );
   }
 
   let sent = 0;
@@ -70,6 +79,20 @@ export async function sendStandupPrompts(
   for (const employee of targets) {
     const existing = await getStandupSession(employee.id, date);
     if (existing) {
+      // Manual triggers may resend to sessions that are still open so the
+      // admin gets an immediate prompt without waiting for the cron.
+      if (
+        options.resend &&
+        (existing.status === "pending" || existing.status === "in_progress")
+      ) {
+        try {
+          await send(jidFor(employee.phone), standupPromptText(date));
+          sent++;
+        } catch {
+          failed++;
+        }
+        continue;
+      }
       skipped++;
       continue;
     }

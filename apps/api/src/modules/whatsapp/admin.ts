@@ -715,10 +715,11 @@ export async function handleAdminMessage(args: {
           }
           const result = await sendStandupPrompts({
             employeeId: matches[0].id,
+            resend: true,
           });
           return standupTriggerReply(result);
         }
-        const result = await sendStandupPrompts();
+        const result = await sendStandupPrompts({ resend: true });
         return standupTriggerReply(result);
       }
     }

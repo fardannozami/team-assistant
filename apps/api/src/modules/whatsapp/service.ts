@@ -23,6 +23,31 @@ let currentPairingCode: string | null = null;
 let pairingPhoneNumber: string | null = null;
 const processedMessageIds = new Set<string>();
 
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_DELAY_MS = 60_000;
+
+/**
+ * Reconnect with exponential backoff (and a longer base for 440 conflict).
+ * A tight reconnect loop — e.g. when another instance holds the same session
+ * or WhatsApp replaced the connection — makes the conflict worse.
+ */
+function scheduleReconnect(statusCode: number | undefined) {
+  if (reconnectTimer) return;
+  const base = statusCode === 440 ? 15_000 : 1_000;
+  const delay = Math.min(
+    MAX_RECONNECT_DELAY_MS,
+    base * 2 ** Math.min(reconnectAttempts, 5),
+  );
+  reconnectAttempts += 1;
+  logger.warn({ delay, statusCode }, "Scheduling WhatsApp reconnect");
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    startWhatsApp().catch((e) => logger.error(e));
+  }, delay);
+  reconnectTimer.unref?.();
+}
+
 export function getQr() {
   return currentQr;
 }
@@ -45,6 +70,10 @@ export function normalizePhoneNumber(input: string): string {
 
 export async function startWhatsApp(): Promise<ReturnType<typeof makeWASocket>> {
   if (sock) return sock;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
 
   const { state, saveCreds } = await useMultiFileAuthState(SESSION_PATH);
   const { version } = await fetchLatestBaileysVersion();
@@ -83,13 +112,16 @@ export async function startWhatsApp(): Promise<ReturnType<typeof makeWASocket>> 
       sock = null;
       currentQr = null;
       logger.warn({ statusCode, shouldReconnect }, "Connection closed");
-      if (shouldReconnect) {
-        startWhatsApp().catch((e) => logger.error(e));
-      }
+      if (shouldReconnect) scheduleReconnect(statusCode);
     } else if (connection === "open") {
       currentQr = null;
       currentPairingCode = null;
       pairingPhoneNumber = null;
+      reconnectAttempts = 0;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
       logger.info("WhatsApp connected");
     }
   });
@@ -230,6 +262,11 @@ export async function pairWithPhoneNumber(phoneNumber: string): Promise<string> 
 }
 
 export async function stopWhatsApp() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  reconnectAttempts = 0;
   const current = sock;
   sock = null;
   currentQr = null;
