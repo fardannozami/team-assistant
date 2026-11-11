@@ -8,8 +8,11 @@ import {
   stopWhatsApp,
   sendText,
 } from "./service.js";
+import { requireRole } from "../auth/index.js";
 
 export const whatsapp = new Hono();
+
+whatsapp.use("*", requireRole("Owner", "Admin"));
 
 whatsapp.get("/status", (c) => {
   const socket = getSocket();

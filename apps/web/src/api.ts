@@ -295,7 +295,31 @@ export const authApi = {
     }),
 
   logout: () => setToken(null),
+
+  providers: () =>
+    request<{ google: boolean }>("/auth/providers").catch(() => ({ google: false })),
+
+  googleLoginUrl: `${API_BASE}/auth/google`,
 };
+
+const OAUTH_ERRORS: Record<string, string> = {
+  not_registered: "Akun Google ini tidak diizinkan masuk atau sudah dinonaktifkan.",
+  unverified_email: "Email Google Anda belum terverifikasi.",
+  cancelled: "Login dengan Google dibatalkan.",
+  invalid_state: "Sesi login kedaluwarsa. Silakan coba lagi.",
+  google_error: "Google tidak merespons. Silakan coba lagi.",
+};
+
+/** Reads the token or error the Google OAuth callback put in the URL hash. */
+export function consumeOAuthRedirect(): string {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  const token = params.get("token");
+  const error = params.get("auth_error");
+  if (!token && !error) return "";
+  history.replaceState(null, "", window.location.pathname + window.location.search);
+  if (token) setToken(token);
+  return error ? (OAUTH_ERRORS[error] ?? "Login dengan Google gagal.") : "";
+}
 
 export const employeesApi = {
   list: (filters?: EmployeeFilters) => {

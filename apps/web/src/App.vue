@@ -47,14 +47,14 @@
     </div>
 
     <div v-else class="relative z-10 flex min-h-screen items-center justify-center px-4 py-8 sm:px-6">
-      <AuthView @login="handleLogin" />
+      <AuthView :initial-error="oauthError" @login="handleLogin" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
-import { apiHealth, authApi, getToken, onUnauthorized, showToast, addToastListener, type Toast } from "./api";
+import { apiHealth, authApi, consumeOAuthRedirect, getToken, onUnauthorized, showToast, addToastListener, type Toast } from "./api";
 import AuthView from "./views/AuthView.vue";
 import HomeView from "./views/HomeView.vue";
 import EmployeesView from "./views/EmployeesView.vue";
@@ -74,6 +74,7 @@ const settingsSections = ["whatsapp", "schedules", "holidays"];
 const views: Record<string, any> = { home: HomeView, employees: EmployeesView, standups: StandupsView, reports: ReportsView };
 const ONBOARDED_KEY = "ta_onboarded";
 
+const oauthError = consumeOAuthRedirect();
 const token = ref(getToken() ?? "");
 const currentTab = ref("home");
 const settingsSection = ref("whatsapp");

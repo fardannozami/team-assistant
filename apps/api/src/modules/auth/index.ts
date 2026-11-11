@@ -1,8 +1,9 @@
 import { Hono } from "hono";
 import { sign, verify } from "hono/jwt";
+import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { createDbClient } from "@repo/database";
 import { users, roles, employees, auditLogs } from "@repo/database";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 const db = createDbClient(process.env.DATABASE_URL ?? "postgres://teamassistant:teamassistant@localhost:5432/teamassistant");
 const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-change-me";
@@ -19,9 +20,98 @@ auth.post("/login", async (c) => {
   if (!ok) {
     return c.json({ error: "Invalid credentials" }, 401);
   }
+  return c.json({ token: await issueToken(user) });
+});
+
+async function issueToken(user: { id: string; roleId: string | null }) {
   const [role] = user.roleId ? await db.select().from(roles).where(eq(roles.id, user.roleId)).limit(1) : [];
-  const token = await sign({ sub: user.id, role: role?.name ?? null }, JWT_SECRET);
-  return c.json({ token });
+  return sign({ sub: user.id, role: role?.name ?? null }, JWT_SECRET);
+}
+
+/* ---------- Google OAuth ---------- */
+
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? "";
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? "";
+const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI ?? "http://localhost:4000/auth/google/callback";
+const WEB_URL = process.env.WEB_URL ?? "http://localhost:3000";
+// Role given to Google accounts that sign in without an existing user.
+// Empty disables auto-registration (only existing users may sign in).
+const GOOGLE_AUTO_REGISTER_ROLE = process.env.GOOGLE_AUTO_REGISTER_ROLE ?? "Admin";
+const OAUTH_STATE_COOKIE = "ta_oauth_state";
+const googleEnabled = () => Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET);
+
+auth.get("/providers", (c) => c.json({ google: googleEnabled() }));
+
+auth.get("/google", (c) => {
+  if (!googleEnabled()) return c.json({ error: "Google login is not configured" }, 404);
+  const state = crypto.randomUUID();
+  setCookie(c, OAUTH_STATE_COOKIE, state, {
+    httpOnly: true,
+    sameSite: "Lax",
+    secure: GOOGLE_REDIRECT_URI.startsWith("https://"),
+    path: "/auth/google",
+    maxAge: 600,
+  });
+  const params = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: GOOGLE_REDIRECT_URI,
+    response_type: "code",
+    scope: "openid email profile",
+    state,
+    prompt: "select_account",
+  });
+  return c.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+});
+
+auth.get("/google/callback", async (c) => {
+  const fail = (reason: string) => c.redirect(`${WEB_URL}/#auth_error=${reason}`);
+  const expectedState = getCookie(c, OAUTH_STATE_COOKIE);
+  deleteCookie(c, OAUTH_STATE_COOKIE, { path: "/auth/google" });
+
+  const { code, state, error } = c.req.query();
+  if (error) return fail("cancelled");
+  if (!googleEnabled() || !code || !state || state !== expectedState) return fail("invalid_state");
+
+  const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      code,
+      client_id: GOOGLE_CLIENT_ID,
+      client_secret: GOOGLE_CLIENT_SECRET,
+      redirect_uri: GOOGLE_REDIRECT_URI,
+      grant_type: "authorization_code",
+    }),
+  });
+  if (!tokenRes.ok) return fail("google_error");
+  const { access_token } = (await tokenRes.json()) as { access_token?: string };
+
+  const profileRes = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
+    headers: { Authorization: `Bearer ${access_token}` },
+  });
+  if (!profileRes.ok) return fail("google_error");
+  const profile = (await profileRes.json()) as { email?: string; email_verified?: boolean; name?: string };
+  if (!profile.email || !profile.email_verified) return fail("unverified_email");
+
+  const email = profile.email.toLowerCase();
+  let [user] = await db.select().from(users).where(sql`lower(${users.email}) = ${email}`).limit(1);
+  if (!user) {
+    if (!GOOGLE_AUTO_REGISTER_ROLE) return fail("not_registered");
+    const [role] = await db.select().from(roles).where(eq(roles.name, GOOGLE_AUTO_REGISTER_ROLE)).limit(1);
+    if (!role) return fail("not_registered");
+    [user] = await db
+      .insert(users)
+      .values({ email, name: profile.name || email.split("@")[0]!, roleId: role.id })
+      .onConflictDoNothing()
+      .returning();
+    if (!user) [user] = await db.select().from(users).where(sql`lower(${users.email}) = ${email}`).limit(1);
+    if (!user) return fail("google_error");
+    await audit(user.id, "auth.register", "users", user.id, { provider: "google", role: role.name });
+  }
+  if (!user.isActive) return fail("not_registered");
+
+  await audit(user.id, "auth.login", "users", user.id, { provider: "google" });
+  return c.redirect(`${WEB_URL}/#token=${encodeURIComponent(await issueToken(user))}`);
 });
 
 export async function verifyToken(token: string) {
