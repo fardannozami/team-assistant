@@ -1,9 +1,12 @@
-FROM node:22-alpine AS build
+FROM oven/bun:1.4.2 AS build
 WORKDIR /app
 COPY package.json bun.lock ./
 COPY apps/web ./apps/web
 COPY packages ./packages
-RUN npm install -g bun && bun install --frozen-lockfile
+RUN bun install --frozen-lockfile
+# Baked into the bundle at build time: the public URL of the API.
+ARG VITE_API_URL=http://localhost:4000
+ENV VITE_API_URL=$VITE_API_URL
 WORKDIR /app/apps/web
 RUN bun run build
 
