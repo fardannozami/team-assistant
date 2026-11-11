@@ -235,6 +235,55 @@ describe.skipIf(!url)("tenant isolation", () => {
     expect(usage.week[0].messages).toBe(2);
   });
 
+  test("reminders ask for what is missing, admins get a summary, close marks missed", async () => {
+    const { sendStandupReminders, sendStandupSummary, closeStandups } = await import("./modules/standups/service.js");
+    const { handleStandupMessage } = await import("./modules/standups/engine.js");
+    const { createEmployee, getEmployee } = await import("./modules/employees/service.js");
+    const { eq } = await import("drizzle-orm");
+    const [adminRole] = await db.select().from(schema.roles).where(eq(schema.roles.name, "Admin"));
+    const admin = await createEmployee(ws.b.id, { name: "Admin b", phone: "6281200000099", roleId: adminRole.id });
+    const employee = { ...(await getEmployee(ws.b.id, ws.b.employeeId))!, workspaceId: ws.b.id };
+    const date = "2030-02-04"; // a Monday
+    const outbox: { to: string; text: string }[] = [];
+    const send = async (jid: string, text: string) => void outbox.push({ to: jid.split("@")[0]!, text });
+
+    // No session yet (e.g. the prompt never arrived): the reminder opens one.
+    const first = await sendStandupReminders(ws.b.id, { date, send });
+    expect(first).toMatchObject({ sent: 1, created: 1 });
+    expect(outbox.map((m) => m.to)).toEqual([phone]); // admins are not reminded
+    expect(outbox[0]!.text).toContain("Apa yang kamu kerjakan kemarin?");
+
+    await handleStandupMessage({ employee, body: "kemarin: rapat klien", date });
+    outbox.length = 0;
+    await sendStandupReminders(ws.b.id, { date, send });
+    expect(outbox[0]!.text).toContain("belum lengkap");
+    expect(outbox[0]!.text).not.toContain("kemarin?");
+    expect(outbox[0]!.text).toContain("Apa rencanamu hari ini?");
+
+    outbox.length = 0;
+    await sendStandupSummary(ws.b.id, { date, send });
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0]!.to).toBe(admin!.phone);
+    expect(outbox[0]!.text).toContain("0 dari 1 sudah mengisi");
+    expect(outbox[0]!.text).toContain("Emp b: kurang hari ini, kendala");
+
+    expect(await closeStandups(ws.b.id, { date })).toMatchObject({ missed: 1 });
+    expect(await handleStandupMessage({ employee, body: "hari ini: coding", date })).toBeNull();
+    expect(await handleStandupMessage({ employee, body: "STANDUP", date })).toContain("sudah ditutup");
+    outbox.length = 0;
+    expect((await sendStandupReminders(ws.b.id, { date, send })).sent).toBe(0);
+    await sendStandupSummary(ws.b.id, { date, send });
+    expect(outbox[0]!.text).toContain("Emp b: tidak mengisi");
+
+    const badClose = await req("b", `/schedules/${ws.b.scheduleId}`, { method: "PATCH", body: JSON.stringify({ closeTime: "08:00" }) });
+    expect(badClose.status).toBe(400);
+    const ok = await req("b", `/schedules/${ws.b.scheduleId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ reminderMinutes: 30, reminderRepeatMinutes: 60, closeTime: "17:00", summaryTime: "11:00" }),
+    });
+    expect((await ok.json()).closeTime).toBe("17:00");
+  });
+
   test("whatsapp status is per workspace and requires auth", async () => {
     expect((await app.request("/whatsapp/status")).status).toBe(401);
     const status = await (await req("a", "/whatsapp/status")).json();

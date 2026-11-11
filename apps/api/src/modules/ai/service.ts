@@ -85,6 +85,11 @@ function pendingSummary(tool: string, args: Record<string, unknown>): string {
           : `reminder ${args.reminderMinutes} min`,
       );
     }
+    if (args.reminderRepeatMinutes !== undefined) {
+      parts.push(args.reminderRepeatMinutes === null ? "single reminder" : `repeat every ${args.reminderRepeatMinutes} min`);
+    }
+    if (args.closeTime !== undefined) parts.push(args.closeTime === null ? "never close" : `close at ${args.closeTime}`);
+    if (args.summaryTime !== undefined) parts.push(args.summaryTime === null ? "no admin summary" : `admin summary at ${args.summaryTime}`);
     if (args.isActive !== undefined) {
       parts.push(args.isActive ? "activate" : "deactivate");
     }

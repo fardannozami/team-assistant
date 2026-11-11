@@ -13,6 +13,8 @@ import {
   listStandupsByDate,
   sendStandupPrompts,
   sendStandupReminders,
+  sendStandupSummary,
+  closeStandups,
 } from "./service.js";
 
 export const standupsApi = new Hono();
@@ -36,6 +38,16 @@ standupsApi.post("/reminders", canManage, async (c) => {
     await c.req.json().catch(() => ({})),
   );
   return c.json(await sendStandupReminders(getWorkspaceId(c), input));
+});
+
+standupsApi.post("/summary", canManage, async (c) => {
+  const input = parseWith(remindStandupSchema, await c.req.json().catch(() => ({})));
+  return c.json(await sendStandupSummary(getWorkspaceId(c), input));
+});
+
+standupsApi.post("/close", canManage, async (c) => {
+  const input = parseWith(remindStandupSchema, await c.req.json().catch(() => ({})));
+  return c.json(await closeStandups(getWorkspaceId(c), input));
 });
 
 standupsApi.get("/", canView, async (c) => {

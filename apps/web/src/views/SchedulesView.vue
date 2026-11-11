@@ -42,10 +42,7 @@
           <label class="mb-1.5 block text-sm font-semibold text-text">Zona waktu</label>
           <input v-model="form.timezone" type="text" placeholder="Asia/Jakarta" class="min-h-12 w-full rounded-xl border border-border bg-panel px-4 text-base focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20" />
         </div>
-        <div>
-          <label class="mb-1.5 block text-sm font-semibold text-text">Pengingat sebelumnya (menit)</label>
-          <input v-model.number="form.reminder" type="number" min="0" max="1440" class="min-h-12 w-full rounded-xl border border-border bg-panel px-4 text-base focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20" />
-        </div>
+        <ReminderFields v-model="form.reminders" :time="form.time" />
         <div>
           <label class="mb-2 block text-sm font-semibold text-text">Hari aktif</label>
           <div class="flex flex-wrap gap-2">
@@ -90,10 +87,7 @@
           <label class="mb-1.5 block text-sm font-semibold text-text">Zona waktu</label>
           <input v-model="edit.timezone" type="text" class="min-h-12 w-full rounded-xl border border-border bg-panel px-4 text-base focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20" />
         </div>
-        <div>
-          <label class="mb-1.5 block text-sm font-semibold text-text">Pengingat sebelumnya (menit)</label>
-          <input v-model.number="edit.reminder" type="number" min="0" max="1440" class="min-h-12 w-full rounded-xl border border-border bg-panel px-4 text-base focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20" />
-        </div>
+        <ReminderFields v-model="edit.reminders" :time="edit.time" />
         <div>
           <label class="mb-2 block text-sm font-semibold text-text">Hari aktif</label>
           <div class="flex flex-wrap gap-2">
@@ -135,7 +129,7 @@
           <td class="px-5 py-4 border-b border-border align-middle text-text font-mono text-[13px] text-text-dim">{{ s.timeOfDay }}</td>
           <td class="px-5 py-4 border-b border-border align-middle text-text">{{ weekdayLabels(s.weekdays).join(", ") }}</td>
           <td class="px-5 py-4 border-b border-border align-middle text-text">{{ s.timezone || "Asia/Jakarta" }}</td>
-          <td class="px-5 py-4 border-b border-border align-middle text-text">{{ s.reminderMinutes === null ? "—" : s.reminderMinutes + " min" }}</td>
+          <td class="px-5 py-4 border-b border-border align-middle text-text">{{ reminderLabel(s) }}</td>
           <td class="px-5 py-4 border-b border-border align-middle text-text">
             <span class="badge" :class="s.isActive ? 'bg-success/8 text-success border-success/20' : 'bg-text-muted/10 text-text-dim border border-border'">{{ s.isActive ? "Aktif" : "Nonaktif" }}</span>
           </td>
@@ -185,6 +179,7 @@ import {
   showToast,
   type Schedule,
 } from "../api";
+import ReminderFields, { type ReminderSettings } from "./ReminderFields.vue";
 
 const DAYS = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 
@@ -202,7 +197,7 @@ const form = ref({
   time: "09:00",
   weekdays: [1, 2, 3, 4, 5],
   timezone: "Asia/Jakarta",
-  reminder: null as number | null,
+  reminders: defaultReminders(),
 });
 
 const editingId = ref<string | null>(null);
@@ -213,7 +208,7 @@ const edit = ref({
   time: "",
   weekdays: [] as number[],
   timezone: "",
-  reminder: null as number | null,
+  reminders: defaultReminders(),
   isActive: true,
 });
 
@@ -242,6 +237,36 @@ function toggleWeekday(arr: number[], d: number) {
   }
 }
 
+function defaultReminders(): ReminderSettings {
+  return { reminder: 30, repeat: 60, closeTime: "17:00", summaryTime: "11:00" };
+}
+
+function remindersFrom(s: Schedule): ReminderSettings {
+  return {
+    reminder: s.reminderMinutes,
+    repeat: s.reminderRepeatMinutes,
+    closeTime: s.closeTime ?? "",
+    summaryTime: s.summaryTime ?? "",
+  };
+}
+
+/** Form values to API fields: empty inputs mean "off". */
+function reminderPayload(r: ReminderSettings) {
+  const num = (v: number | "" | null) => (typeof v === "number" && v > 0 ? v : null);
+  return {
+    reminderMinutes: num(r.reminder),
+    reminderRepeatMinutes: num(r.reminder) ? num(r.repeat) : null,
+    closeTime: r.closeTime || null,
+    summaryTime: r.summaryTime || null,
+  };
+}
+
+function reminderLabel(s: Schedule) {
+  if (s.reminderMinutes == null) return s.closeTime ? `— · tutup ${s.closeTime}` : "—";
+  const repeat = s.reminderRepeatMinutes ? `, lalu tiap ${s.reminderRepeatMinutes}` : "";
+  return `+${s.reminderMinutes} mnt${repeat}${s.closeTime ? ` · tutup ${s.closeTime}` : ""}`;
+}
+
 function weekdayLabels(ws: number[]) {
   return ws.map((d) => DAYS[d] ?? "?");
 }
@@ -264,7 +289,7 @@ async function handleCreate() {
       timeOfDay: form.value.time,
       weekdays: form.value.weekdays.slice(),
       timezone: form.value.timezone || "Asia/Jakarta",
-      reminderMinutes: form.value.reminder,
+      ...reminderPayload(form.value.reminders),
     });
     showToast("Jadwal berhasil dibuat.", "success");
     createStep.value = 1;
@@ -274,7 +299,7 @@ async function handleCreate() {
       time: "09:00",
       weekdays: [1, 2, 3, 4, 5],
       timezone: "Asia/Jakarta",
-      reminder: null,
+      reminders: defaultReminders(),
     };
     await load();
   } catch (err) {
@@ -293,7 +318,7 @@ function editSchedule(s: Schedule) {
     time: s.timeOfDay,
     weekdays: s.weekdays.slice(),
     timezone: s.timezone || "Asia/Jakarta",
-    reminder: s.reminderMinutes ?? null,
+    reminders: remindersFrom(s),
     isActive: s.isActive,
   };
 }
@@ -305,7 +330,7 @@ async function handleSave() {
     !edit.value.time ||
     !edit.value.weekdays.length
   ) {
-    formError.value = "Name, time and at least one weekday are required.";
+    formError.value = "Nama, waktu, dan minimal satu hari wajib diisi.";
     return;
   }
   error.value = "";
@@ -316,7 +341,7 @@ async function handleSave() {
       timeOfDay: edit.value.time,
       weekdays: edit.value.weekdays.slice(),
       timezone: edit.value.timezone || "Asia/Jakarta",
-      reminderMinutes: edit.value.reminder,
+      ...reminderPayload(edit.value.reminders),
       isActive: edit.value.isActive,
     });
     showToast("Jadwal berhasil diperbarui.", "success");

@@ -170,7 +170,10 @@ export const AI_TOOLS: ToolSpec[] = [
           timeOfDay: { type: "string", description: "HH:mm 24-hour time." },
           weekdays: { type: "array", items: { type: "integer" }, description: "0=Sunday..6=Saturday." },
           timezone: { type: "string", description: "IANA timezone, e.g. Asia/Jakarta." },
-          reminderMinutes: { type: "integer", description: "Reminder minutes after the standup (0-1440), or null to disable." },
+          reminderMinutes: { type: "integer", description: "First reminder, minutes after the standup (0-1440), or null to disable." },
+          reminderRepeatMinutes: { type: "integer", description: "Repeat the reminder every N minutes (15-720) until closeTime, or null for a single reminder." },
+          closeTime: { type: "string", description: "HH:mm when today's standup closes: reminders stop and unfinished ones count as missed. null to never close." },
+          summaryTime: { type: "string", description: "HH:mm when admins get the list of who has not finished. null to disable." },
           isActive: { type: "boolean", description: "Enable or disable the schedule." },
         },
       },
@@ -489,14 +492,21 @@ function describeSchedule(row: {
   weekdays: unknown;
   timezone: string;
   reminderMinutes: number | null;
+  reminderRepeatMinutes: number | null;
+  closeTime: string | null;
+  summaryTime: string | null;
 }): string {
   const when = row.timeOfDay ?? row.cronExpression ?? "?";
   const days = Array.isArray(row.weekdays)
     ? (row.weekdays as number[]).map((d) => DAY_NAMES[d] ?? String(d)).join(", ")
     : "custom days";
   const reminder =
-    row.reminderMinutes != null ? `, reminder ${row.reminderMinutes} min after` : "";
-  return `- ${row.name} (${row.isActive ? "active" : "disabled"}): ${when} ${days}, ${row.timezone}${reminder}`;
+    row.reminderMinutes != null
+      ? `, reminder ${row.reminderMinutes} min after${row.reminderRepeatMinutes ? `, then every ${row.reminderRepeatMinutes} min` : ""}`
+      : "";
+  const close = row.closeTime ? `, closes ${row.closeTime}` : "";
+  const summary = row.summaryTime ? `, admin summary ${row.summaryTime}` : "";
+  return `- ${row.name} (${row.isActive ? "active" : "disabled"}): ${when} ${days}, ${row.timezone}${reminder}${close}${summary}`;
 }
 
 const ADMIN_ONLY = "Hanya Owner atau Admin yang bisa melakukan ini.";

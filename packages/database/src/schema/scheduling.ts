@@ -20,7 +20,10 @@ export const schedules = pgTable(
     weekdays: jsonb("weekdays"), // number[], cron convention 0=Sunday .. 6=Saturday
     timeOfDay: text("time_of_day"), // HH:mm
     timezone: text("timezone").default("Asia/Jakarta").notNull(),
-    reminderMinutes: integer("reminder_minutes"),
+    reminderMinutes: integer("reminder_minutes"), // first reminder, minutes after the prompt
+    reminderRepeatMinutes: integer("reminder_repeat_minutes"), // then every N minutes until closeTime
+    closeTime: text("close_time"), // HH:mm: reminders stop, unfinished standups become "missed"
+    summaryTime: text("summary_time"), // HH:mm: admins get who has not finished yet
     isActive: boolean("is_active").default(true).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()

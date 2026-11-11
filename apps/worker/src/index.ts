@@ -11,6 +11,7 @@ import {
 } from "@repo/database";
 import { and, eq } from "drizzle-orm";
 import { dateInTimezone } from "@repo/shared";
+import { reminderTimes } from "./reminder-times.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 
@@ -39,18 +40,27 @@ const RECONCILE_INTERVAL_MS = Number(
   process.env.SCHEDULER_RECONCILE_MS ?? 60_000,
 );
 
-const OWNED_PREFIXES = ["standup-prompts", "standup-reminders", "daily-report"];
+const OWNED_PREFIXES = [
+  "standup-prompts",
+  "standup-reminders",
+  "standup-summary",
+  "standup-close",
+  "daily-report",
+];
 
 const API_PATHS: Record<string, string> = {
   "standup-prompts": "/standups/trigger",
   "standup-reminders": "/standups/reminders",
+  "standup-summary": "/standups/summary",
+  "standup-close": "/standups/close",
   "daily-report": "/reports/daily/notify",
 };
 
 /**
- * Job names are `<baseName>:<suffix>`: the suffix is the schedule id for
- * standup jobs and the workspace id for daily reports. Legacy `:env` jobs
- * have no owner and yield a null suffix.
+ * Job names are `<baseName>:<suffix>[@HHmm]`: the suffix is the schedule id
+ * for standup jobs and the workspace id for daily reports; reminders add the
+ * time they run at, so each reminder of the day is its own repeatable. Legacy
+ * `:env` jobs have no owner and yield a null suffix.
  */
 function splitJobName(name: string): {
   baseName: string;
@@ -59,7 +69,7 @@ function splitJobName(name: string): {
   const separator = name.indexOf(":");
   if (separator === -1) return { baseName: name, suffix: null };
   const baseName = name.slice(0, separator);
-  const suffix = name.slice(separator + 1);
+  const suffix = name.slice(separator + 1).split("@")[0]!;
   return { baseName, suffix: suffix === "env" ? null : suffix };
 }
 
@@ -67,14 +77,6 @@ function cronFor(timeOfDay: string, weekdays: number[]): string {
   const [hour = 0, minute = 0] = timeOfDay.split(":").map(Number);
   const days = [...new Set(weekdays)].sort((a, b) => a - b).join(",");
   return `${minute} ${hour} * * ${days || "*"}`;
-}
-
-function shiftTime(timeOfDay: string, minutes: number): string {
-  const [hour = 0, minute = 0] = timeOfDay.split(":").map(Number);
-  const total = (((hour * 60 + minute + minutes) % 1440) + 1440) % 1440;
-  const hh = String(Math.floor(total / 60)).padStart(2, "0");
-  const mm = String(total % 60).padStart(2, "0");
-  return `${hh}:${mm}`;
 }
 
 type DesiredRepeatable = {
@@ -107,13 +109,26 @@ async function desiredRepeatables(): Promise<DesiredRepeatable[]> {
         tz,
         ...owner,
       });
-      if (schedule.reminderMinutes != null && schedule.reminderMinutes > 0) {
+      for (const time of reminderTimes({ ...schedule, timeOfDay: schedule.timeOfDay })) {
         desired.push({
-          name: `standup-reminders:${schedule.id}`,
-          pattern: cronFor(
-            shiftTime(schedule.timeOfDay, schedule.reminderMinutes),
-            weekdays,
-          ),
+          name: `standup-reminders:${schedule.id}@${time.replace(":", "")}`,
+          pattern: cronFor(time, weekdays),
+          tz,
+          ...owner,
+        });
+      }
+      if (schedule.summaryTime) {
+        desired.push({
+          name: `standup-summary:${schedule.id}`,
+          pattern: cronFor(schedule.summaryTime, weekdays),
+          tz,
+          ...owner,
+        });
+      }
+      if (schedule.closeTime) {
+        desired.push({
+          name: `standup-close:${schedule.id}`,
+          pattern: cronFor(schedule.closeTime, weekdays),
           tz,
           ...owner,
         });

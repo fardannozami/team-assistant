@@ -184,6 +184,9 @@ export interface Schedule {
   weekdays: number[];
   timezone: string;
   reminderMinutes: number | null;
+  reminderRepeatMinutes: number | null;
+  closeTime: string | null;
+  summaryTime: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -195,6 +198,9 @@ export interface ScheduleInput {
   weekdays: number[];
   timezone?: string | null;
   reminderMinutes?: number | null;
+  reminderRepeatMinutes?: number | null;
+  closeTime?: string | null;
+  summaryTime?: string | null;
   isActive?: boolean;
 }
 

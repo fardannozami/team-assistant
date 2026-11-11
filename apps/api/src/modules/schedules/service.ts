@@ -19,6 +19,17 @@ function assertValidTimezone(timezone: string) {
   }
 }
 
+/** Close and summary times only make sense after the prompt, on the same day. */
+function assertDayOrder(s: { timeOfDay: string | null; closeTime?: string | null; summaryTime?: string | null }) {
+  if (!s.timeOfDay) return;
+  if (s.closeTime && s.closeTime <= s.timeOfDay) {
+    throw new HttpError(400, `Jam tutup (${s.closeTime}) harus setelah jam standup (${s.timeOfDay}).`);
+  }
+  if (s.summaryTime && s.summaryTime <= s.timeOfDay) {
+    throw new HttpError(400, `Jam ringkasan (${s.summaryTime}) harus setelah jam standup (${s.timeOfDay}).`);
+  }
+}
+
 function scheduleWhere(workspaceId: string, id: string) {
   return and(eq(schedules.id, id), eq(schedules.workspaceId, workspaceId));
 }
@@ -47,6 +58,7 @@ export async function createSchedule(
   actorId?: string | null,
 ) {
   assertValidTimezone(input.timezone ?? "Asia/Jakarta");
+  assertDayOrder(input);
 
   const [created] = await db
     .insert(schedules)
@@ -57,6 +69,9 @@ export async function createSchedule(
       weekdays: input.weekdays,
       timezone: input.timezone ?? "Asia/Jakarta",
       reminderMinutes: input.reminderMinutes ?? null,
+      reminderRepeatMinutes: input.reminderRepeatMinutes ?? null,
+      closeTime: input.closeTime ?? null,
+      summaryTime: input.summaryTime ?? null,
       isActive: true,
     })
     .onConflictDoNothing({ target: [schedules.workspaceId, schedules.name] })
@@ -89,8 +104,13 @@ export async function updateSchedule(
   input: UpdateScheduleInput,
   actorId?: string | null,
 ) {
-  await getSchedule(workspaceId, id);
+  const existing = await getSchedule(workspaceId, id);
   if (input.timezone) assertValidTimezone(input.timezone);
+  assertDayOrder({
+    timeOfDay: input.timeOfDay ?? existing.timeOfDay,
+    closeTime: input.closeTime === undefined ? existing.closeTime : input.closeTime,
+    summaryTime: input.summaryTime === undefined ? existing.summaryTime : input.summaryTime,
+  });
 
   const changes: Partial<typeof schedules.$inferInsert> = {
     updatedAt: new Date(),
@@ -102,6 +122,11 @@ export async function updateSchedule(
   if (input.reminderMinutes !== undefined) {
     changes.reminderMinutes = input.reminderMinutes;
   }
+  if (input.reminderRepeatMinutes !== undefined) {
+    changes.reminderRepeatMinutes = input.reminderRepeatMinutes;
+  }
+  if (input.closeTime !== undefined) changes.closeTime = input.closeTime;
+  if (input.summaryTime !== undefined) changes.summaryTime = input.summaryTime;
   if (input.isActive !== undefined) changes.isActive = input.isActive;
 
   try {

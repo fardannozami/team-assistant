@@ -116,13 +116,16 @@ function statusLabel(status: string) {
   const key = String(status).toLowerCase();
   if (key === "completed") return "Selesai";
   if (key === "pending") return "Menunggu";
+  if (key === "in_progress") return "Sebagian";
+  if (key === "missed") return "Tidak mengisi";
   return status;
 }
 
 function statusBadgeUtils(status: string) {
   const key = String(status).toLowerCase();
   if (key === "completed") return "bg-success/8 text-success border-success/20";
-  if (key === "pending") return "bg-warning/8 text-warning border-warning/20";
+  if (key === "pending" || key === "in_progress") return "bg-warning/8 text-warning border-warning/20";
+  if (key === "missed") return "bg-danger/8 text-danger border-danger/20";
   return "bg-text-muted/10 text-text-dim border border-border";
 }
 

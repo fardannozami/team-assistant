@@ -57,12 +57,17 @@ export function standupPromptText(date: string): string {
   ].join("\n");
 }
 
-export function standupReminderText(date: string): string {
+/** Asks only for the answers still missing (all three by default). */
+export function standupReminderText(
+  date: string,
+  missing: readonly StandupElement[] = CORE_STANDUP_ELEMENTS,
+): string {
+  const partial = missing.length < CORE_STANDUP_ELEMENTS.length;
   return [
-    `Pengingat: kamu belum mengirim standup untuk ${date}.`,
-    `${STANDUP_QUESTIONS.yesterday}`,
-    `${STANDUP_QUESTIONS.today}`,
-    `${STANDUP_QUESTIONS.blockers}`,
+    partial
+      ? `Pengingat: standup ${date} kamu belum lengkap.`
+      : `Pengingat: kamu belum mengirim standup untuk ${date}.`,
+    ...missing.map((key) => STANDUP_QUESTIONS[key]),
   ].join("\n");
 }
 
@@ -278,8 +283,12 @@ export async function handleStandupMessage(args: {
   if (start) return startStandup(args.employee, date, text.slice(start[0].length));
 
   const session = await getStandupSession(args.employee.id, date);
-  if (!session || session.status === "completed") return null;
+  if (!session || session.status === "completed" || session.status === "missed") return null;
   return recordAnswers(args.employee, session, date, text);
+}
+
+function closedText(date: string) {
+  return `Standup ${date} sudah ditutup, jawaban tidak bisa dicatat lagi. Sampai jumpa di standup berikutnya!`;
 }
 
 /** STANDUP: opens today's session on demand, then records any answers sent with it. */
@@ -294,6 +303,7 @@ async function startStandup(employee: StandupCollector, date: string, rest: stri
     if (!session) return "Standup belum bisa dimulai. Coba lagi sebentar.";
   }
 
+  if (session.status === "missed") return closedText(date);
   if (session.status === "completed") {
     const row = await getOrCreateStandupRow(employee.workspaceId, session.id, employee.id, date);
     return `${summarize(date, "Standup kamu sudah tercatat untuk", await getAnswers(row.id))}\n${EDIT_HINT}`;
@@ -311,6 +321,7 @@ async function startStandup(employee: StandupCollector, date: string, rest: stri
 async function editStandup(employee: StandupCollector, date: string, rest: string) {
   const session = await getStandupSession(employee.id, date);
   if (!session) return `Belum ada standup untuk ${date}. Kirim STANDUP untuk mulai.`;
+  if (session.status === "missed") return closedText(date);
   if (session.status !== "completed") {
     return rest ? recordAnswers(employee, session, date, rest) : `Standup ${date} belum selesai. ${STANDUP_QUESTIONS.yesterday}`;
   }
