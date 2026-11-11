@@ -511,7 +511,26 @@ export interface SaveAiSettingsInput {
   apiKey?: string;
 }
 
+export interface AiPolicy {
+  allowEmployees: boolean;
+  employeeDailyLimit: number;
+  workspaceDailyLimit: number;
+}
+
+export interface AiUsage {
+  today: number;
+  week: { name: string; messages: number; tokens: number; today: number }[];
+}
+
 export const aiApi = {
+  policy: () => request<{ policy: AiPolicy; usage: AiUsage }>("/ai/policy"),
+
+  savePolicy: (patch: Partial<AiPolicy>) =>
+    request<{ policy: AiPolicy }>("/ai/policy", {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    }),
+
   settings: () => request<AiSettings>("/ai/settings"),
 
   save: (input: SaveAiSettingsInput) =>

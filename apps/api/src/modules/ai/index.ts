@@ -6,6 +6,7 @@ import { HttpError } from "../../lib/http-error.js";
 import { getActorId, getWorkspaceId } from "../../lib/tenant.js";
 import { handleAiMessage } from "./service.js";
 import { deleteAiSettings, getAiSettings, saveAiSettings, type SaveAiSettingsInput } from "./settings.js";
+import { getAiPolicy, getAiUsageSummary, updateAiPolicy, type AiPolicy } from "./policy.js";
 
 const db = createDbClient(
   process.env.DATABASE_URL ??
@@ -59,3 +60,14 @@ aiApi.put("/settings", canManage, async (c) => {
 });
 
 aiApi.delete("/settings", canManage, async (c) => c.json(await deleteAiSettings(getWorkspaceId(c), getActorId(c))));
+
+aiApi.get("/policy", canManage, async (c) => {
+  const ws = getWorkspaceId(c);
+  const [policy, usage] = await Promise.all([getAiPolicy(ws), getAiUsageSummary(ws)]);
+  return c.json({ policy, usage });
+});
+
+aiApi.put("/policy", canManage, async (c) => {
+  const patch = await c.req.json<Partial<AiPolicy>>();
+  return c.json({ policy: await updateAiPolicy(getWorkspaceId(c), patch, getActorId(c)) });
+});

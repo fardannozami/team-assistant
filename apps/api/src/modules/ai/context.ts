@@ -110,6 +110,12 @@ export async function buildAgentContext(args: AgentArgs): Promise<string> {
       ? "This user may look up any employee's profile and standup history, and see team activity and reports."
       : "This user may only access their own profile and standup history (tools enforce this).",
   ];
+  if (!canViewOthers(resolvedRole)) {
+    lines.push(
+      "This user is a regular employee and this assistant is only for their daily standup: recording or checking their own standup, the standup schedule and holidays.",
+      "Politely decline anything else in one short sentence and mention they can type STANDUP or BANTUAN.",
+    );
+  }
   if (resolvedRole === "Owner" || resolvedRole === "Admin") {
     lines.push(
       "This user is an admin: they may manage employees (add, rename, change WhatsApp number, team or role, deactivate), teams, schedules, calendar exceptions, and send standup prompts or reminders now.",

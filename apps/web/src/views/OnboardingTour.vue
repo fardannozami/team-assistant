@@ -33,7 +33,7 @@ const emit = defineEmits<{ (event: "close"): void }>();
 const steps = [
   { icon: "👋", title: "Selamat datang di Team Assistant", body: "Ini workspace Anda sendiri: bot WhatsApp, anggota, dan laporan Anda terpisah dari pengguna lain. Asisten menanyakan kabar harian tim lewat WhatsApp, lalu merangkumnya untuk Anda." },
   { icon: "💬", title: "Standup lewat WhatsApp", body: "Setiap hari kerja, bot mengirim pertanyaan standup ke anggota. Mereka cukup membalas chat — tanpa aplikasi tambahan." },
-  { icon: "🔑", title: "AI dengan API key Anda sendiri", body: "Bot memakai AI untuk menjawab pertanyaan dan perintah bebas. Setiap workspace memakai API key miliknya sendiri, jadi kuota Anda tidak terbagi dengan pengguna lain. Google Gemini dan Groq punya kuota gratis; key disimpan terenkripsi." },
+  { icon: "🔑", title: "AI dengan API key Anda sendiri", body: "Bot memakai AI untuk menjawab pertanyaan dan perintah bebas. Setiap workspace memakai API key miliknya sendiri, jadi kuota Anda tidak terbagi dengan pengguna lain. Google Gemini dan Groq punya kuota gratis; key disimpan terenkripsi. Secara bawaan AI hanya untuk Owner, Admin, dan Manager; karyawan cukup memakai kata kunci STANDUP, dan Anda bisa mengatur batas hariannya." },
   { icon: "📊", title: "Pantau dari Beranda", body: "Lihat siapa yang sudah mengisi, hambatan yang muncul, dan laporan mingguan dalam satu tempat." },
   { icon: "✅", title: "Siap dalam 4 langkah", body: "Hubungkan nomor WhatsApp untuk bot, pasang API key AI di Pengaturan → AI, tambahkan anggota (termasuk diri Anda dengan role Admin agar bisa memberi perintah lewat WhatsApp), lalu cek jadwal. Daftar periksa di Beranda akan memandu Anda." },
 ];

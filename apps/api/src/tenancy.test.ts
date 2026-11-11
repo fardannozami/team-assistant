@@ -202,6 +202,39 @@ describe.skipIf(!url)("tenant isolation", () => {
     expect(edited).toContain("Hari ini: integrasi API");
   });
 
+  test("AI policy: employees off by default, limits apply before any model call", async () => {
+    // Workspace A has an (unreachable) AI key from the earlier test, so every
+    // reply below must come from the policy, never from the provider.
+    const { handleAiMessage } = await import("./modules/ai/service.js");
+    const { getEmployee } = await import("./modules/employees/service.js");
+    const employee = { ...(await getEmployee(ws.a.id, ws.a.employeeId))!, workspaceId: ws.a.id } as any;
+    const ask = (body: string, roleName: string) =>
+      handleAiMessage({ workspaceId: ws.a.id, phone: employee.phone, body, employee, roleName });
+
+    expect(await ask("ceritakan lelucon", "Employee")).toBeNull();
+
+    const bad = await req("a", "/ai/policy", { method: "PUT", body: JSON.stringify({ employeeDailyLimit: 0 }) });
+    expect(bad.status).toBe(400);
+    const saved = await req("a", "/ai/policy", {
+      method: "PUT",
+      body: JSON.stringify({ allowEmployees: true, employeeDailyLimit: 1, workspaceDailyLimit: 2 }),
+    });
+    expect((await saved.json()).policy).toEqual({ allowEmployees: true, employeeDailyLimit: 1, workspaceDailyLimit: 2 });
+    expect((await (await req("b", "/ai/policy")).json()).policy.allowEmployees).toBe(false);
+
+    expect(await ask("x".repeat(1001), "Employee")).toContain("terlalu panjang");
+
+    await db.insert(schema.aiUsageLogs).values({ workspaceId: ws.a.id, employeeId: employee.id, model: "test" });
+    expect(await ask("halo", "Employee")).toContain("sudah memakai 1 pesan AI");
+
+    await db.insert(schema.aiUsageLogs).values({ workspaceId: ws.a.id, employeeId: employee.id, model: "test" });
+    expect(await ask("halo", "Admin")).toContain("Batas harian asisten AI");
+
+    const { usage } = await (await req("a", "/ai/policy")).json();
+    expect(usage.today).toBe(2);
+    expect(usage.week[0].messages).toBe(2);
+  });
+
   test("whatsapp status is per workspace and requires auth", async () => {
     expect((await app.request("/whatsapp/status")).status).toBe(401);
     const status = await (await req("a", "/whatsapp/status")).json();

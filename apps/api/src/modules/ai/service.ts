@@ -3,6 +3,13 @@ import { createDbClient, aiUsageLogs, agentMemories } from "@repo/database";
 import { AiProviderError, chatWithTools, type ChatMessage } from "./client.js";
 import { resolveAiConfig } from "./settings.js";
 import {
+  countAiUsageToday,
+  EMPLOYEE_TOOL_NAMES,
+  getAiPolicy,
+  isStaffRole,
+  MAX_MESSAGE_CHARS,
+} from "./policy.js";
+import {
   appendConversationMessage,
   buildAgentContext,
   getConversationHistory,
@@ -122,17 +129,15 @@ async function logUsage(
     total_tokens?: number;
   } | null,
 ) {
-  if (!usage || (usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0) === 0) {
-    return;
-  }
+  // One row per AI-handled message: it is also what daily limits count.
   try {
     await db.insert(aiUsageLogs).values({
       workspaceId,
       employeeId,
       model,
-      promptTokens: usage.prompt_tokens ?? null,
-      completionTokens: usage.completion_tokens ?? null,
-      totalTokens: usage.total_tokens ?? null,
+      promptTokens: usage?.prompt_tokens ?? null,
+      completionTokens: usage?.completion_tokens ?? null,
+      totalTokens: usage?.total_tokens ?? null,
     });
   } catch (error) {
     logger.warn({ err: error }, "Failed to log AI usage");
@@ -252,7 +257,15 @@ export async function handleAiMessage(
   const config = await resolveAiConfig(args.workspaceId);
   if (!config) return null;
 
+  // Employees are for standups: without AI access they get the keywords.
+  const staff = isStaffRole(args.roleName);
+  const policy = await getAiPolicy(args.workspaceId);
+  if (!staff && !policy.allowEmployees) return null;
+
   const channel = args.channel ?? "whatsapp";
+  const tools = staff ? AI_TOOLS : AI_TOOLS.filter((t) => EMPLOYEE_TOOL_NAMES.has(t.function.name));
+  let modelCalled = false;
+  let usedModel = config.model;
 
   try {
     const confirmationReply = await runPendingConfirmation(
@@ -271,6 +284,18 @@ export async function handleAiMessage(
       return confirmationReply;
     }
 
+    const maxChars = staff ? MAX_MESSAGE_CHARS.staff : MAX_MESSAGE_CHARS.employee;
+    if (body.length > maxChars) {
+      return `Pesan terlalu panjang untuk asisten AI (maksimal ${maxChars} karakter). Persingkat pesannya.`;
+    }
+    const used = await countAiUsageToday(args.workspaceId, args.employee.id);
+    if (used.workspace >= policy.workspaceDailyLimit) {
+      return "Batas harian asisten AI untuk workspace ini sudah tercapai. Coba lagi besok, atau ketik BANTUAN untuk perintah standup.";
+    }
+    if (!staff && used.employee >= policy.employeeDailyLimit) {
+      return `Kamu sudah memakai ${policy.employeeDailyLimit} pesan AI hari ini. Untuk standup, gunakan STANDUP atau ketik BANTUAN.`;
+    }
+
     const system = await buildAgentContext({
       workspaceId: args.workspaceId,
       employee: args.employee,
@@ -285,11 +310,11 @@ export async function handleAiMessage(
     ];
 
     let finalText: string | null = null;
-    let usedModel = config.model;
     let usage: Parameters<typeof logUsage>[3] = null;
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
-      const result = await chatWithTools(config, messages, AI_TOOLS);
+      modelCalled = true;
+      const result = await chatWithTools(config, messages, tools);
       usedModel = result.model;
       usage = result.usage ?? usage;
       messages.push(result.message);
@@ -307,6 +332,15 @@ export async function handleAiMessage(
           parsed = JSON.parse(call.function?.arguments || "{}");
         } catch {
           parsed = {};
+        }
+
+        if (!tools.some((t) => t.function.name === name)) {
+          messages.push({
+            role: "tool",
+            tool_call_id: call.id,
+            content: JSON.stringify({ ok: false, error: "This tool is not available to this user." }),
+          });
+          continue;
         }
 
         if (MUTATING_TOOLS.has(name)) {
@@ -364,6 +398,8 @@ export async function handleAiMessage(
     );
     return finalText;
   } catch (error) {
+    // Failed calls still count toward the daily limits.
+    if (modelCalled) await logUsage(args.workspaceId, args.employee.id, usedModel, null);
     if (error instanceof HttpError) {
       if (error.status === 400) return null;
       logger.warn({ err: error }, "AI request rejected");

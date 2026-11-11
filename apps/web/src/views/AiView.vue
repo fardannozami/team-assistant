@@ -118,12 +118,77 @@
         </div>
       </form>
     </section>
+
+    <!-- Akses & batas -->
+    <section v-if="policy" class="mt-9">
+      <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-3">Akses & batas</div>
+      <form class="grid gap-4" @submit.prevent="savePolicy">
+        <label class="flex items-start gap-3 px-4 py-4 rounded-xl border border-border bg-panel-hover cursor-pointer">
+          <input v-model="policyForm.allowEmployees" type="checkbox" class="mt-1 h-4 w-4 accent-accent" />
+          <span>
+            <span class="block text-sm font-bold text-text">Izinkan AI untuk karyawan</span>
+            <span class="block text-sm text-text-muted">
+              Mati: karyawan hanya memakai kata kunci standup (STANDUP, UBAH STANDUP, BANTUAN). Hidup: AI hanya membantu standup mereka sendiri, dengan batas harian di bawah. Owner, Admin, dan Manager selalu bisa memakai AI.
+            </span>
+          </span>
+        </label>
+        <div class="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+          <div>
+            <label for="ai-employee-limit" class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Pesan AI per karyawan / hari</label>
+            <input id="ai-employee-limit" v-model.number="policyForm.employeeDailyLimit" type="number" min="1" max="500" required :disabled="!policyForm.allowEmployees" :class="[inputClass, 'disabled:opacity-50']" />
+          </div>
+          <div>
+            <label for="ai-workspace-limit" class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Pesan AI seluruh workspace / hari</label>
+            <input id="ai-workspace-limit" v-model.number="policyForm.workspaceDailyLimit" type="number" min="1" max="10000" required :class="inputClass" />
+          </div>
+        </div>
+        <p class="text-text-muted text-xs -mt-2">Pesan karyawan ke AI maksimal 1.000 karakter, admin 4.000. Hitungan harian direset tengah malam WIB.</p>
+        <div>
+          <button
+            type="submit"
+            :disabled="savingPolicy || !policyDirty"
+            class="px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white transition hover:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {{ savingPolicy ? "Menyimpan…" : "Simpan batas" }}
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Pemakaian -->
+    <section v-if="usage" class="mt-9">
+      <div class="flex items-baseline justify-between gap-3 mb-3">
+        <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim">Pemakaian 7 hari terakhir</div>
+        <div class="text-sm text-text-muted">Hari ini: <span class="font-bold text-text">{{ usage.today }}</span> / {{ policy?.workspaceDailyLimit }}</div>
+      </div>
+      <p v-if="usage.week.length === 0" class="text-sm text-text-muted">Belum ada pemakaian AI.</p>
+      <div v-else class="overflow-x-auto rounded-xl border border-border">
+        <table class="w-full text-sm">
+          <thead class="bg-panel-hover text-left text-[11px] font-extrabold uppercase tracking-wider text-text-dim">
+            <tr>
+              <th class="px-4 py-2.5">Anggota</th>
+              <th class="px-4 py-2.5 text-right">Hari ini</th>
+              <th class="px-4 py-2.5 text-right">7 hari</th>
+              <th class="px-4 py-2.5 text-right">Token</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in usage.week" :key="row.name" class="border-t border-border">
+              <td class="px-4 py-2.5 text-text">{{ row.name }}</td>
+              <td class="px-4 py-2.5 text-right tabular-nums">{{ row.today }}</td>
+              <td class="px-4 py-2.5 text-right tabular-nums">{{ row.messages }}</td>
+              <td class="px-4 py-2.5 text-right tabular-nums text-text-muted">{{ row.tokens.toLocaleString("id-ID") }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
   </template>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { aiApi, ApiError, showToast, type AiProvider, type AiSettings } from "../api";
+import { aiApi, ApiError, showToast, type AiPolicy, type AiProvider, type AiSettings, type AiUsage } from "../api";
 
 const providerOptions: { id: AiProvider; label: string; help: string; keyUrl?: string }[] = [
   { id: "gemini", label: "Google Gemini", help: "Ada kuota gratis harian. Buat key di Google AI Studio.", keyUrl: "https://aistudio.google.com/apikey" },
@@ -147,6 +212,18 @@ const form = reactive<{ provider: AiProvider; baseUrl: string; model: string; ap
   model: "",
   apiKey: "",
 });
+
+const policy = ref<AiPolicy | null>(null);
+const usage = ref<AiUsage | null>(null);
+const policyForm = reactive<AiPolicy>({ allowEmployees: false, employeeDailyLimit: 10, workspaceDailyLimit: 200 });
+const savingPolicy = ref(false);
+const policyDirty = computed(
+  () =>
+    !!policy.value &&
+    (policy.value.allowEmployees !== policyForm.allowEmployees ||
+      policy.value.employeeDailyLimit !== policyForm.employeeDailyLimit ||
+      policy.value.workspaceDailyLimit !== policyForm.workspaceDailyLimit),
+);
 
 const currentOption = computed(() => providerOptions.find((p) => p.id === form.provider)!);
 // The server keeps the stored key only when the endpoint stays the same.
@@ -173,10 +250,31 @@ function fillForm(s: AiSettings) {
   form.apiKey = "";
 }
 
+function fillPolicy(p: AiPolicy) {
+  policy.value = p;
+  Object.assign(policyForm, p);
+}
+
+async function savePolicy() {
+  error.value = "";
+  savingPolicy.value = true;
+  try {
+    fillPolicy((await aiApi.savePolicy({ ...policyForm })).policy);
+    showToast("Batas AI disimpan.", "success");
+  } catch (err) {
+    error.value = err instanceof ApiError ? err.message : "Batas AI gagal disimpan.";
+  } finally {
+    savingPolicy.value = false;
+  }
+}
+
 async function load() {
   loading.value = true;
   try {
-    fillForm(await aiApi.settings());
+    const [s, p] = await Promise.all([aiApi.settings(), aiApi.policy()]);
+    fillPolicy(p.policy);
+    usage.value = p.usage;
+    fillForm(s);
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : "Pengaturan AI gagal dimuat.";
   } finally {
