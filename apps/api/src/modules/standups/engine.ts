@@ -37,6 +37,10 @@ const ELEMENT_KEYWORDS: Record<StandupElement, RegExp[]> = {
 const NO_BLOCKER =
   /^(tidak\s+ada(\s+(kendala|blocker|masalah))?|ga[k]?\s+ada(\s+(kendala|blocker))?|nggak\s+ada(\s+(kendala|blocker))?|none|no\s+blockers?|nothing|belum\s+ada|aman|lancar)\.?$/i;
 
+// Negation right before a blocker keyword ("... dan tidak ada kendala").
+const NEGATED_BLOCKER_PREFIX =
+  /(?:[,;]?\s*(?:dan|tapi|terus)\s+)?(?:tidak|tdk|ga|gak|nggak|ngga|enggak|belum)\s+ada\s+$/i;
+
 export const STANDUP_QUESTIONS: Record<StandupElement, string> = {
   yesterday: "Apa yang kamu kerjakan kemarin?",
   today: "Apa rencanamu hari ini?",
@@ -62,10 +66,15 @@ export function standupReminderText(date: string): string {
   ].join("\n");
 }
 
-function parseStandupText(
+export function parseStandupText(
   text: string,
 ): Partial<Record<StandupElement, string>> {
-  const marks: { index: number; end: number; element: StandupElement }[] = [];
+  const marks: {
+    index: number;
+    end: number;
+    element: StandupElement;
+    negated?: boolean;
+  }[] = [];
 
   for (const [element, patterns] of Object.entries(ELEMENT_KEYWORDS) as [
     StandupElement,
@@ -74,10 +83,15 @@ function parseStandupText(
     for (const pattern of patterns) {
       const match = text.match(pattern);
       if (match && match.index !== undefined) {
+        const negation =
+          element === "blockers"
+            ? text.slice(0, match.index).match(NEGATED_BLOCKER_PREFIX)
+            : null;
         marks.push({
-          index: match.index,
+          index: match.index - (negation?.[0].length ?? 0),
           end: match.index + match[0].length,
           element,
+          negated: !!negation,
         });
       }
     }
@@ -109,7 +123,10 @@ function parseStandupText(
       .replace(/[\s,;]+$/, "")
       .trim();
     let value = rawValue;
-    if (!value && element === "blockers" && NO_BLOCKER.test(text)) {
+    if (
+      element === "blockers" &&
+      (marks[i]!.negated || (!value && NO_BLOCKER.test(text)))
+    ) {
       value = "none";
     }
     if (!value) continue;
