@@ -133,7 +133,7 @@ async function logUsage(
       totalTokens: usage.total_tokens ?? null,
     });
   } catch (error) {
-    logger.warn({ error }, "Failed to log AI usage");
+    logger.warn({ err: error }, "Failed to log AI usage");
   }
 }
 
@@ -181,7 +181,7 @@ async function storeConfirmedActionMemory(
       content: summary,
     });
   } catch (error) {
-    logger.warn({ error }, "Failed to store agent memory");
+    logger.warn({ err: error }, "Failed to store agent memory");
   }
 }
 
@@ -351,9 +351,9 @@ export async function handleAiMessage(
   } catch (error) {
     if (error instanceof HttpError) {
       if (error.status === 400) return null;
-      logger.warn({ error }, "AI request rejected");
+      logger.warn({ err: error }, "AI request rejected");
     } else {
-      logger.error({ error }, "AI message handling failed");
+      logger.error({ err: error }, "AI message handling failed");
     }
     return "Sorry, something went wrong on my side. Please try again later.";
   }

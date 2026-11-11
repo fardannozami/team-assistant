@@ -519,7 +519,7 @@ export async function startAllWhatsApp() {
   try {
     await migrateLegacySession();
   } catch (error) {
-    logger.error({ error }, "Failed to migrate legacy WhatsApp session");
+    logger.error({ err: error }, "Failed to migrate legacy WhatsApp session");
   }
 
   const rows = await db
