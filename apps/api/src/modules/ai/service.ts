@@ -1,6 +1,7 @@
 import pino from "pino";
 import { createDbClient, aiUsageLogs, agentMemories } from "@repo/database";
-import { chatWithTools, isAiConfigured, aiModel, type ChatMessage } from "./client.js";
+import { AiProviderError, chatWithTools, type ChatMessage } from "./client.js";
+import { resolveAiConfig } from "./settings.js";
 import {
   appendConversationMessage,
   buildAgentContext,
@@ -240,13 +241,15 @@ export type AiMessageArgs = ToolContextInput & {
 export async function handleAiMessage(
   args: AiMessageArgs,
 ): Promise<string | null> {
-  if (!isAiConfigured()) return null;
   if (process.env.AI_ENABLED === "false") return null;
   const body = (args.body ?? "").trim();
   if (!body) return null;
 
   const phone = args.phone ?? args.employee?.phone;
   if (!phone || !args.employee?.id || !args.workspaceId) return null;
+
+  const config = await resolveAiConfig(args.workspaceId);
+  if (!config) return null;
 
   const channel = args.channel ?? "whatsapp";
 
@@ -281,11 +284,11 @@ export async function handleAiMessage(
     ];
 
     let finalText: string | null = null;
-    let usedModel = aiModel();
+    let usedModel = config.model;
     let usage: Parameters<typeof logUsage>[3] = null;
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
-      const result = await chatWithTools(messages, AI_TOOLS);
+      const result = await chatWithTools(config, messages, AI_TOOLS);
       usedModel = result.model;
       usage = result.usage ?? usage;
       messages.push(result.message);
@@ -354,6 +357,9 @@ export async function handleAiMessage(
       logger.warn({ err: error }, "AI request rejected");
     } else {
       logger.error({ err: error }, "AI message handling failed");
+    }
+    if (error instanceof AiProviderError && (error.isKeyRejected || error.status === 429)) {
+      return "Asisten AI sedang tidak tersedia: API key workspace ini ditolak atau kuotanya habis. Admin dapat memperbaruinya di Pengaturan → AI.";
     }
     return "Sorry, something went wrong on my side. Please try again later.";
   }

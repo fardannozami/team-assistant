@@ -66,7 +66,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { ApiError, employeesApi, reportsApi, schedulesApi, whatsappApi, type DailyReport } from "../api";
+import { ApiError, aiApi, employeesApi, reportsApi, schedulesApi, whatsappApi, type DailyReport } from "../api";
 
 const emit = defineEmits<{ (event: "navigate", tab: string): void; (event: "tour"): void }>();
 const report = ref<DailyReport | null>(null);
@@ -74,9 +74,10 @@ const loading = ref(true);
 const error = ref("");
 
 const setupLoaded = ref(false);
-const status = ref({ whatsapp: false, employees: false, schedules: false });
+const status = ref({ whatsapp: false, ai: false, employees: false, schedules: false });
 const setup = computed(() => [
   { id: "whatsapp", title: "Hubungkan WhatsApp", description: "Tautkan nomor bot agar bisa mengirim pesan", done: status.value.whatsapp },
+  { id: "ai", title: "Pasang API key AI", description: "Gunakan key Anda sendiri (mis. Gemini atau Groq, gratis) agar bot bisa menjawab pertanyaan", done: status.value.ai },
   { id: "employees", title: "Tambah anggota tim", description: "Masukkan nama dan nomor WhatsApp anggota", done: status.value.employees },
   { id: "schedules", title: "Atur jadwal standup", description: "Tentukan jam pertanyaan dikirim setiap hari", done: status.value.schedules },
 ]);
@@ -102,9 +103,10 @@ async function loadSummary() {
 }
 
 async function loadSetup() {
-  const [wa, employees, schedules] = await Promise.allSettled([whatsappApi.status(), employeesApi.list({ active: true }), schedulesApi.list()]);
+  const [wa, ai, employees, schedules] = await Promise.allSettled([whatsappApi.status(), aiApi.settings(), employeesApi.list({ active: true }), schedulesApi.list()]);
   status.value = {
     whatsapp: wa.status === "fulfilled" && (wa.value.connected || wa.value.registered),
+    ai: ai.status === "fulfilled" && (ai.value.configured || ai.value.sharedKeyAvailable),
     employees: employees.status === "fulfilled" && employees.value.length > 0,
     schedules: schedules.status === "fulfilled" && schedules.value.some((s) => s.isActive),
   };

@@ -491,6 +491,41 @@ export const whatsappApi = {
     }),
 };
 
+export type AiProvider = "gemini" | "groq" | "openai" | "openrouter" | "custom";
+
+export interface AiSettings {
+  configured: boolean;
+  provider: AiProvider | null;
+  baseUrl: string | null;
+  model: string | null;
+  apiKeyHint: string | null;
+  updatedAt: string | null;
+  sharedKeyAvailable: boolean;
+  providers: Record<AiProvider, { baseUrl: string; model: string; models: { id: string; note: string }[] }>;
+}
+
+export interface SaveAiSettingsInput {
+  provider: AiProvider;
+  baseUrl?: string;
+  model?: string;
+  apiKey?: string;
+}
+
+export const aiApi = {
+  settings: () => request<AiSettings>("/ai/settings"),
+
+  save: (input: SaveAiSettingsInput) =>
+    request<{ settings: AiSettings; warning: string | null }>("/ai/settings", {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }),
+
+  remove: () =>
+    request<AiSettings>("/ai/settings", {
+      method: "DELETE",
+    }),
+};
+
 export const rolesApi = {
   list: () =>
     request<{ roles: Role[] }>("/roles").then((r) => r.roles),

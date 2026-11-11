@@ -96,6 +96,42 @@ describe.skipIf(!url)("tenant isolation", () => {
     ).toBe(400);
   });
 
+  test("AI keys are per workspace, encrypted, and never returned", async () => {
+    const { encryptSecret } = await import("./lib/secrets.js");
+    const { resolveAiConfig } = await import("./modules/ai/settings.js");
+    const stored = await encryptSecret("sk-test-secret-a1b2");
+    expect(stored).not.toContain("sk-test");
+    await db.insert(schema.workspaceAiSettings).values({
+      workspaceId: ws.a.id,
+      provider: "openai",
+      baseUrl: "https://api.openai.com/v1",
+      model: "gpt-4o-mini",
+      apiKey: stored,
+      apiKeyHint: "a1b2",
+    });
+
+    const a = await (await req("a", "/ai/settings")).json();
+    expect(a.configured).toBe(true);
+    expect(a.apiKeyHint).toBe("a1b2");
+    expect(JSON.stringify(a)).not.toContain("sk-test");
+    expect((await (await req("b", "/ai/settings")).json()).configured).toBe(false);
+
+    expect((await resolveAiConfig(ws.a.id))?.apiKey).toBe("sk-test-secret-a1b2");
+    expect(await resolveAiConfig(ws.b.id)).toBeNull();
+
+    // B can't reuse A's stored key, and custom endpoints must be public https.
+    const keyless = await req("b", "/ai/settings", { method: "PUT", body: JSON.stringify({ provider: "openai" }) });
+    expect(keyless.status).toBe(400);
+    const local = await req("a", "/ai/settings", {
+      method: "PUT",
+      body: JSON.stringify({ provider: "custom", baseUrl: "http://localhost:4000", apiKey: "x" }),
+    });
+    expect(local.status).toBe(400);
+
+    expect((await req("b", "/ai/settings", { method: "DELETE" })).status).toBe(200);
+    expect(await resolveAiConfig(ws.a.id)).not.toBeNull();
+  });
+
   test("whatsapp status is per workspace and requires auth", async () => {
     expect((await app.request("/whatsapp/status")).status).toBe(401);
     const status = await (await req("a", "/whatsapp/status")).json();

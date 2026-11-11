@@ -5,6 +5,7 @@ import { requireRole, getRoleName } from "../auth/index.js";
 import { HttpError } from "../../lib/http-error.js";
 import { getActorId, getWorkspaceId } from "../../lib/tenant.js";
 import { handleAiMessage } from "./service.js";
+import { deleteAiSettings, getAiSettings, saveAiSettings, type SaveAiSettingsInput } from "./settings.js";
 
 const db = createDbClient(
   process.env.DATABASE_URL ??
@@ -47,3 +48,14 @@ aiApi.post("/chat", canChat, async (c) => {
 
   return c.json({ reply });
 });
+
+const canManage = requireRole("Owner", "Admin");
+
+aiApi.get("/settings", canManage, async (c) => c.json(await getAiSettings(getWorkspaceId(c))));
+
+aiApi.put("/settings", canManage, async (c) => {
+  const input = await c.req.json<SaveAiSettingsInput>();
+  return c.json(await saveAiSettings(getWorkspaceId(c), input, getActorId(c)));
+});
+
+aiApi.delete("/settings", canManage, async (c) => c.json(await deleteAiSettings(getWorkspaceId(c), getActorId(c))));

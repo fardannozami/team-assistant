@@ -1,7 +1,27 @@
-import { HttpError } from "../../lib/http-error.js";
+/** Provider endpoint and credentials; each workspace brings its own key. */
+export type AiConfig = {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+};
 
-const DEFAULT_BASE_URL = "https://api.openai.com/v1";
-const DEFAULT_MODEL = "gpt-4o-mini";
+/** A non-2xx response from the provider; `status` lets callers explain it. */
+export class AiProviderError extends Error {
+  status: number;
+  detail: string;
+
+  constructor(status: number, detail: string) {
+    super(`AI provider error ${status}: ${detail.slice(0, 300)}`);
+    this.name = "AiProviderError";
+    this.status = status;
+    this.detail = detail;
+  }
+
+  /** The key itself was rejected (Gemini answers 400 rather than 401). */
+  get isKeyRejected(): boolean {
+    return this.status === 401 || this.status === 403 || (this.status === 400 && /api.?key/i.test(this.detail));
+  }
+}
 
 export type ChatRole = "system" | "user" | "assistant" | "tool";
 
@@ -39,36 +59,18 @@ export type ChatResult = {
   usage: ChatUsage | null;
 };
 
-function apiBaseUrl(): string {
-  const raw = process.env.AI_BASE_URL ?? DEFAULT_BASE_URL;
-  return raw.replace(/\/+$/, "");
-}
-
-export function aiModel(): string {
-  return process.env.AI_MODEL ?? DEFAULT_MODEL;
-}
-
-export function isAiConfigured(): boolean {
-  return Boolean(process.env.AI_API_KEY);
-}
-
 /**
  * Calls an OpenAI-compatible `/chat/completions` endpoint via plain fetch.
- * Returns the assistant message and usage; throws when the key is missing
- * or the provider is unreachable/misbehaving (the caller turns that into a
- * friendly reply).
+ * Returns the assistant message and usage; throws when the provider is
+ * unreachable/misbehaving (the caller turns that into a friendly reply).
  */
 export async function chatWithTools(
+  config: AiConfig,
   messages: ChatMessage[],
   tools: ToolSpec[],
-  opts: { model?: string; temperature?: number } = {},
+  opts: { temperature?: number } = {},
 ): Promise<ChatResult> {
-  const apiKey = process.env.AI_API_KEY;
-  if (!apiKey) {
-    throw new HttpError(400, "AI_API_KEY is not configured");
-  }
-
-  const model = opts.model ?? aiModel();
+  const model = config.model;
   const body: Record<string, unknown> = {
     model,
     messages,
@@ -81,11 +83,11 @@ export async function chatWithTools(
 
   let response: Response;
   try {
-    response = await fetch(`${apiBaseUrl()}/chat/completions`, {
+    response = await fetch(`${config.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${config.apiKey}`,
       },
       body: JSON.stringify(body),
     });
@@ -95,9 +97,7 @@ export async function chatWithTools(
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    throw new Error(
-      `AI provider error ${response.status}: ${detail.slice(0, 300)}`,
-    );
+    throw new AiProviderError(response.status, detail);
   }
 
   const payload = (await response.json()) as {

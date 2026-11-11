@@ -29,3 +29,16 @@ export const aiUsageLogs = pgTable("ai_usage_logs", {
   totalTokens: integer("total_tokens"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+// Bring-your-own-key: each workspace pays for its own AI provider usage.
+export const workspaceAiSettings = pgTable("workspace_ai_settings", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: workspaceRef().unique(),
+  provider: text("provider").notNull(), // gemini | groq | openai | openrouter | custom
+  baseUrl: text("base_url").notNull(),
+  model: text("model").notNull(),
+  apiKey: text("api_key").notNull(), // encrypted
+  apiKeyHint: text("api_key_hint"), // last 4 characters, for display
+  updatedBy: uuid("updated_by"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
