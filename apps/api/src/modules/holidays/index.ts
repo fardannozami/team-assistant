@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import type { Context } from "hono";
 import { requireRole } from "../auth/index.js";
+import { getActorId, getWorkspaceId } from "../../lib/tenant.js";
 import { parseWith } from "../../lib/validate.js";
 import {
   createException,
@@ -20,18 +20,14 @@ export const holidaysApi = new Hono();
 const canManage = requireRole("Owner", "Admin");
 const canView = requireRole("Owner", "Admin", "Manager");
 
-function actorId(c: Context): string | null {
-  return (c.get("user") as { sub?: string } | undefined)?.sub ?? null;
-}
-
 holidaysApi.get("/settings", canView, async (c) => {
-  return c.json(await getCalendarSettings());
+  return c.json(await getCalendarSettings(getWorkspaceId(c)));
 });
 
 holidaysApi.patch("/settings", canManage, async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const patch = body as any;
-  return c.json(await updateCalendarSettings(patch, actorId(c)));
+  return c.json(await updateCalendarSettings(getWorkspaceId(c), patch, getActorId(c)));
 });
 
 holidaysApi.get("/", canView, async (c) => {
@@ -49,17 +45,17 @@ holidaysApi.get("/upcoming", canView, async (c) => {
 holidaysApi.post("/sync", canManage, async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const year = body?.year ? Number(body.year) : new Date().getFullYear();
-  return c.json(await syncHolidays(year, actorId(c)));
+  return c.json(await syncHolidays(year, getActorId(c), getWorkspaceId(c)));
 });
 
 holidaysApi.get("/check", canView, async (c) => {
   const date = c.req.query("date");
   if (!date) throw new (await import("../../lib/http-error.js")).HttpError(400, "date query required");
-  return c.json(await isExcludedDate(date));
+  return c.json(await isExcludedDate(getWorkspaceId(c), date));
 });
 
 holidaysApi.get("/exceptions", canView, async (c) => {
-  return c.json({ exceptions: await listExceptions() });
+  return c.json({ exceptions: await listExceptions(getWorkspaceId(c)) });
 });
 
 holidaysApi.post("/exceptions", canManage, async (c) => {
@@ -72,16 +68,16 @@ holidaysApi.post("/exceptions", canManage, async (c) => {
     reason: body.reason,
     skip: body.skip,
   };
-  return c.json(await createException(input, actorId(c)), 201);
+  return c.json(await createException(getWorkspaceId(c), input, getActorId(c)), 201);
 });
 
 holidaysApi.delete("/exceptions/:id", canManage, async (c) => {
-  await deleteException(c.req.param("id"), actorId(c));
+  await deleteException(getWorkspaceId(c), c.req.param("id"), getActorId(c));
   return c.json({ deleted: true });
 });
 
 holidaysApi.post("/notify", canManage, async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const days = body?.days ? Number(body.days) : 7;
-  return c.json(await notifyAdminsBeforeHolidays(days));
+  return c.json(await notifyAdminsBeforeHolidays(getWorkspaceId(c), days));
 });

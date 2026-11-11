@@ -30,6 +30,7 @@ export type AgentEmployee = {
 };
 
 export type AgentArgs = {
+  workspaceId: string;
   employee: AgentEmployee;
   roleName: string | null;
 };
@@ -76,7 +77,7 @@ async function recentStandups(employeeId: string, limit: number) {
  * the sender may see (self-only for Employee roles).
  */
 export async function buildAgentContext(args: AgentArgs): Promise<string> {
-  const { employee, roleName } = args;
+  const { workspaceId, employee, roleName } = args;
 
   const [profile] = await db
     .select({
@@ -86,7 +87,9 @@ export async function buildAgentContext(args: AgentArgs): Promise<string> {
     .from(employees)
     .leftJoin(teams, eq(employees.teamId, teams.id))
     .leftJoin(roles, eq(employees.roleId, roles.id))
-    .where(eq(employees.id, employee.id))
+    .where(
+      and(eq(employees.id, employee.id), eq(employees.workspaceId, workspaceId)),
+    )
     .limit(1);
 
   const teamName = profile?.teamName ?? null;
@@ -137,7 +140,7 @@ export async function buildAgentContext(args: AgentArgs): Promise<string> {
   }
 
   try {
-    const schedules = await listSchedules();
+    const schedules = await listSchedules(workspaceId);
     if (schedules.length > 0) {
       lines.push(
         "",
@@ -189,6 +192,7 @@ function isToday(when: Date): boolean {
  * creating the conversation row when needed.
  */
 export async function appendConversationMessage(
+  workspaceId: string,
   employeeId: string,
   role: "user" | "assistant" | "system",
   content: string,
@@ -201,6 +205,7 @@ export async function appendConversationMessage(
     .from(conversations)
     .where(
       and(
+        eq(conversations.workspaceId, workspaceId),
         eq(conversations.employeeId, employeeId),
         eq(conversations.channel, channel),
       ),
@@ -212,7 +217,7 @@ export async function appendConversationMessage(
   if (!conversationId || !latest || !isToday(latest.startedAt)) {
     const [created] = await db
       .insert(conversations)
-      .values({ employeeId, channel })
+      .values({ workspaceId, employeeId, channel })
       .returning({ id: conversations.id });
     if (!created) return;
     conversationId = created.id;

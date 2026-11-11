@@ -36,7 +36,12 @@ type PendingAction = {
   expiresAt: number;
 };
 
+// Keyed by `${workspaceId}:${phone}`: the same phone may exist in several workspaces.
 const pendingActions = new Map<string, PendingAction>();
+
+function pendingKey(workspaceId: string, phone: string): string {
+  return `${workspaceId}:${phone}`;
+}
 
 function isYes(text: string): boolean {
   return YES.test(text.trim().replace(/[.!,\s]+$/, ""));
@@ -92,6 +97,7 @@ function pendingSummary(tool: string, args: Record<string, unknown>): string {
 
 function toolContext(args: ToolContextInput): ToolContext {
   return {
+    workspaceId: args.workspaceId,
     employee: args.employee,
     roleName: args.roleName,
     actorId: args.employee.userId ?? null,
@@ -99,11 +105,13 @@ function toolContext(args: ToolContextInput): ToolContext {
 }
 
 export type ToolContextInput = {
+  workspaceId: string;
   employee: AgentEmployee;
   roleName: string | null;
 };
 
 async function logUsage(
+  workspaceId: string,
   employeeId: string,
   model: string,
   usage: {
@@ -117,6 +125,7 @@ async function logUsage(
   }
   try {
     await db.insert(aiUsageLogs).values({
+      workspaceId,
       employeeId,
       model,
       promptTokens: usage.prompt_tokens ?? null,
@@ -129,13 +138,21 @@ async function logUsage(
 }
 
 async function persistExchange(
+  workspaceId: string,
   employeeId: string,
   channel: string,
   userMessage: string,
   assistantMessage: string,
 ) {
-  await appendConversationMessage(employeeId, "user", userMessage, channel);
   await appendConversationMessage(
+    workspaceId,
+    employeeId,
+    "user",
+    userMessage,
+    channel,
+  );
+  await appendConversationMessage(
+    workspaceId,
     employeeId,
     "assistant",
     assistantMessage,
@@ -148,6 +165,7 @@ async function persistExchange(
  * Kept minimal: only mutating actions that were actually executed.
  */
 async function storeConfirmedActionMemory(
+  workspaceId: string,
   employeeId: string,
   tool: string,
   args: Record<string, unknown>,
@@ -157,6 +175,7 @@ async function storeConfirmedActionMemory(
     `${tool} confirmed: ${result.replace(/\s+/g, " ").trim()}`.slice(0, 200);
   try {
     await db.insert(agentMemories).values({
+      workspaceId,
       employeeId,
       scope: "conversation",
       content: summary,
@@ -171,18 +190,20 @@ async function runPendingConfirmation(
   body: string,
   ctx: ToolContextInput,
 ): Promise<string | null> {
-  const entry = pendingActions.get(phone);
+  const key = pendingKey(ctx.workspaceId, phone);
+  const entry = pendingActions.get(key);
   if (!entry) return null;
   if (entry.expiresAt < Date.now()) {
-    pendingActions.delete(phone);
+    pendingActions.delete(key);
     return null;
   }
 
   if (isYes(body)) {
-    pendingActions.delete(phone);
+    pendingActions.delete(key);
     const result = await executeTool(entry.tool, entry.args, toolContext(ctx));
     if (result.ok) {
       await storeConfirmedActionMemory(
+        ctx.workspaceId,
         ctx.employee.id,
         entry.tool,
         entry.args,
@@ -194,13 +215,13 @@ async function runPendingConfirmation(
   }
 
   if (isNo(body)) {
-    pendingActions.delete(phone);
+    pendingActions.delete(key);
     return "Cancelled.";
   }
 
   // Not a yes/no answer: treat the message as a new request. Drop the stale
   // pending action so it cannot collide with a future confirmation.
-  pendingActions.delete(phone);
+  pendingActions.delete(key);
   return null;
 }
 
@@ -225,7 +246,7 @@ export async function handleAiMessage(
   if (!body) return null;
 
   const phone = args.phone ?? args.employee?.phone;
-  if (!phone || !args.employee?.id) return null;
+  if (!phone || !args.employee?.id || !args.workspaceId) return null;
 
   const channel = args.channel ?? "whatsapp";
 
@@ -237,6 +258,7 @@ export async function handleAiMessage(
     );
     if (confirmationReply) {
       await persistExchange(
+        args.workspaceId,
         args.employee.id,
         channel,
         body,
@@ -246,6 +268,7 @@ export async function handleAiMessage(
     }
 
     const system = await buildAgentContext({
+      workspaceId: args.workspaceId,
       employee: args.employee,
       roleName: args.roleName,
     });
@@ -259,7 +282,7 @@ export async function handleAiMessage(
 
     let finalText: string | null = null;
     let usedModel = aiModel();
-    let usage: Parameters<typeof logUsage>[2] = null;
+    let usage: Parameters<typeof logUsage>[3] = null;
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
       const result = await chatWithTools(messages, AI_TOOLS);
@@ -284,7 +307,7 @@ export async function handleAiMessage(
 
         if (MUTATING_TOOLS.has(name)) {
           const summary = pendingSummary(name, parsed);
-          pendingActions.set(phone, {
+          pendingActions.set(pendingKey(args.workspaceId, phone), {
             tool: name,
             args: parsed,
             expiresAt: Date.now() + PENDING_TTL_MS,
@@ -316,8 +339,14 @@ export async function handleAiMessage(
       finalText = "I could not finish that request. Please try again.";
     }
 
-    await logUsage(args.employee.id, usedModel, usage);
-    await persistExchange(args.employee.id, channel, body, finalText);
+    await logUsage(args.workspaceId, args.employee.id, usedModel, usage);
+    await persistExchange(
+      args.workspaceId,
+      args.employee.id,
+      channel,
+      body,
+      finalText,
+    );
     return finalText;
   } catch (error) {
     if (error instanceof HttpError) {

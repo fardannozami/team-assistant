@@ -7,7 +7,11 @@ import {
 import { and, asc, desc, eq, gte, lte } from "drizzle-orm";
 import { audit } from "../auth/index.js";
 import { HttpError } from "../../lib/http-error.js";
-import { dateInTimezone, DEFAULT_TIMEZONE } from "@repo/shared";
+import {
+  dateInTimezone,
+  DEFAULT_TIMEZONE,
+  normalizePhoneNumber,
+} from "@repo/shared";
 
 const db = createDbClient(
   process.env.DATABASE_URL ??
@@ -17,17 +21,31 @@ const db = createDbClient(
 const HOLIDAY_API_URL =
   process.env.HOLIDAY_API_URL ?? "https://tanggalmerah.upset.dev/api/holidays";
 
-export async function getCalendarSettings() {
-  const [row] = await db.select().from(calendarSettings).limit(1);
+async function selectCalendarSettings(workspaceId: string) {
+  const [row] = await db
+    .select()
+    .from(calendarSettings)
+    .where(eq(calendarSettings.workspaceId, workspaceId))
+    .limit(1);
+  return row;
+}
+
+export async function getCalendarSettings(workspaceId: string) {
+  const row = await selectCalendarSettings(workspaceId);
   if (row) return row;
-  const [created] = await db
+  // createWorkspace seeds this row; fall back for older workspaces. A
+  // concurrent insert is fine: conflict on workspaceId, then re-select.
+  await db
     .insert(calendarSettings)
-    .values({ country: "ID", timezone: DEFAULT_TIMEZONE })
-    .returning();
-  return created!;
+    .values({ workspaceId, country: "ID", timezone: DEFAULT_TIMEZONE })
+    .onConflictDoNothing({ target: calendarSettings.workspaceId });
+  const created = await selectCalendarSettings(workspaceId);
+  if (!created) throw new Error("Failed to create calendar settings");
+  return created;
 }
 
 export async function updateCalendarSettings(
+  workspaceId: string,
   patch: {
     country?: string;
     timezone?: string;
@@ -38,8 +56,8 @@ export async function updateCalendarSettings(
   },
   actorId?: string | null,
 ) {
-  const existing = await getCalendarSettings();
-  const existingId = existing!.id;
+  const existing = await getCalendarSettings(workspaceId);
+  const existingId = existing.id;
   const changes: Partial<typeof calendarSettings.$inferInsert> = {
     updatedAt: new Date(),
   };
@@ -55,9 +73,21 @@ export async function updateCalendarSettings(
   const [updated] = await db
     .update(calendarSettings)
     .set(changes)
-    .where(eq(calendarSettings.id, existingId))
+    .where(
+      and(
+        eq(calendarSettings.id, existingId),
+        eq(calendarSettings.workspaceId, workspaceId),
+      ),
+    )
     .returning();
-  await audit(actorId ?? null, "calendar.settings.update", "calendar_settings", existingId, patch);
+  await audit(
+    workspaceId,
+    actorId ?? null,
+    "calendar.settings.update",
+    "calendar_settings",
+    existingId,
+    patch,
+  );
   return updated!;
 }
 
@@ -85,9 +115,14 @@ export async function listUpcomingHolidays(limit = 10, from?: string) {
     .limit(limit);
 }
 
+/**
+ * Holidays are global (public data); `workspaceId` only attributes the audit
+ * entry to the workspace that triggered the sync.
+ */
 export async function syncHolidays(
   year: number = new Date().getFullYear(),
   actorId?: string | null,
+  workspaceId: string | null = null,
 ) {
   const url = `${HOLIDAY_API_URL}?year=${year}`;
   let data: any[] = [];
@@ -101,28 +136,33 @@ export async function syncHolidays(
     throw new HttpError(400, `Failed to sync holidays: ${(err as Error).message}`);
   }
 
-  // Replace both national and joint rows for that year with fresh data.
-  await db
-    .delete(holidays)
-    .where(and(gte(holidays.date, `${year}-01-01`), lte(holidays.date, `${year}-12-31`)));
+  // Replace both national and joint rows for that year with fresh data. The
+  // table is shared by every workspace, so swap atomically: readers never see
+  // an empty year.
+  const inserted = await db.transaction(async (tx) => {
+    await tx
+      .delete(holidays)
+      .where(and(gte(holidays.date, `${year}-01-01`), lte(holidays.date, `${year}-12-31`)));
 
-  const inserted = [];
-  for (const entry of data) {
-    const date = entry.date;
-    const name = entry.localName ?? entry.name ?? "Holiday";
-    const isJoint =
-      entry.type === "leave" ||
-      /cuti bersama/i.test(name) ||
-      (Array.isArray(entry.types) && entry.types.includes("Joint"));
-    const type = isJoint ? "joint" : "national";
-    const [row] = await db
-      .insert(holidays)
-      .values({ date, name, type, source: url })
-      .returning();
-    if (row) inserted.push(row);
-  }
+    const rows = [];
+    for (const entry of data) {
+      const date = entry.date;
+      const name = entry.localName ?? entry.name ?? "Holiday";
+      const isJoint =
+        entry.type === "leave" ||
+        /cuti bersama/i.test(name) ||
+        (Array.isArray(entry.types) && entry.types.includes("Joint"));
+      const type = isJoint ? "joint" : "national";
+      const [row] = await tx
+        .insert(holidays)
+        .values({ date, name, type, source: url })
+        .returning();
+      if (row) rows.push(row);
+    }
+    return rows;
+  });
 
-  await audit(actorId ?? null, "holiday.sync", "holidays", undefined, {
+  await audit(workspaceId, actorId ?? null, "holiday.sync", "holidays", undefined, {
     year,
     count: inserted.length,
     source: url,
@@ -130,42 +170,70 @@ export async function syncHolidays(
   return { year, synced: inserted.length, holidays: inserted };
 }
 
-export async function listExceptions() {
-  return db.select().from(calendarExceptions).orderBy(asc(calendarExceptions.date));
+export async function listExceptions(workspaceId: string) {
+  return db
+    .select()
+    .from(calendarExceptions)
+    .where(eq(calendarExceptions.workspaceId, workspaceId))
+    .orderBy(asc(calendarExceptions.date));
 }
 
 export async function createException(
+  workspaceId: string,
   input: { date: string; reason?: string; skip?: boolean },
   actorId?: string | null,
 ) {
   const [created] = await db
     .insert(calendarExceptions)
     .values({
+      workspaceId,
       date: input.date,
       reason: input.reason ?? null,
       skip: input.skip ?? true,
     })
     .returning();
-  await audit(actorId ?? null, "calendar.exception.create", "calendar_exception", created!.id, input);
+  await audit(
+    workspaceId,
+    actorId ?? null,
+    "calendar.exception.create",
+    "calendar_exception",
+    created!.id,
+    input,
+  );
   return created!;
 }
 
-export async function deleteException(id: string, actorId?: string | null) {
+export async function deleteException(
+  workspaceId: string,
+  id: string,
+  actorId?: string | null,
+) {
+  const where = and(
+    eq(calendarExceptions.id, id),
+    eq(calendarExceptions.workspaceId, workspaceId),
+  );
   const [existing] = await db
     .select()
     .from(calendarExceptions)
-    .where(eq(calendarExceptions.id, id))
+    .where(where)
     .limit(1);
   if (!existing) throw new HttpError(404, "Exception not found");
-  await db.delete(calendarExceptions).where(eq(calendarExceptions.id, id));
-  await audit(actorId ?? null, "calendar.exception.delete", "calendar_exception", id, {
-    date: existing.date,
-  });
+  await db.delete(calendarExceptions).where(where);
+  await audit(
+    workspaceId,
+    actorId ?? null,
+    "calendar.exception.delete",
+    "calendar_exception",
+    id,
+    { date: existing.date },
+  );
 }
 
-export async function isExcludedDate(date: string): Promise<{ excluded: boolean; reason?: string }> {
-  const settings = await getCalendarSettings();
-  const s = settings!;
+export async function isExcludedDate(
+  workspaceId: string,
+  date: string,
+): Promise<{ excluded: boolean; reason?: string }> {
+  const s = await getCalendarSettings(workspaceId);
   const dayOfWeek = new Date(`${date}T00:00:00Z`).getUTCDay();
 
   // Weekend check
@@ -177,14 +245,19 @@ export async function isExcludedDate(date: string): Promise<{ excluded: boolean;
   const [exception] = await db
     .select()
     .from(calendarExceptions)
-    .where(eq(calendarExceptions.date, date))
+    .where(
+      and(
+        eq(calendarExceptions.workspaceId, workspaceId),
+        eq(calendarExceptions.date, date),
+      ),
+    )
     .limit(1);
   if (exception) {
     if (exception.skip) return { excluded: true, reason: exception.reason ?? "manual exception" };
     return { excluded: false, reason: exception.reason ?? "manual override (not skipped)" };
   }
 
-  // Holidays
+  // Holidays (global)
   const holidayRows = await db
     .select()
     .from(holidays)
@@ -202,13 +275,12 @@ export async function isExcludedDate(date: string): Promise<{ excluded: boolean;
 }
 
 export async function notifyAdminsBeforeHolidays(
+  workspaceId: string,
   daysAhead: number = 7,
-  send?: (phone: string, text: string) => Promise<void>,
 ) {
   // Lazy import to avoid circular deps
   const { listEmployees } = await import("../employees/service.js");
   const { sendText } = await import("../whatsapp/service.js");
-  const sender = send ?? sendText;
 
   const today = new Date();
   const end = new Date(today);
@@ -224,8 +296,9 @@ export async function notifyAdminsBeforeHolidays(
 
   if (upcoming.length === 0) return { sent: 0, holidays: [] };
 
-  const admins = (await listEmployees()).filter((e: any) => e.roleName && ["Owner", "Admin"].includes(e.roleName));
-  // employees may not have phone? they do
+  const admins = (await listEmployees(workspaceId, { active: true })).filter(
+    (e) => e.roleName && ["Owner", "Admin"].includes(e.roleName),
+  );
   let sent = 0;
   const text = [
     `Upcoming holidays (next ${daysAhead} days):`,
@@ -234,7 +307,11 @@ export async function notifyAdminsBeforeHolidays(
 
   for (const admin of admins) {
     try {
-      await sender((admin as any).phone, text);
+      await sendText(
+        workspaceId,
+        `${normalizePhoneNumber(admin.phone)}@s.whatsapp.net`,
+        text,
+      );
       sent++;
     } catch {
       // ignore

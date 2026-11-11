@@ -1,8 +1,10 @@
 import { pgTable, text, timestamp, uuid, jsonb, date } from "drizzle-orm/pg-core";
+import { workspaceRef } from "./workspaces.js";
 import { employees } from "./employees.js";
 
 export const reports = pgTable("reports", {
   id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: workspaceRef(),
   type: text("type").notNull(), // daily | weekly
   date: date("date").notNull(),
   scope: text("scope"), // team | company

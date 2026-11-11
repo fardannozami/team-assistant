@@ -1,8 +1,10 @@
 import { pgTable, text, timestamp, uuid, jsonb, boolean } from "drizzle-orm/pg-core";
+import { workspaceRef } from "./workspaces.js";
 import { employees } from "./employees.js";
 
 export const integrations = pgTable("integrations", {
   id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: workspaceRef(),
   provider: text("provider").notNull(), // github | figma
   name: text("name"),
   config: jsonb("config"),

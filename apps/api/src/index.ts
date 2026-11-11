@@ -11,7 +11,7 @@ import { reportsApi } from "./modules/reports/index.js";
 import { teamsApi } from "./modules/teams/index.js";
 import { whatsapp } from "./modules/whatsapp/index.js";
 import { aiApi } from "./modules/ai/index.js";
-import { startWhatsApp } from "./modules/whatsapp/service.js";
+import { startAllWhatsApp, stopAllWhatsApp } from "./modules/whatsapp/service.js";
 import { HttpError } from "./lib/http-error.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
@@ -63,6 +63,23 @@ export { app };
 if (import.meta.main) {
   const port = Number(process.env.PORT ?? 4000);
   logger.info({ port }, "Server running");
-  startWhatsApp().catch((e) => logger.error(e));
+  startAllWhatsApp().catch((e) => logger.error(e));
   Bun.serve({ fetch: app.fetch, port });
+
+  // Registered once per process: `bun --hot` re-evaluates this module.
+  const g = globalThis as any;
+  if (!g.__taSignalHandlers) {
+    g.__taSignalHandlers = true;
+    for (const signal of ["SIGINT", "SIGTERM"] as const) {
+      process.on(signal, async () => {
+        logger.info({ signal }, "Shutting down");
+        try {
+          await stopAllWhatsApp();
+        } catch (e) {
+          logger.error(e);
+        }
+        process.exit(0);
+      });
+    }
+  }
 }

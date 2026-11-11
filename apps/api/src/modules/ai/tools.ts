@@ -36,6 +36,7 @@ function ownerOrAdmin(roleName: string | null): boolean {
 }
 
 export type ToolContext = {
+  workspaceId: string;
   employee: AgentEmployee;
   roleName: string | null;
   actorId: string | null;
@@ -203,12 +204,12 @@ async function resolveTargetEmployee(
 ): Promise<EmployeeLookup> {
   const identifier = typeof args?.identifier === "string" ? args.identifier.trim() : "";
   if (!identifier) {
-    return { ok: true, employee: await getEmployee(ctx.employee.id) };
+    return { ok: true, employee: await getEmployee(ctx.workspaceId, ctx.employee.id) };
   }
 
   const self = ctx.employee;
   if (identifier === self.name || identifier === self.phone) {
-    return { ok: true, employee: await getEmployee(self.id) };
+    return { ok: true, employee: await getEmployee(ctx.workspaceId, self.id) };
   }
 
   if (!canViewOthers(ctx.roleName)) {
@@ -218,7 +219,7 @@ async function resolveTargetEmployee(
     };
   }
 
-  const matches = await findEmployeesByIdentifier(identifier);
+  const matches = await findEmployeesByIdentifier(ctx.workspaceId, identifier);
   if (matches.length === 0) {
     return { ok: false, error: `No employee found for "${identifier}".` };
   }
@@ -233,7 +234,7 @@ async function resolveTargetEmployee(
     };
   }
 
-  return { ok: true, employee: await getEmployee(matches[0]!.id) };
+  return { ok: true, employee: await getEmployee(ctx.workspaceId, matches[0]!.id) };
 }
 
 function formatEmployee(e: Awaited<ReturnType<typeof getEmployee>>): ToolResult {
@@ -266,6 +267,7 @@ function describeSchedule(row: {
 
 export type StandupCollector = {
   id: string;
+  workspaceId: string;
   name: string;
   phone: string;
   isActive: boolean;
@@ -296,6 +298,7 @@ export async function executeTool(
 
         const limit = Math.min(Math.max(Number(args?.limit ?? 5), 1), 20);
         const { standups: history } = await getEmployeeStandupHistory(
+          ctx.workspaceId,
           target.employee.id,
         );
         if (history.length === 0) {
@@ -341,6 +344,7 @@ export async function executeTool(
         const composed = `Yesterday: ${yesterday}. Today: ${today}. Blockers: ${blockers}`;
         const collector: StandupCollector = {
           id: ctx.employee.id,
+          workspaceId: ctx.workspaceId,
           name: ctx.employee.name,
           phone: ctx.employee.phone,
           isActive: ctx.employee.isActive,
@@ -369,7 +373,7 @@ export async function executeTool(
       }
 
       case "get_schedule": {
-        const rows = await listSchedules();
+        const rows = await listSchedules(ctx.workspaceId);
         if (rows.length === 0) {
           return { ok: true, data: "No schedules configured yet." };
         }
@@ -392,7 +396,7 @@ export async function executeTool(
               .join("; "),
           };
         }
-        const created = await createSchedule(parsed.data, ctx.actorId);
+        const created = await createSchedule(ctx.workspaceId, parsed.data, ctx.actorId);
         return {
           ok: true,
           data: `Schedule "${created!.name}" created: ${created!.timeOfDay} ${Array.isArray(created!.weekdays) ? (created!.weekdays as number[]).map((d) => DAY_NAMES[d]).join(", ") : ""} ${created!.timezone}`,
@@ -414,14 +418,14 @@ export async function executeTool(
           const [row] = await db
             .select()
             .from(schedules)
-            .where(eq(schedules.id, id))
+            .where(and(eq(schedules.id, id), eq(schedules.workspaceId, ctx.workspaceId)))
             .limit(1);
           target = row ?? null;
         } else if (name) {
           const [row] = await db
             .select()
             .from(schedules)
-            .where(eq(schedules.name, name))
+            .where(and(eq(schedules.name, name), eq(schedules.workspaceId, ctx.workspaceId)))
             .limit(1);
           target = row ?? null;
         } else {
@@ -444,7 +448,12 @@ export async function executeTool(
           };
         }
 
-        const updated = await updateSchedule(target.id, parsed.data, ctx.actorId);
+        const updated = await updateSchedule(
+          ctx.workspaceId,
+          target.id,
+          parsed.data,
+          ctx.actorId,
+        );
         return { ok: true, data: `Schedule updated.\n${describeSchedule(updated)}` };
       }
 
@@ -462,7 +471,7 @@ export async function executeTool(
         const startStr = dateInTimezone(DEFAULT_TIMEZONE, since);
         const todayStr = dateInTimezone();
 
-        const rosters = await listEmployees({ active: true });
+        const rosters = await listEmployees(ctx.workspaceId, { active: true });
         const rosterIds = new Set(rosters.map((r) => r.id));
 
         const rows = await db
@@ -475,6 +484,8 @@ export async function executeTool(
           .innerJoin(employees, eq(standupSessions.employeeId, employees.id))
           .where(
             and(
+              eq(standupSessions.workspaceId, ctx.workspaceId),
+              eq(employees.workspaceId, ctx.workspaceId),
               gte(standupSessions.date, startStr),
               eq(employees.isActive, true),
             ),
@@ -498,7 +509,13 @@ export async function executeTool(
           })
           .from(standupAnswers)
           .innerJoin(standups, eq(standupAnswers.standupId, standups.id))
-          .where(and(gte(standups.date, startStr), eq(standupAnswers.questionKey, "blockers")))
+          .where(
+            and(
+              eq(standups.workspaceId, ctx.workspaceId),
+              gte(standups.date, startStr),
+              eq(standupAnswers.questionKey, "blockers"),
+            ),
+          )
           .limit(500);
 
         const blockers = new Map<string, number>();
@@ -541,7 +558,7 @@ export async function executeTool(
           typeof args?.date === "string" && args.date.trim()
             ? args.date.trim()
             : undefined;
-        const report = await generateDailyReport(date);
+        const report = await generateDailyReport(ctx.workspaceId, date);
         return { ok: true, data: report.text };
       }
 
@@ -552,7 +569,7 @@ export async function executeTool(
             error: "Only Manager, Admin or Owner can generate reports.",
           };
         }
-        const report = await generateWeeklyReport();
+        const report = await generateWeeklyReport(ctx.workspaceId);
         return { ok: true, data: report.text };
       }
 

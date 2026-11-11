@@ -8,7 +8,8 @@
     "build": "bun build src/index.ts --outdir dist --target bun",
     "start": "bun --env-file=../../.env dist/index.js",
     "lint": "eslint . --max-warnings 0",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "bun test"
   },
   "dependencies": {
     "@repo/config": "*",

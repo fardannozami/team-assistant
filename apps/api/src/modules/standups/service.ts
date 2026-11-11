@@ -1,7 +1,7 @@
 import { createDbClient, employees, standupAnswers, standupSessions, standups, teams } from "@repo/database";
 import { and, eq, inArray } from "drizzle-orm";
 import { dateInTimezone } from "@repo/shared";
-import { sendText } from "../whatsapp/service.js";
+import { getWhatsAppStatus, sendText } from "../whatsapp/service.js";
 import { getEmployee, listEmployees } from "../employees/service.js";
 import { HttpError } from "../../lib/http-error.js";
 import { isUniqueViolation } from "../../lib/db.js";
@@ -18,6 +18,14 @@ const db = createDbClient(
 
 type SendFn = (jid: string, text: string) => Promise<void>;
 
+// Returned instead of creating sessions whose prompts could not be sent.
+const NOT_CONNECTED = {
+  sent: 0,
+  failed: 0,
+  whatsappConnected: false,
+  reason: "WhatsApp is not connected for this workspace",
+} as const;
+
 function jidFor(phone: string) {
   return `${phone}@s.whatsapp.net`;
 }
@@ -28,6 +36,7 @@ function jidFor(phone: string) {
  * future queue processor).
  */
 export async function sendStandupPrompts(
+  workspaceId: string,
   options: {
     employeeId?: string;
     date?: string;
@@ -36,12 +45,17 @@ export async function sendStandupPrompts(
     resend?: boolean;
   } = {},
 ) {
-  const send = options.send ?? sendText;
+  const send: SendFn =
+    options.send ?? ((jid, text) => sendText(workspaceId, jid, text));
   const date = options.date ?? dateInTimezone();
+
+  if (!options.send && !getWhatsAppStatus(workspaceId).connected) {
+    return { date, ...NOT_CONNECTED, skipped: 0 };
+  }
 
   if (!options.force) {
     const { isExcludedDate } = await import("../holidays/service.js");
-    const check = await isExcludedDate(date);
+    const check = await isExcludedDate(workspaceId, date);
     if (check.excluded) {
       return {
         date,
@@ -56,12 +70,12 @@ export async function sendStandupPrompts(
 
   let targets;
   if (options.employeeId) {
-    const employee = await getEmployee(options.employeeId);
+    const employee = await getEmployee(workspaceId, options.employeeId);
     if (!employee) throw new HttpError(404, "Employee not found");
     if (!employee.isActive) throw new HttpError(400, "Employee is not active");
     targets = [employee];
   } else {
-    const active = await listEmployees({ active: true });
+    const active = await listEmployees(workspaceId, { active: true });
     const includeAdmins = process.env.STANDUP_INCLUDE_ADMINS === "true";
     targets = includeAdmins
       ? active
@@ -99,7 +113,7 @@ export async function sendStandupPrompts(
 
     const [created] = await db
       .insert(standupSessions)
-      .values({ employeeId: employee.id, date, status: "pending" })
+      .values({ workspaceId, employeeId: employee.id, date, status: "pending" })
       .onConflictDoNothing()
       .returning({ id: standupSessions.id });
 
@@ -123,10 +137,16 @@ export async function sendStandupPrompts(
 }
 
 export async function sendStandupReminders(
+  workspaceId: string,
   options: { date?: string; send?: SendFn } = {},
 ) {
-  const send = options.send ?? sendText;
+  const send: SendFn =
+    options.send ?? ((jid, text) => sendText(workspaceId, jid, text));
   const date = options.date ?? dateInTimezone();
+
+  if (!options.send && !getWhatsAppStatus(workspaceId).connected) {
+    return { date, ...NOT_CONNECTED };
+  }
 
   const rows = await db
     .select({
@@ -137,6 +157,7 @@ export async function sendStandupReminders(
     .innerJoin(employees, eq(standupSessions.employeeId, employees.id))
     .where(
       and(
+        eq(standupSessions.workspaceId, workspaceId),
         eq(standupSessions.date, date),
         inArray(standupSessions.status, ["pending", "in_progress"]),
         eq(employees.isActive, true),
@@ -158,7 +179,7 @@ export async function sendStandupReminders(
   return { date, sent, failed };
 }
 
-export async function listStandupsByDate(date: string) {
+export async function listStandupsByDate(workspaceId: string, date: string) {
   const rows = await db
     .select({
       sessionId: standupSessions.id,
@@ -176,7 +197,12 @@ export async function listStandupsByDate(date: string) {
     .leftJoin(teams, eq(employees.teamId, teams.id))
     .leftJoin(standups, eq(standups.sessionId, standupSessions.id))
     .leftJoin(standupAnswers, eq(standupAnswers.standupId, standups.id))
-    .where(eq(standupSessions.date, date))
+    .where(
+      and(
+        eq(standupSessions.workspaceId, workspaceId),
+        eq(standupSessions.date, date),
+      ),
+    )
     .orderBy(employees.name);
 
   const grouped = new Map<

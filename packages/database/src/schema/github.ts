@@ -1,7 +1,9 @@
 import { pgTable, text, timestamp, uuid, jsonb, boolean } from "drizzle-orm/pg-core";
+import { workspaceRef } from "./workspaces.js";
 
 export const githubInstallations = pgTable("github_installations", {
   id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: workspaceRef(),
   installationId: text("installation_id").notNull().unique(),
   accountLogin: text("account_login"),
   accountType: text("account_type"),

@@ -7,7 +7,7 @@ const db = createDbClient(
     "postgres://teamassistant:teamassistant@localhost:5432/teamassistant",
 );
 
-export async function generateDailyReport(date?: string) {
+export async function generateDailyReport(workspaceId: string, date?: string) {
   const d = date ?? dateInTimezone();
   const rows = await db
     .select({
@@ -26,6 +26,8 @@ export async function generateDailyReport(date?: string) {
     .leftJoin(standupAnswers, eq(standupAnswers.standupId, standups.id))
     .where(
       and(
+        eq(standupSessions.workspaceId, workspaceId),
+        eq(employees.workspaceId, workspaceId),
         eq(standupSessions.date, d),
         eq(employees.isActive, true),
         or(isNull(roles.name), notInArray(roles.name, ["Owner", "Admin"])),
@@ -52,6 +54,7 @@ export async function generateDailyReport(date?: string) {
     .leftJoin(roles, eq(employees.roleId, roles.id))
     .where(
       and(
+        eq(employees.workspaceId, workspaceId),
         eq(employees.isActive, true),
         or(isNull(roles.name), notInArray(roles.name, ["Owner", "Admin"])),
       ),
@@ -96,7 +99,7 @@ export async function generateDailyReport(date?: string) {
   };
 }
 
-export async function generateWeeklyReport() {
+export async function generateWeeklyReport(workspaceId: string) {
   const end = new Date();
   const start = new Date();
   start.setDate(start.getDate() - 6);
@@ -118,6 +121,8 @@ export async function generateWeeklyReport() {
     .leftJoin(standupAnswers, eq(standupAnswers.standupId, standups.id))
     .where(
       and(
+        eq(standupSessions.workspaceId, workspaceId),
+        eq(employees.workspaceId, workspaceId),
         gte(standupSessions.date, startStr),
         lte(standupSessions.date, endStr),
         eq(employees.isActive, true),

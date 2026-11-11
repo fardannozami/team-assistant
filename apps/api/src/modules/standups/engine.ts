@@ -155,6 +155,7 @@ export async function getStandupSession(employeeId: string, date: string) {
 }
 
 async function getOrCreateStandupRow(
+  workspaceId: string,
   sessionId: string,
   employeeId: string,
   date: string,
@@ -170,7 +171,7 @@ async function getOrCreateStandupRow(
 
   const [created] = await db
     .insert(standups)
-    .values({ sessionId, employeeId, date })
+    .values({ workspaceId, sessionId, employeeId, date })
     .onConflictDoNothing()
     .returning();
   if (created) return created;
@@ -219,6 +220,7 @@ async function setSessionStatus(sessionId: string, status: string) {
 
 export type StandupCollector = {
   id: string;
+  workspaceId: string;
   name: string;
   phone: string;
   isActive: boolean;
@@ -247,7 +249,12 @@ export async function handleStandupMessage(args: {
     if (Object.keys(parsed).length === 0) {
       return `Standup untuk ${date} sudah tercatat. Untuk mengubah, kirim ulang jawaban (kemarin/hari ini/kendala).`;
     }
-    const standupRow = await getOrCreateStandupRow(session.id, args.employee.id, date);
+    const standupRow = await getOrCreateStandupRow(
+      args.employee.workspaceId,
+      session.id,
+      args.employee.id,
+      date,
+    );
     for (const [key, value] of Object.entries(parsed) as [StandupElement, string][]) {
       const normalized = key === "blockers" && NO_BLOCKER.test(value) ? "none" : value;
       await upsertAnswer(standupRow.id, key, normalized);
@@ -264,6 +271,7 @@ export async function handleStandupMessage(args: {
   }
 
   const standupRow = await getOrCreateStandupRow(
+    args.employee.workspaceId,
     session.id,
     args.employee.id,
     date,

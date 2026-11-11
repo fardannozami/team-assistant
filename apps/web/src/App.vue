@@ -15,7 +15,10 @@
               TA
               <span class="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-panel" :class="apiOk === true ? 'bg-success' : apiOk === false ? 'bg-danger' : 'bg-text-muted'" :title="apiStatusTitle"></span>
             </span>
-            <span class="truncate font-display text-base font-extrabold tracking-tight text-text">Team Assistant</span>
+            <span class="min-w-0">
+              <span class="block truncate font-display text-base font-extrabold leading-tight tracking-tight text-text">Team Assistant</span>
+              <span v-if="me" class="block truncate text-xs text-text-muted">{{ me.workspace.name }}</span>
+            </span>
           </button>
 
           <nav class="hidden items-center gap-1 md:flex" aria-label="Navigasi utama">
@@ -54,7 +57,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
-import { apiHealth, authApi, consumeOAuthRedirect, getToken, onUnauthorized, showToast, addToastListener, type Toast } from "./api";
+import { apiHealth, authApi, consumeOAuthRedirect, getToken, type Me, onUnauthorized, showToast, addToastListener, type Toast } from "./api";
 import AuthView from "./views/AuthView.vue";
 import HomeView from "./views/HomeView.vue";
 import EmployeesView from "./views/EmployeesView.vue";
@@ -76,6 +79,7 @@ const ONBOARDED_KEY = "ta_onboarded";
 
 const oauthError = consumeOAuthRedirect();
 const token = ref(getToken() ?? "");
+const me = ref<Me | null>(null);
 const currentTab = ref("home");
 const settingsSection = ref("whatsapp");
 const apiOk = ref<boolean | null>(null);
@@ -110,7 +114,13 @@ onUnauthorized(() => {
   currentTab.value = "home";
   showToast("Sesi berakhir. Silakan masuk kembali.", "error");
 });
-onMounted(async () => { apiOk.value = await apiHealth(); });
+async function loadMe() {
+  me.value = token.value ? await authApi.me().catch(() => null) : null;
+}
+onMounted(async () => {
+  loadMe();
+  apiOk.value = await apiHealth();
+});
 function navigateTo(tab: string) {
   if (settingsSections.includes(tab)) {
     settingsSection.value = tab;
@@ -120,8 +130,9 @@ function navigateTo(tab: string) {
   }
 }
 function handleLogin() {
+  loadMe();
   token.value = getToken() ?? "";
   showTour.value = !hasOnboarded();
 }
-function handleLogout() { authApi.logout(); token.value = ""; currentTab.value = "home"; toasts.value = []; showTour.value = false; }
+function handleLogout() { authApi.logout(); token.value = ""; me.value = null; currentTab.value = "home"; toasts.value = []; showTour.value = false; }
 </script>

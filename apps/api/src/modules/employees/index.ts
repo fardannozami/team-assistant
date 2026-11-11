@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import type { Context } from "hono";
 import {
   createEmployeeSchema,
   updateEmployeePhoneSchema,
@@ -7,6 +6,7 @@ import {
 } from "@repo/shared";
 import { requireRole } from "../auth/index.js";
 import { HttpError } from "../../lib/http-error.js";
+import { getActorId, getWorkspaceId } from "../../lib/tenant.js";
 import { parseWith } from "../../lib/validate.js";
 import {
   createEmployee,
@@ -22,13 +22,9 @@ export const employeesApi = new Hono();
 const canManage = requireRole("Owner", "Admin");
 const canView = requireRole("Owner", "Admin", "Manager");
 
-function actorId(c: Context): string | null {
-  return (c.get("user") as { sub?: string } | undefined)?.sub ?? null;
-}
-
 employeesApi.get("/", canView, async (c) => {
   const activeParam = c.req.query("active");
-  const rows = await listEmployees({
+  const rows = await listEmployees(getWorkspaceId(c), {
     teamId: c.req.query("teamId"),
     roleId: c.req.query("roleId"),
     search: c.req.query("search"),
@@ -40,12 +36,16 @@ employeesApi.get("/", canView, async (c) => {
 
 employeesApi.post("/", canManage, async (c) => {
   const input = parseWith(createEmployeeSchema, await c.req.json());
-  const employee = await createEmployee(input, actorId(c));
+  const employee = await createEmployee(
+    getWorkspaceId(c),
+    input,
+    getActorId(c),
+  );
   return c.json(employee, 201);
 });
 
 employeesApi.get("/:id/standups", canView, async (c) => {
-  return c.json(await getEmployeeStandupHistory(c.req.param("id")));
+  return c.json(await getEmployeeStandupHistory(getWorkspaceId(c), c.req.param("id")));
 });
 
 employeesApi.patch("/:id/phone", canManage, async (c) => {
@@ -54,21 +54,27 @@ employeesApi.patch("/:id/phone", canManage, async (c) => {
     await c.req.json(),
   );
   const employee = await updateEmployeePhone(
+    getWorkspaceId(c),
     c.req.param("id"),
     phone,
-    actorId(c),
+    getActorId(c),
   );
   return c.json(employee);
 });
 
 employeesApi.get("/:id", canView, async (c) => {
-  const employee = await getEmployee(c.req.param("id"));
+  const employee = await getEmployee(getWorkspaceId(c), c.req.param("id"));
   if (!employee) throw new HttpError(404, "Employee not found");
   return c.json(employee);
 });
 
 employeesApi.patch("/:id", canManage, async (c) => {
   const input = parseWith(updateEmployeeSchema, await c.req.json());
-  const employee = await updateEmployee(c.req.param("id"), input, actorId(c));
+  const employee = await updateEmployee(
+    getWorkspaceId(c),
+    c.req.param("id"),
+    input,
+    getActorId(c),
+  );
   return c.json(employee);
 });

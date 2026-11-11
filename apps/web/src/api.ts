@@ -300,10 +300,17 @@ export const authApi = {
     request<{ google: boolean }>("/auth/providers").catch(() => ({ google: false })),
 
   googleLoginUrl: `${API_BASE}/auth/google`,
+
+  me: () => request<Me>("/auth/me"),
 };
 
+export interface Me {
+  user: { name: string; email: string; role: string | null };
+  workspace: { id: string; name: string };
+}
+
 const OAUTH_ERRORS: Record<string, string> = {
-  not_registered: "Akun Google ini tidak diizinkan masuk atau sudah dinonaktifkan.",
+  not_registered: "Akun Google ini belum terdaftar atau sudah dinonaktifkan. Pendaftaran baru sedang ditutup.",
   unverified_email: "Email Google Anda belum terverifikasi.",
   cancelled: "Login dengan Google dibatalkan.",
   invalid_state: "Sesi login kedaluwarsa. Silakan coba lagi.",

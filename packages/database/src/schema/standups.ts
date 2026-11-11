@@ -1,10 +1,12 @@
 import { pgTable, text, timestamp, uuid, date, unique } from "drizzle-orm/pg-core";
 import { employees } from "./employees.js";
+import { workspaceRef } from "./workspaces.js";
 
 export const standupSessions = pgTable(
   "standup_sessions",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: workspaceRef(),
     employeeId: uuid("employee_id")
       .notNull()
       .references(() => employees.id, { onDelete: "cascade" }),
@@ -24,6 +26,7 @@ export const standups = pgTable(
   "standups",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: workspaceRef(),
     sessionId: uuid("session_id").references(() => standupSessions.id, {
       onDelete: "cascade",
     }),

@@ -8,6 +8,7 @@ import {
 import { requireInternalOrRole, requireRole } from "../auth/index.js";
 import { HttpError } from "../../lib/http-error.js";
 import { parseWith } from "../../lib/validate.js";
+import { getWorkspaceId } from "../../lib/tenant.js";
 import {
   listStandupsByDate,
   sendStandupPrompts,
@@ -24,7 +25,9 @@ standupsApi.post("/trigger", canManage, async (c) => {
     triggerStandupSchema,
     await c.req.json().catch(() => ({})),
   );
-  return c.json(await sendStandupPrompts({ ...input, force: input.force }));
+  return c.json(
+    await sendStandupPrompts(getWorkspaceId(c), { ...input, force: input.force }),
+  );
 });
 
 standupsApi.post("/reminders", canManage, async (c) => {
@@ -32,13 +35,14 @@ standupsApi.post("/reminders", canManage, async (c) => {
     remindStandupSchema,
     await c.req.json().catch(() => ({})),
   );
-  return c.json(await sendStandupReminders(input));
+  return c.json(await sendStandupReminders(getWorkspaceId(c), input));
 });
 
 standupsApi.get("/", canView, async (c) => {
+  const ws = getWorkspaceId(c);
   const date = c.req.query("date") ?? dateInTimezone();
   if (!standupDateSchema.safeParse(date).success) {
     throw new HttpError(400, "date must be in YYYY-MM-DD format");
   }
-  return c.json({ date, standups: await listStandupsByDate(date) });
+  return c.json({ date, standups: await listStandupsByDate(ws, date) });
 });

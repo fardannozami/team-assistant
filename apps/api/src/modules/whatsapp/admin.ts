@@ -264,7 +264,11 @@ function standupTriggerReply(result: {
   sent: number;
   skipped: number;
   failed: number;
+  whatsappConnected?: boolean;
 }) {
+  if (result.whatsappConnected === false) {
+    return "WhatsApp workspace ini belum terhubung, prompt standup tidak dikirim.";
+  }
   if (result.sent > 0) {
     const parts = [`Prompt standup terkirim ke ${result.sent} karyawan.`];
     if (result.skipped > 0) {
@@ -279,8 +283,8 @@ function standupTriggerReply(result: {
   return "Tidak ada prompt terkirim - semua karyawan sudah punya sesi standup hari ini.";
 }
 
-async function showSchedules(): Promise<string> {
-  const rows = await listSchedules();
+async function showSchedules(workspaceId: string): Promise<string> {
+  const rows = await listSchedules(workspaceId);
   if (rows.length === 0) {
     return "Belum ada jadwal. Gunakan SET SCHEDULE <HH:mm> [HARI], contoh SET SCHEDULE 09:00 MON-FRI.";
   }
@@ -300,7 +304,7 @@ async function showSchedules(): Promise<string> {
     .join("\n");
 }
 
-async function setScheduleCommand(rest: string): Promise<string> {
+async function setScheduleCommand(workspaceId: string, rest: string): Promise<string> {
   const timeMatch = rest.match(/\b(\d{1,2}):(\d{2})\b/);
   if (!timeMatch) {
     return "Format: SET SCHEDULE <HH:mm> [HARI], contoh SET SCHEDULE 08:45 MON-FRI";
@@ -323,18 +327,18 @@ async function setScheduleCommand(rest: string): Promise<string> {
     weekdays = parsed;
   }
 
-  const schedule = await upsertStandupSchedule({ timeOfDay, weekdays });
+  const schedule = await upsertStandupSchedule(workspaceId, { timeOfDay, weekdays });
   return savedScheduleReply(schedule);
 }
 
-async function setReminderCommand(rest: string): Promise<string> {
+async function setReminderCommand(workspaceId: string, rest: string): Promise<string> {
   const token = rest.trim().toUpperCase();
   if (!token) {
     return "Format: SET REMINDER <menit> (setelah standup) atau SET REMINDER OFF";
   }
 
   if (/^(OFF|NONE|DISABLED?)$/.test(token)) {
-    await upsertStandupSchedule({ reminderMinutes: null });
+    await upsertStandupSchedule(workspaceId, { reminderMinutes: null });
     return "Pengingat dimatikan.";
   }
 
@@ -347,25 +351,26 @@ async function setReminderCommand(rest: string): Promise<string> {
     return "Pengingat maksimal 1440 menit (24 jam).";
   }
 
-  await upsertStandupSchedule({ reminderMinutes: minutes });
+  await upsertStandupSchedule(workspaceId, { reminderMinutes: minutes });
   return `Pengingat akan dikirim ${minutes} menit setelah standup.`;
 }
 
+// Keyed by `${workspaceId}:${phone}`.
 const flows = new Map<string, { flow: PendingFlow; expiresAt: number }>();
 
-function setFlow(phone: string, flow: PendingFlow) {
-  flows.set(phone, { flow, expiresAt: Date.now() + FLOW_TTL_MS });
+function setFlow(key: string, flow: PendingFlow) {
+  flows.set(key, { flow, expiresAt: Date.now() + FLOW_TTL_MS });
 }
 
-function clearFlow(phone: string) {
-  flows.delete(phone);
+function clearFlow(key: string) {
+  flows.delete(key);
 }
 
-function getFlow(phone: string): PendingFlow | null {
-  const entry = flows.get(phone);
+function getFlow(key: string): PendingFlow | null {
+  const entry = flows.get(key);
   if (!entry) return null;
   if (entry.expiresAt < Date.now()) {
-    flows.delete(phone);
+    flows.delete(key);
     return null;
   }
   return entry.flow;
@@ -438,8 +443,8 @@ function phoneConfirmation(employeeName: string, phone: string) {
   return `Saya akan mengubah nomor WhatsApp ${employeeName} menjadi ${phone}. Sudah benar? Balas YA atau TIDAK.`;
 }
 
-async function renderEmployeeList() {
-  const rows = await listEmployees({ active: true });
+async function renderEmployeeList(workspaceId: string) {
+  const rows = await listEmployees(workspaceId, { active: true });
   if (rows.length === 0) return "Tidak ada karyawan aktif.";
 
   const lines = rows.slice(0, 50).map((employee, index) => {
@@ -454,14 +459,14 @@ async function renderEmployeeList() {
   return [`Karyawan aktif (${rows.length}):`, ...lines].join("\n") + suffix;
 }
 
-async function startAddFlow(phone: string, rest: string): Promise<string> {
+async function startAddFlow(flowKey: string, rest: string): Promise<string> {
   const { name, phone: rawPhone } = splitNameAndPhone(rest);
   const parsedPhone = toValidPhone(rawPhone);
 
   if (rawPhone && !parsedPhone) return INVALID_PHONE;
 
   if (name && parsedPhone) {
-    setFlow(phone, {
+    setFlow(flowKey, {
       kind: "add",
       step: "confirm",
       name,
@@ -471,20 +476,24 @@ async function startAddFlow(phone: string, rest: string): Promise<string> {
   }
 
   if (parsedPhone) {
-    setFlow(phone, { kind: "add", step: "name", phone: parsedPhone });
+    setFlow(flowKey, { kind: "add", step: "name", phone: parsedPhone });
     return "Siapa nama karyawannya?";
   }
 
   if (name) {
-    setFlow(phone, { kind: "add", step: "phone", name });
+    setFlow(flowKey, { kind: "add", step: "phone", name });
     return `Berapa nomor WhatsApp ${name} (dengan kode negara)?`;
   }
 
-  setFlow(phone, { kind: "add", step: "name" });
+  setFlow(flowKey, { kind: "add", step: "name" });
   return "Siapa nama karyawannya?";
 }
 
-async function startPhoneFlow(phone: string, rest: string): Promise<string> {
+async function startPhoneFlow(
+  workspaceId: string,
+  flowKey: string,
+  rest: string,
+): Promise<string> {
   const numbers = extractPhones(rest);
 
   if (numbers.length >= 2) {
@@ -492,10 +501,10 @@ async function startPhoneFlow(phone: string, rest: string): Promise<string> {
     const newPhone = numbers[1];
     if (!currentPhone || !newPhone) return INVALID_PHONE;
 
-    const target = await findEmployeeByPhone(currentPhone);
+    const target = await findEmployeeByPhone(workspaceId, currentPhone);
     if (!target) return "Karyawan dengan nomor itu tidak ditemukan.";
 
-    setFlow(phone, {
+    setFlow(flowKey, {
       kind: "phone",
       step: "confirm",
       employeeId: target.id,
@@ -509,10 +518,10 @@ async function startPhoneFlow(phone: string, rest: string): Promise<string> {
     const currentPhone = numbers[0];
     if (!currentPhone) return INVALID_PHONE;
 
-    const target = await findEmployeeByPhone(currentPhone);
+    const target = await findEmployeeByPhone(workspaceId, currentPhone);
     if (!target) return "Karyawan dengan nomor itu tidak ditemukan.";
 
-    setFlow(phone, {
+    setFlow(flowKey, {
       kind: "phone",
       step: "phone",
       employeeId: target.id,
@@ -521,12 +530,13 @@ async function startPhoneFlow(phone: string, rest: string): Promise<string> {
     return `What is the new WhatsApp number for ${target.name}?`;
   }
 
-  setFlow(phone, { kind: "phone", step: "employee" });
+  setFlow(flowKey, { kind: "phone", step: "employee" });
   return "Karyawan yang mana? Kirim nama atau nomor WhatsApp saat ini.";
 }
 
 async function continueAddFlow(
-  phone: string,
+  workspaceId: string,
+  flowKey: string,
   flow: Extract<PendingFlow, { kind: "add" }>,
   text: string,
   sender: AdminSender,
@@ -537,11 +547,11 @@ async function continueAddFlow(
 
     const existingPhone = toValidPhone(flow.phone);
     if (!existingPhone) {
-      setFlow(phone, { kind: "add", step: "phone", name });
+      setFlow(flowKey, { kind: "add", step: "phone", name });
       return `Berapa nomor WhatsApp ${name} (dengan kode negara)?`;
     }
 
-    setFlow(phone, {
+    setFlow(flowKey, {
       kind: "add",
       step: "confirm",
       name,
@@ -554,7 +564,7 @@ async function continueAddFlow(
     const candidate = toValidPhone(text);
     if (!candidate) return INVALID_PHONE;
 
-    setFlow(phone, {
+    setFlow(flowKey, {
       kind: "add",
       step: "confirm",
       name: flow.name,
@@ -564,9 +574,10 @@ async function continueAddFlow(
   }
 
   if (isYes(text)) {
-    clearFlow(phone);
+    clearFlow(flowKey);
     try {
       const created = await createEmployee(
+        workspaceId,
         { name: flow.name, phone: flow.phone },
         sender.userId,
       );
@@ -580,7 +591,7 @@ async function continueAddFlow(
   }
 
   if (isNo(text)) {
-    clearFlow(phone);
+    clearFlow(flowKey);
     return "Dibatalkan.";
   }
 
@@ -588,13 +599,14 @@ async function continueAddFlow(
 }
 
 async function continuePhoneFlow(
-  phone: string,
+  workspaceId: string,
+  flowKey: string,
   flow: Extract<PendingFlow, { kind: "phone" }>,
   text: string,
   sender: AdminSender,
 ): Promise<string> {
   if (flow.step === "employee") {
-    const matches = await findEmployeesByIdentifier(text);
+    const matches = await findEmployeesByIdentifier(workspaceId, text);
     if (matches.length === 0) {
       return "No employee found with that name or phone number. Send a name or current WhatsApp number, or reply CANCEL.";
     }
@@ -609,7 +621,7 @@ async function continuePhoneFlow(
     const target = matches[0];
     if (!target) return "Karyawan dengan nama atau nomor itu tidak ditemukan.";
 
-    setFlow(phone, {
+    setFlow(flowKey, {
       kind: "phone",
       step: "phone",
       employeeId: target.id,
@@ -622,7 +634,7 @@ async function continuePhoneFlow(
     const candidate = toValidPhone(text);
     if (!candidate) return INVALID_PHONE;
 
-    setFlow(phone, {
+    setFlow(flowKey, {
       kind: "phone",
       step: "confirm",
       employeeId: flow.employeeId,
@@ -633,9 +645,9 @@ async function continuePhoneFlow(
   }
 
   if (isYes(text)) {
-    clearFlow(phone);
+    clearFlow(flowKey);
     try {
-      await updateEmployeePhone(flow.employeeId, flow.phone, sender.userId);
+      await updateEmployeePhone(workspaceId, flow.employeeId, flow.phone, sender.userId);
       return "Nomor WhatsApp diperbarui.";
     } catch (error) {
       if (error instanceof HttpError) return error.message;
@@ -644,7 +656,7 @@ async function continuePhoneFlow(
   }
 
   if (isNo(text)) {
-    clearFlow(phone);
+    clearFlow(flowKey);
     return "Dibatalkan.";
   }
 
@@ -652,6 +664,7 @@ async function continuePhoneFlow(
 }
 
 export async function handleAdminMessage(args: {
+  workspaceId: string;
   phone: string;
   body: string;
   employee: AdminSender | null;
@@ -660,8 +673,10 @@ export async function handleAdminMessage(args: {
   const text = args.body.trim();
   if (!text) return null;
 
+  const ws = args.workspaceId;
+  const flowKey = `${ws}:${args.phone}`;
   const command = parseCommand(text);
-  const pending = getFlow(args.phone);
+  const pending = getFlow(flowKey);
 
   if (!args.employee) {
     const looksAdmin = command || pending || ADMIN_KEYWORD.test(text);
@@ -674,52 +689,52 @@ export async function handleAdminMessage(args: {
   }
 
   if (/^(cancel|batal|stop)$/i.test(text)) {
-    clearFlow(args.phone);
+    clearFlow(flowKey);
     return "Dibatalkan.";
   }
 
   if (command) {
-    clearFlow(args.phone);
+    clearFlow(flowKey);
     switch (command.name) {
       case "MENU":
       case "HELP":
         return MENU_TEXT;
       case "EMPLOYEE_LIST":
-        return renderEmployeeList();
+        return renderEmployeeList(ws);
       case "SHOW_SCHEDULE":
-        return showSchedules();
+        return showSchedules(ws);
       case "SET_SCHEDULE":
-        return setScheduleCommand(command.rest);
+        return setScheduleCommand(ws, command.rest);
       case "SET_REMINDER":
-        return setReminderCommand(command.rest);
+        return setReminderCommand(ws, command.rest);
       case "ADD_EMPLOYEE":
-        return startAddFlow(args.phone, command.rest);
+        return startAddFlow(flowKey, command.rest);
       case "UPDATE_PHONE":
-        return startPhoneFlow(args.phone, command.rest);
+        return startPhoneFlow(ws, flowKey, command.rest);
       case "REPORT_TODAY": {
-        const r = await generateDailyReport();
+        const r = await generateDailyReport(ws);
         return r.text;
       }
       case "REPORT_WEEKLY": {
-        const r = await generateWeeklyReport();
+        const r = await generateWeeklyReport(ws);
         return r.text;
       }
       case "START_STANDUP": {
         if (command.rest) {
-          const matches = await findEmployeesByIdentifier(command.rest);
+          const matches = await findEmployeesByIdentifier(ws, command.rest);
           if (matches.length === 0) {
             return "Karyawan dengan nama atau nomor itu tidak ditemukan.";
           }
           if (matches.length > 1 || !matches[0]) {
             return "Ada beberapa karyawan yang cocok. Kirim nama lengkap atau nomor WhatsApp yang tepat.";
           }
-          const result = await sendStandupPrompts({
+          const result = await sendStandupPrompts(ws, {
             employeeId: matches[0].id,
             resend: true,
           });
           return standupTriggerReply(result);
         }
-        const result = await sendStandupPrompts({ resend: true });
+        const result = await sendStandupPrompts(ws, { resend: true });
         return standupTriggerReply(result);
       }
     }
@@ -727,13 +742,13 @@ export async function handleAdminMessage(args: {
 
   if (pending) {
     return pending.kind === "add"
-      ? continueAddFlow(args.phone, pending, text, args.employee)
-      : continuePhoneFlow(args.phone, pending, text, args.employee);
+      ? continueAddFlow(ws, flowKey, pending, text, args.employee)
+      : continuePhoneFlow(ws, flowKey, pending, text, args.employee);
   }
 
   const natural = parseNaturalSchedule(text);
   if (natural) {
-    const schedule = await upsertStandupSchedule(natural, args.employee.userId);
+    const schedule = await upsertStandupSchedule(ws, natural, args.employee.userId);
     return savedScheduleReply(schedule);
   }
 
