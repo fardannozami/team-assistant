@@ -370,6 +370,12 @@ async function openSocket(workspaceId: string, pairingPhone?: string): Promise<S
             { workspaceId, phone, body },
             "Employee message had no open standup session and no AI reply",
           );
+          // Without AI nothing else understands free text; point to the keywords.
+          // Stickers, images and reactions have no text: stay quiet for those.
+          if (body.trim()) {
+            await sendText(workspaceId, from, "Pesan belum dikenali. Ketik BANTUAN untuk melihat perintah standup.");
+          }
+          continue;
         }
 
         logger.info({ workspaceId, phone, body }, "Incoming message");

@@ -110,6 +110,12 @@ export async function buildAgentContext(args: AgentArgs): Promise<string> {
       ? "This user may look up any employee's profile and standup history, and see team activity and reports."
       : "This user may only access their own profile and standup history (tools enforce this).",
   ];
+  if (resolvedRole === "Owner" || resolvedRole === "Admin") {
+    lines.push(
+      "This user is an admin: they may manage employees (add, rename, change WhatsApp number, team or role, deactivate), teams, schedules, calendar exceptions, and send standup prompts or reminders now.",
+      "For any change, call the matching tool right away with what the user said (names are fine; the tool resolves them). The system then asks the user to confirm with YA/TIDAK, so do not ask for confirmation yourself. If a required detail is missing, ask for it briefly.",
+    );
+  }
 
   const history = await recentStandups(employee.id, 5);
   if (history.length > 0) {

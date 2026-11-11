@@ -132,6 +132,76 @@ describe.skipIf(!url)("tenant isolation", () => {
     expect(await resolveAiConfig(ws.a.id)).not.toBeNull();
   });
 
+  test("admin chat tools resolve, confirm and act only within the workspace", async () => {
+    const { prepareTool, executeTool } = await import("./modules/ai/tools.js");
+    const { getEmployee } = await import("./modules/employees/service.js");
+    const self = (await getEmployee(ws.a.id, ws.a.employeeId))!;
+    const admin = { workspaceId: ws.a.id, employee: self as any, roleName: "Admin", actorId: null };
+    const member = { ...admin, roleName: "Employee" };
+    const run = async (name: string, args: Record<string, unknown>) => {
+      const prepared = await prepareTool(name, args, admin);
+      if (!prepared?.ok) throw new Error(`${name}: ${prepared ? prepared.error : "not prepared"}`);
+      return { prepared, result: await executeTool(name, prepared.args, admin) };
+    };
+
+    expect(await prepareTool("add_employee", { name: "X", phone: "08123456789" }, member)).toEqual({
+      ok: false,
+      error: "Hanya Owner atau Admin yang bisa melakukan ini.",
+    });
+    // Workspace B's employee is invisible to A.
+    expect((await prepareTool("update_employee_phone", { identifier: "Emp b", phone: "0811111111" }, admin))?.ok).toBe(false);
+
+    const added = await run("add_employee", { name: "Budi Chat", phone: "0812 3333 4444" });
+    expect(added.prepared.summary).toContain("6281233334444");
+    expect(added.result.ok).toBe(true);
+
+    const phone = await run("update_employee_phone", { identifier: "budi", phone: "0857-1111-2222" });
+    expect(phone.result.data).toContain("6285711112222");
+
+    await run("create_team", { name: "Tim Chat" });
+    const moved = await run("update_employee", { identifier: "Budi Chat", team: "tim chat", role: "Manager" });
+    expect(moved.result.data).toContain("Tim Chat");
+    expect(moved.result.data).toContain("Manager");
+    expect((await prepareTool("delete_team", { team: "Tim Chat" }, admin))?.ok).toBe(false);
+
+    await run("set_employee_active", { identifier: "Budi Chat", active: false });
+    expect((await prepareTool("set_employee_active", { identifier: self.name, active: false }, admin))?.ok).toBe(false);
+
+    const list = await executeTool("list_employees", { status: "all" }, admin);
+    expect(list.data).toContain("Budi Chat");
+    expect(list.data).toContain("nonaktif");
+    expect(list.data).not.toContain("Emp b");
+
+    await run("add_calendar_exception", { date: "2030-01-02", reason: "Outing" });
+    expect((await executeTool("list_holidays", {}, admin)).data).toContain("2030-01-02");
+    await run("delete_calendar_exception", { date: "2030-01-02" });
+
+    const standup = await run("start_standup", {});
+    expect(standup.result.data).toContain("belum terhubung");
+  });
+
+  test("employee standup keywords; other messages are left for the AI", async () => {
+    const { handleStandupMessage } = await import("./modules/standups/engine.js");
+    const { getEmployee } = await import("./modules/employees/service.js");
+    const employee = { ...(await getEmployee(ws.b.id, ws.b.employeeId))!, workspaceId: ws.b.id };
+    const say = (body: string) => handleStandupMessage({ employee, body, date: "2030-02-01" });
+
+    expect(await say("ganti nomor Wil sekarang")).toBeNull();
+    expect(await say("BANTUAN")).toContain("UBAH STANDUP");
+    expect(await say("UBAH STANDUP kendala: x")).toContain("Kirim STANDUP");
+
+    expect(await say("STANDUP")).toContain("Apa yang kamu kerjakan kemarin?");
+    expect(await say("bikin halaman login")).toContain("Diterima kemarin");
+    expect(await say("hari ini: integrasi API. kendala: tidak ada")).toContain("Standup tercatat");
+
+    // Completed: free text (even with words like "sekarang"/"masalah") is not an edit.
+    expect(await say("tolong cek masalah server sekarang")).toBeNull();
+    expect(await say("STANDUP")).toContain("sudah tercatat");
+    const edited = await say("ubah standup kendala: menunggu akses server");
+    expect(edited).toContain("Kendala: menunggu akses server");
+    expect(edited).toContain("Hari ini: integrasi API");
+  });
+
   test("whatsapp status is per workspace and requires auth", async () => {
     expect((await app.request("/whatsapp/status")).status).toBe(401);
     const status = await (await req("a", "/whatsapp/status")).json();

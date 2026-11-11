@@ -91,7 +91,9 @@ const MENU_TEXT = [
   "SET SCHEDULE <HH:mm> [HARI] - ubah waktu standup",
   "SET REMINDER <menit>|OFF - ubah pengingat standup",
   "Atau ketik: jadwalkan standup senin sampai jumat jam 9 pagi WIB",
+  "Dengan API key AI, cukup tulis biasa, mis. \"ganti nomor Budi jadi 0812...\", \"siapa saja anggota tim Design?\", \"liburkan standup tanggal 24\"",
   "CANCEL - batalkan langkah saat ini",
+  "Standup pribadi: STANDUP, UBAH STANDUP (lihat BANTUAN)",
 ].join("\n");
 
 const DAY_INDEX: Record<string, number> = {
@@ -260,7 +262,7 @@ function parseNaturalSchedule(text: string): {
   return { timeOfDay, weekdays, timezone };
 }
 
-function standupTriggerReply(result: {
+export function standupTriggerReply(result: {
   sent: number;
   skipped: number;
   failed: number;
@@ -684,6 +686,8 @@ export async function handleAdminMessage(args: {
   }
 
   if (!isAdminRole(args.roleName)) {
+    // Employees get their own menu from the standup engine.
+    if (command?.name === "MENU" || command?.name === "HELP") return null;
     const looksAdmin = command || pending || ADMIN_KEYWORD.test(text);
     return looksAdmin ? "Kamu bukan administrator." : null;
   }

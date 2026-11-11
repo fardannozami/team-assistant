@@ -226,10 +226,39 @@ export type StandupCollector = {
   isActive: boolean;
 };
 
+const STANDUP_COMMAND = /^standup\b[\s:,.-]*/i;
+const EDIT_COMMAND = /^(?:ubah|edit|update|ganti|revisi)\s+standup\b[\s:,.-]*/i;
+const HELP_COMMAND = /^(?:bantuan|help|menu)$/i;
+const ELEMENT_LABEL: Record<StandupElement, string> = {
+  yesterday: "Kemarin",
+  today: "Hari ini",
+  blockers: "Kendala",
+};
+
+export const EMPLOYEE_MENU = [
+  "Perintah standup:",
+  "STANDUP - mulai atau lanjutkan standup hari ini",
+  "STANDUP kemarin: ... hari ini: ... kendala: ... - isi sekaligus",
+  "UBAH STANDUP kendala: ... - ubah jawaban yang sudah terkirim",
+  "BANTUAN - tampilkan pesan ini",
+].join("\n");
+
+const EDIT_HINT = "Untuk mengubah, kirim UBAH STANDUP diikuti bagiannya, contoh: UBAH STANDUP kendala: menunggu akses server";
+
+function summarize(date: string, title: string, answers: { questionKey: string; answer: string }[]) {
+  const answerFor = (key: StandupElement) =>
+    answers.find((a) => a.questionKey === key)?.answer ?? "-";
+  return [
+    `${title} ${date}.`,
+    ...CORE_STANDUP_ELEMENTS.map((key) => `${ELEMENT_LABEL[key]}: ${answerFor(key)}`),
+  ].join("\n");
+}
+
 /**
- * Collects an inbound WhatsApp message into the employee's open standup
- * session for today. Returns the reply text, or null when the employee has
- * no open session (the message is not a standup answer).
+ * Standup messages from employees. With an open session (after a prompt or
+ * STANDUP), any message is an answer. Otherwise only the keywords above touch
+ * the standup, so everything else can go to admin commands or the AI agent.
+ * Returns null when the message is not for the standup.
  */
 export async function handleStandupMessage(args: {
   employee: StandupCollector;
@@ -240,42 +269,71 @@ export async function handleStandupMessage(args: {
   if (!text || !args.employee.isActive) return null;
 
   const date = args.date ?? dateInTimezone();
-  const session = await getStandupSession(args.employee.id, date);
-  if (!session) return null;
+  if (HELP_COMMAND.test(text)) return EMPLOYEE_MENU;
 
-  // Allow editing an already-completed standup by re-sending answers.
-  if (session.status === "completed") {
-    const parsed = parseStandupText(text);
-    if (Object.keys(parsed).length === 0) {
-      return `Standup untuk ${date} sudah tercatat. Untuk mengubah, kirim ulang jawaban (kemarin/hari ini/kendala).`;
-    }
-    const standupRow = await getOrCreateStandupRow(
-      args.employee.workspaceId,
-      session.id,
-      args.employee.id,
-      date,
-    );
-    for (const [key, value] of Object.entries(parsed) as [StandupElement, string][]) {
-      const normalized = key === "blockers" && NO_BLOCKER.test(value) ? "none" : value;
-      await upsertAnswer(standupRow.id, key, normalized);
-    }
-    const final = await getAnswers(standupRow.id);
-    const answerFor = (key: StandupElement) =>
-      final.find((a) => a.questionKey === key)?.answer ?? "-";
-    return [
-      `Standup untuk ${date} diperbarui 😊`,
-      `Kemarin: ${answerFor("yesterday")}`,
-      `Hari ini: ${answerFor("today")}`,
-      `Kendala: ${answerFor("blockers")}`,
-    ].join("\n");
+  const edit = text.match(EDIT_COMMAND);
+  if (edit) return editStandup(args.employee, date, text.slice(edit[0].length));
+
+  const start = text.match(STANDUP_COMMAND);
+  if (start) return startStandup(args.employee, date, text.slice(start[0].length));
+
+  const session = await getStandupSession(args.employee.id, date);
+  if (!session || session.status === "completed") return null;
+  return recordAnswers(args.employee, session, date, text);
+}
+
+/** STANDUP: opens today's session on demand, then records any answers sent with it. */
+async function startStandup(employee: StandupCollector, date: string, rest: string) {
+  let session = await getStandupSession(employee.id, date);
+  if (!session) {
+    await db
+      .insert(standupSessions)
+      .values({ workspaceId: employee.workspaceId, employeeId: employee.id, date, status: "pending" })
+      .onConflictDoNothing();
+    session = await getStandupSession(employee.id, date);
+    if (!session) return "Standup belum bisa dimulai. Coba lagi sebentar.";
   }
 
-  const standupRow = await getOrCreateStandupRow(
-    args.employee.workspaceId,
-    session.id,
-    args.employee.id,
-    date,
-  );
+  if (session.status === "completed") {
+    const row = await getOrCreateStandupRow(employee.workspaceId, session.id, employee.id, date);
+    return `${summarize(date, "Standup kamu sudah tercatat untuk", await getAnswers(row.id))}\n${EDIT_HINT}`;
+  }
+  if (rest) return recordAnswers(employee, session, date, rest);
+
+  const row = await getOrCreateStandupRow(employee.workspaceId, session.id, employee.id, date);
+  const answered = new Set((await getAnswers(row.id)).map((a) => a.questionKey));
+  const missing = CORE_STANDUP_ELEMENTS.filter((key) => !answered.has(key));
+  if (missing.length === CORE_STANDUP_ELEMENTS.length) return standupPromptText(date);
+  return `Lanjutkan standup ${date}: ${STANDUP_QUESTIONS[missing[0]!]}`;
+}
+
+/** UBAH STANDUP: changes only the labelled parts of today's answers. */
+async function editStandup(employee: StandupCollector, date: string, rest: string) {
+  const session = await getStandupSession(employee.id, date);
+  if (!session) return `Belum ada standup untuk ${date}. Kirim STANDUP untuk mulai.`;
+  if (session.status !== "completed") {
+    return rest ? recordAnswers(employee, session, date, rest) : `Standup ${date} belum selesai. ${STANDUP_QUESTIONS.yesterday}`;
+  }
+
+  const parsed = parseStandupText(rest);
+  if (Object.keys(parsed).length === 0) return EDIT_HINT;
+
+  const row = await getOrCreateStandupRow(employee.workspaceId, session.id, employee.id, date);
+  for (const [key, value] of Object.entries(parsed) as [StandupElement, string][]) {
+    const normalized = key === "blockers" && NO_BLOCKER.test(value) ? "none" : value;
+    await upsertAnswer(row.id, key, normalized);
+  }
+  return `${summarize(date, "Standup diperbarui untuk", await getAnswers(row.id))} 😊`;
+}
+
+/** Files a message into an open session and asks for whatever is still missing. */
+async function recordAnswers(
+  employee: StandupCollector,
+  session: { id: string; status: string },
+  date: string,
+  text: string,
+) {
+  const standupRow = await getOrCreateStandupRow(employee.workspaceId, session.id, employee.id, date);
 
   const answers = await getAnswers(standupRow.id);
   const answered = new Set(answers.map((a) => a.questionKey));
@@ -308,14 +366,8 @@ export async function handleStandupMessage(args: {
 
   if (stillMissing.length === 0) {
     await setSessionStatus(session.id, "completed");
-    const final = await getAnswers(standupRow.id);
-    const answerFor = (key: StandupElement) =>
-      final.find((a) => a.questionKey === key)?.answer ?? "-";
     return [
-      `Standup tercatat untuk ${date}.`,
-      `Kemarin: ${answerFor("yesterday")}`,
-      `Hari ini: ${answerFor("today")}`,
-      `Kendala: ${answerFor("blockers")}`,
+      summarize(date, "Standup tercatat untuk", await getAnswers(standupRow.id)),
       "Terima kasih 😊",
     ].join("\n");
   }

@@ -8,7 +8,14 @@ import {
   getConversationHistory,
   type AgentEmployee,
 } from "./context.js";
-import { AI_TOOLS, executeTool, type ToolContext } from "./tools.js";
+import {
+  AI_TOOLS,
+  confirmationText,
+  executeTool,
+  MUTATING_TOOLS,
+  prepareTool,
+  type ToolContext,
+} from "./tools.js";
 import { HttpError } from "../../lib/http-error.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
@@ -18,18 +25,12 @@ const db = createDbClient(
     "postgres://teamassistant:teamassistant@localhost:5432/teamassistant",
 );
 
-const MAX_ITERATIONS = 2;
+// Room for a lookup (e.g. list_employees) before the action and the reply.
+const MAX_ITERATIONS = 4;
 const PENDING_TTL_MS = 10 * 60 * 1000;
 
 const YES = /^(yes|y|ya|iya|ok|oke|correct|benar|betul)$/i;
 const NO = /^(no|n|tidak|bukan|salah|batal|cancel)$/i;
-
-/** Mutating tools never run immediately; they wait for a YES/NO reply. */
-const MUTATING_TOOLS = new Set([
-  "create_schedule",
-  "update_schedule",
-  "create_standup",
-]);
 
 type PendingAction = {
   tool: string;
@@ -309,10 +310,21 @@ export async function handleAiMessage(
         }
 
         if (MUTATING_TOOLS.has(name)) {
-          const summary = pendingSummary(name, parsed);
+          // Mutating tools never run immediately; they wait for a YES/NO reply.
+          const prepared = await prepareTool(name, parsed, toolContext(args));
+          if (prepared && !prepared.ok) {
+            // Let the model ask for the missing or ambiguous detail.
+            messages.push({
+              role: "tool",
+              tool_call_id: call.id,
+              content: JSON.stringify(prepared),
+            });
+            continue;
+          }
+          const summary = prepared ? confirmationText(prepared.summary) : pendingSummary(name, parsed);
           pendingActions.set(pendingKey(args.workspaceId, phone), {
             tool: name,
-            args: parsed,
+            args: prepared ? prepared.args : parsed,
             expiresAt: Date.now() + PENDING_TTL_MS,
           });
           messages.push({
