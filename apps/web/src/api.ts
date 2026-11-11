@@ -4,7 +4,7 @@
  * Uses fetch with an absolute base URL (VITE_API_URL, default http://localhost:4000).
  * The JWT is read from localStorage and sent as a Bearer header on every request.
  * A 401 response clears the token and notifies the shell so the user is returned
- * to the login page (except for /auth/login itself, which handles 401 locally).
+ * to the login page.
  */
 
 export const API_BASE =
@@ -116,8 +116,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     body = await res.text();
   }
 
-  const isAuth = path === "/auth/login";
-  if (res.status === 401 && !isAuth) {
+  if (res.status === 401) {
     setToken(null);
     triggerUnauthorized();
   }
@@ -285,15 +284,6 @@ export interface WeeklyReport {
 /* ------------------------------------------------------------------ */
 
 export const authApi = {
-  login: (email: string, password: string) =>
-    request<{ token: string }>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    }).then((r) => {
-      setToken(r.token);
-      return r.token;
-    }),
-
   logout: () => setToken(null),
 
   providers: () =>

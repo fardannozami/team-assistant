@@ -50,7 +50,7 @@
     </div>
 
     <div v-else class="relative z-10 flex min-h-screen items-center justify-center px-4 py-8 sm:px-6">
-      <AuthView :initial-error="oauthError" @login="handleLogin" />
+      <AuthView :initial-error="oauthError" />
     </div>
   </div>
 </template>
@@ -128,11 +128,6 @@ function navigateTo(tab: string) {
   } else {
     currentTab.value = tab;
   }
-}
-function handleLogin() {
-  loadMe();
-  token.value = getToken() ?? "";
-  showTour.value = !hasOnboarded();
 }
 function handleLogout() { authApi.logout(); token.value = ""; me.value = null; currentTab.value = "home"; toasts.value = []; showTour.value = false; }
 </script>

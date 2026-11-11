@@ -11,18 +11,7 @@ const TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 export const auth = new Hono();
 
-auth.post("/login", async (c) => {
-  const { email, password } = await c.req.json<{ email: string; password: string }>();
-  const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
-  if (!user || !user.passwordHash) {
-    return c.json({ error: "Invalid credentials" }, 401);
-  }
-  const ok = await Bun.password.verify(password, user.passwordHash);
-  if (!ok) {
-    return c.json({ error: "Invalid credentials" }, 401);
-  }
-  return c.json({ token: await issueToken(user) });
-});
+// Sign-in is Google OAuth only (see /auth/google below).
 
 async function issueToken(user: { id: string; roleId: string | null; workspaceId: string }) {
   const role = await getRoleName(user.roleId);
