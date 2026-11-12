@@ -1,4 +1,5 @@
 import { pgTable, text, timestamp, boolean, uuid } from "drizzle-orm/pg-core";
+import { workspaceRef } from "./workspaces.js";
 
 export const roles = pgTable("roles", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -20,6 +21,7 @@ export const rolePermissions = pgTable("role_permissions", {
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: workspaceRef(),
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
   passwordHash: text("password_hash"),

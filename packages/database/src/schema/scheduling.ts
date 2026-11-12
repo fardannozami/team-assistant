@@ -8,17 +8,22 @@ import {
   integer,
   unique,
 } from "drizzle-orm/pg-core";
+import { workspaceRef } from "./workspaces.js";
 
 export const schedules = pgTable(
   "schedules",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: workspaceRef(),
     name: text("name").notNull(),
     cronExpression: text("cron_expression"),
     weekdays: jsonb("weekdays"), // number[], cron convention 0=Sunday .. 6=Saturday
     timeOfDay: text("time_of_day"), // HH:mm
     timezone: text("timezone").default("Asia/Jakarta").notNull(),
-    reminderMinutes: integer("reminder_minutes"),
+    reminderMinutes: integer("reminder_minutes"), // first reminder, minutes after the prompt
+    reminderRepeatMinutes: integer("reminder_repeat_minutes"), // then every N minutes until closeTime
+    closeTime: text("close_time"), // HH:mm: reminders stop, unfinished standups become "missed"
+    summaryTime: text("summary_time"), // HH:mm: admins get who has not finished yet
     isActive: boolean("is_active").default(true).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
@@ -27,11 +32,12 @@ export const schedules = pgTable(
       .defaultNow()
       .notNull(),
   },
-  (t) => [unique("schedules_name_uq").on(t.name)],
+  (t) => [unique("schedules_workspace_name_uq").on(t.workspaceId, t.name)],
 );
 
 export const scheduledJobs = pgTable("scheduled_jobs", {
   id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: workspaceRef(),
   scheduleId: uuid("schedule_id").references(() => schedules.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   payload: jsonb("payload"),

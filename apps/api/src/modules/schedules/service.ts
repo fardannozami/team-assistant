@@ -1,5 +1,5 @@
 import { createDbClient, schedules } from "@repo/database";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { STANDUP_SCHEDULE_NAME } from "@repo/shared";
 import { schedulerQueue } from "../../lib/queue.js";
 import { HttpError } from "../../lib/http-error.js";
@@ -19,60 +19,98 @@ function assertValidTimezone(timezone: string) {
   }
 }
 
-export async function listSchedules() {
-  return db.select().from(schedules).orderBy(asc(schedules.name));
+/** Close and summary times only make sense after the prompt, on the same day. */
+function assertDayOrder(s: { timeOfDay: string | null; closeTime?: string | null; summaryTime?: string | null }) {
+  if (!s.timeOfDay) return;
+  if (s.closeTime && s.closeTime <= s.timeOfDay) {
+    throw new HttpError(400, `Jam tutup (${s.closeTime}) harus setelah jam standup (${s.timeOfDay}).`);
+  }
+  if (s.summaryTime && s.summaryTime <= s.timeOfDay) {
+    throw new HttpError(400, `Jam ringkasan (${s.summaryTime}) harus setelah jam standup (${s.timeOfDay}).`);
+  }
 }
 
-export async function getSchedule(id: string) {
+function scheduleWhere(workspaceId: string, id: string) {
+  return and(eq(schedules.id, id), eq(schedules.workspaceId, workspaceId));
+}
+
+export async function listSchedules(workspaceId: string) {
+  return db
+    .select()
+    .from(schedules)
+    .where(eq(schedules.workspaceId, workspaceId))
+    .orderBy(asc(schedules.name));
+}
+
+export async function getSchedule(workspaceId: string, id: string) {
   const [schedule] = await db
     .select()
     .from(schedules)
-    .where(eq(schedules.id, id))
+    .where(scheduleWhere(workspaceId, id))
     .limit(1);
   if (!schedule) throw new HttpError(404, "Schedule not found");
   return schedule;
 }
 
 export async function createSchedule(
+  workspaceId: string,
   input: CreateScheduleInput,
   actorId?: string | null,
 ) {
   assertValidTimezone(input.timezone ?? "Asia/Jakarta");
+  assertDayOrder(input);
 
   const [created] = await db
     .insert(schedules)
     .values({
+      workspaceId,
       name: input.name,
       timeOfDay: input.timeOfDay,
       weekdays: input.weekdays,
       timezone: input.timezone ?? "Asia/Jakarta",
       reminderMinutes: input.reminderMinutes ?? null,
+      reminderRepeatMinutes: input.reminderRepeatMinutes ?? null,
+      closeTime: input.closeTime ?? null,
+      summaryTime: input.summaryTime ?? null,
       isActive: true,
     })
-    .onConflictDoNothing({ target: schedules.name })
+    .onConflictDoNothing({ target: [schedules.workspaceId, schedules.name] })
     .returning();
 
   if (!created) {
     throw new HttpError(409, `Schedule "${input.name}" already exists`);
   }
 
-  await audit(actorId ?? null, "schedule.create", "schedule", created.id, {
-    name: input.name,
-    timeOfDay: input.timeOfDay,
-    weekdays: input.weekdays,
-    timezone: created.timezone,
-  });
+  await audit(
+    workspaceId,
+    actorId ?? null,
+    "schedule.create",
+    "schedule",
+    created.id,
+    {
+      name: input.name,
+      timeOfDay: input.timeOfDay,
+      weekdays: input.weekdays,
+      timezone: created.timezone,
+    },
+  );
 
   return created;
 }
 
 export async function updateSchedule(
+  workspaceId: string,
   id: string,
   input: UpdateScheduleInput,
   actorId?: string | null,
 ) {
-  const existing = await getSchedule(id);
+  const existing = await getSchedule(workspaceId, id);
   if (input.timezone) assertValidTimezone(input.timezone);
+  assertDayOrder({
+    timeOfDay: input.timeOfDay ?? existing.timeOfDay,
+    closeTime: input.closeTime === undefined ? existing.closeTime : input.closeTime,
+    summaryTime: input.summaryTime === undefined ? existing.summaryTime : input.summaryTime,
+  });
 
   const changes: Partial<typeof schedules.$inferInsert> = {
     updatedAt: new Date(),
@@ -84,16 +122,28 @@ export async function updateSchedule(
   if (input.reminderMinutes !== undefined) {
     changes.reminderMinutes = input.reminderMinutes;
   }
+  if (input.reminderRepeatMinutes !== undefined) {
+    changes.reminderRepeatMinutes = input.reminderRepeatMinutes;
+  }
+  if (input.closeTime !== undefined) changes.closeTime = input.closeTime;
+  if (input.summaryTime !== undefined) changes.summaryTime = input.summaryTime;
   if (input.isActive !== undefined) changes.isActive = input.isActive;
 
   try {
     const [updated] = await db
       .update(schedules)
       .set(changes)
-      .where(eq(schedules.id, id))
+      .where(scheduleWhere(workspaceId, id))
       .returning();
     if (!updated) throw new Error("Failed to update schedule");
-    await audit(actorId ?? null, "schedule.update", "schedule", id, input);
+    await audit(
+      workspaceId,
+      actorId ?? null,
+      "schedule.update",
+      "schedule",
+      id,
+      input,
+    );
     return updated;
   } catch (error) {
     if (
@@ -107,10 +157,14 @@ export async function updateSchedule(
   }
 }
 
-export async function deleteSchedule(id: string, actorId?: string | null) {
-  const existing = await getSchedule(id);
-  await db.delete(schedules).where(eq(schedules.id, id));
-  await audit(actorId ?? null, "schedule.delete", "schedule", id, {
+export async function deleteSchedule(
+  workspaceId: string,
+  id: string,
+  actorId?: string | null,
+) {
+  const existing = await getSchedule(workspaceId, id);
+  await db.delete(schedules).where(scheduleWhere(workspaceId, id));
+  await audit(workspaceId, actorId ?? null, "schedule.delete", "schedule", id, {
     name: existing.name,
   });
 }
@@ -122,12 +176,16 @@ const JOB_BACKOFF_MS = Number(process.env.SCHEDULER_BACKOFF_MS ?? 30_000);
  * SCH-007: enqueue the schedule's job right now. The worker executes it with
  * its own idempotency + execution history, so this is safe to call anytime.
  */
-export async function triggerSchedule(id: string, actorId?: string | null) {
-  const schedule = await getSchedule(id);
+export async function triggerSchedule(
+  workspaceId: string,
+  id: string,
+  actorId?: string | null,
+) {
+  const schedule = await getSchedule(workspaceId, id);
 
   await schedulerQueue.add(
     `standup-prompts:${schedule.id}`,
-    { scheduleId: schedule.id, manual: true },
+    { scheduleId: schedule.id, workspaceId, manual: true },
     {
       attempts: JOB_ATTEMPTS,
       backoff: { type: "exponential", delay: JOB_BACKOFF_MS },
@@ -136,7 +194,7 @@ export async function triggerSchedule(id: string, actorId?: string | null) {
     },
   );
 
-  await audit(actorId ?? null, "schedule.trigger", "schedule", id, {
+  await audit(workspaceId, actorId ?? null, "schedule.trigger", "schedule", id, {
     name: schedule.name,
   });
 
@@ -148,6 +206,7 @@ export async function triggerSchedule(id: string, actorId?: string | null) {
  * standup schedule, creating the default row when it does not exist yet.
  */
 export async function upsertStandupSchedule(
+  workspaceId: string,
   patch: {
     timeOfDay?: string;
     weekdays?: number[];
@@ -160,11 +219,17 @@ export async function upsertStandupSchedule(
   const [existing] = await db
     .select()
     .from(schedules)
-    .where(eq(schedules.name, STANDUP_SCHEDULE_NAME))
+    .where(
+      and(
+        eq(schedules.workspaceId, workspaceId),
+        eq(schedules.name, STANDUP_SCHEDULE_NAME),
+      ),
+    )
     .limit(1);
 
   if (!existing) {
     return createSchedule(
+      workspaceId,
       {
         name: STANDUP_SCHEDULE_NAME,
         timeOfDay: patch.timeOfDay ?? "09:00",
@@ -177,6 +242,7 @@ export async function upsertStandupSchedule(
   }
 
   return updateSchedule(
+    workspaceId,
     existing.id,
     {
       timeOfDay: patch.timeOfDay,

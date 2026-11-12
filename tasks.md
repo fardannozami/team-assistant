@@ -118,14 +118,14 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] **T-M6-10** Natural-language schedule config via WhatsApp.
 
 ### Holiday calendar
-- [ ] **T-M6-11** Sync Indonesian holiday data (SKB 3 Menteri source; API as delivery). (HOL-001)
-- [ ] **T-M6-12** Store holiday data locally; retain last successful dataset. (HOL-002)
-- [ ] **T-M6-13** Distinguish national vs joint leave. (HOL-003)
-- [ ] **T-M6-14** Independent config for joint-leave behavior. (HOL-004)
-- [ ] **T-M6-15** Skip standup on excluded dates. (HOL-005)
-- [ ] **T-M6-16** Manual date exceptions. (HOL-006)
-- [ ] **T-M6-17** Display upcoming holidays. (HOL-007)
-- [ ] **T-M6-18** Notify admins before holidays. (HOL-008)
+- [x] **T-M6-11** Sync Indonesian holiday data (SKB 3 Menteri source; API as delivery). (HOL-001)
+- [x] **T-M6-12** Store holiday data locally; retain last successful dataset. (HOL-002)
+- [x] **T-M6-13** Distinguish national vs joint leave. (HOL-003)
+- [x] **T-M6-14** Independent config for joint-leave behavior. (HOL-004)
+- [x] **T-M6-15** Skip standup on excluded dates. (HOL-005)
+- [x] **T-M6-16** Manual date exceptions. (HOL-006)
+- [x] **T-M6-17** Display upcoming holidays. (HOL-007)
+- [x] **T-M6-18** Notify admins before holidays. (HOL-008)
 
 **Acceptance:** schedules configurable via chat; jobs recover after restart; no duplicate standup messages; holiday skip 100% against validated data.
 
@@ -133,15 +133,15 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ## M7 — AI Conversational Agent (3–5 days) — P0
 
-- [ ] **T-M7-01** LLM provider client (OpenAI-compatible) with tool calling.
-- [ ] **T-M7-02** Agent context assembly (sender identity, role, profile, history, standups, activity, config) with RBAC filtering.
-- [ ] **T-M7-03** Indonesian language understanding + conversational style.
-- [ ] **T-M7-04** Implement tools: `get_employee`, `get_standup_history`, `create_standup`, `get_schedule`, `create_schedule`, `update_schedule`, `get_team_activity`, `generate_daily_report`, `generate_weekly_report`.
-- [ ] **T-M7-05** Backend authorization + validation on every tool call (LLM never trusted).
-- [ ] **T-M7-06** Confirmation flow for mutating actions (summarize + confirm).
-- [ ] **T-M7-07** Conversation state/memory persistence (`agent_memories`).
-- [ ] **T-M7-08** Usage logging and token budgets (`ai_usage_logs`).
-- [ ] **T-M7-09** Admin command shortcuts mapping (MENU, HELP, etc.) → structured actions.
+- [x] **T-M7-01** LLM provider client (OpenAI-compatible) with tool calling.
+- [x] **T-M7-02** Agent context assembly (sender identity, role, profile, history, standups, activity, config) with RBAC filtering.
+- [x] **T-M7-03** Indonesian language understanding + conversational style.
+- [x] **T-M7-04** Implement tools: `get_employee`, `get_standup_history`, `create_standup`, `get_schedule`, `create_schedule`, `update_schedule`, `get_team_activity`, `generate_daily_report`, `generate_weekly_report`.
+- [x] **T-M7-05** Backend authorization + validation on every tool call (LLM never trusted).
+- [x] **T-M7-06** Confirmation flow for mutating actions (summarize + confirm).
+- [x] **T-M7-07** Conversation state/memory persistence (`agent_memories`).
+- [x] **T-M7-08** Usage logging and token budgets (`ai_usage_logs`).
+- [x] **T-M7-09** Admin command shortcuts mapping (MENU, HELP, etc.) → structured actions.
 
 **Acceptance:** AI collects standup elements contextually; tool calls authorized; mutating actions confirmed.
 
@@ -181,19 +181,19 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 ## M10 — Reporting and Dashboard (3–5 days) — P1
 
 ### Reports
-- [ ] **T-M10-01** Daily report generation (submitted/not, summaries, blockers, GitHub/Figma activity). (REP)
-- [ ] **T-M10-02** Weekly report (progress, active projects, repeated blockers, PRs awaiting review, in-progress work).
-- [ ] **T-M10-03** WhatsApp `REPORT TODAY` / `REPORT WEEKLY` commands.
-- [ ] **T-M10-04** Report delivery under 1 minute.
+- [x] **T-M10-01** Daily report generation (submitted/not, summaries, blockers, GitHub/Figma activity). (REP)
+- [x] **T-M10-02** Weekly report (progress, active projects, repeated blockers, PRs awaiting review, in-progress work).
+- [x] **T-M10-03** WhatsApp `REPORT TODAY` / `REPORT WEEKLY` commands.
+- [x] **T-M10-04** Report delivery under 1 minute.
 
 ### Vue 3 dashboard
-- [ ] **T-M10-05** Dashboard scaffold (Vue 3 + Vite) with auth.
-- [ ] **T-M10-06** Employee management UI.
-- [ ] **T-M10-07** Schedule management UI.
-- [ ] **T-M10-08** Holiday calendar UI.
+- [x] **T-M10-05** Dashboard scaffold (Vue 3 + Vite) with auth.
+- [x] **T-M10-06** Employee management UI.
+- [x] **T-M10-07** Schedule management UI.
+- [x] **T-M10-08** Holiday calendar UI.
 - [ ] **T-M10-09** Integrations management UI.
-- [ ] **T-M10-10** Analytics: standup completion rate, response rate, blocker trends, PR/review activity, activity by project, standup history.
-- [ ] **T-M10-11** Standup history views.
+- [x] **T-M10-10** Analytics: standup completion rate, response rate, blocker trends, PR/review activity, activity by project, standup history.
+- [x] **T-M10-11** Standup history views.
 - [ ] **T-M10-12** Audit log viewer.
 
 **Acceptance:** no employee ranking by raw activity; dashboard usable for admin + analytics.
@@ -213,6 +213,28 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ---
 
+## M12 — Frontend UI/UX Modernization
+
+- [x] **T-M12-01** Add Indonesian home view with data-backed conversational summary and next actions.
+- [x] **T-M12-02** Simplify responsive navigation with mobile bottom bar and secondary menu.
+- [x] **T-M12-03** Make employee, standup, schedule, holiday, and report views usable on mobile.
+- [x] **T-M12-04** Turn employee and schedule create/edit forms into guided steps.
+- [x] **T-M12-05** Localize all frontend screens and interaction messages to Indonesian.
+- [x] **T-M12-06** Run frontend lint, typecheck, and production build; verify key flows (frontend typecheck/build pass; lint blocked by existing TypeScript parser configuration; browser CLI unavailable).
+
+**Acceptance:** all existing frontend capabilities remain available; primary flows work on mobile and desktop; Indonesian UI is consistent.
+
+---
+
+## M13 — Employee Role Defaults
+
+- [x] **T-M13-01** Assign the Employee role when creating employees without an explicit role.
+- [x] **T-M13-02** Validate API and WhatsApp employee-creation flows with API lint, typecheck, and build.
+
+**Acceptance:** newly created employees default to the Employee role; explicitly provided roles remain unchanged.
+
+---
+
 ## Cross-cutting constraints (apply to all tasks)
 
 - All timestamps stored UTC, displayed in configured TZ (default Asia/Jakarta).
@@ -225,14 +247,14 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ## MVP Definition of Done (PRD §12)
 
-- [ ] Admin can pair WhatsApp bot.
-- [ ] Admins can add/deactivate employees.
+- [x] Admin can pair WhatsApp bot.
+- [x] Admins can add/deactivate employees.
 - [x] Admins can configure standup schedules via WhatsApp.
 - [x] Bot sends standup prompts automatically.
-- [ ] AI collects all three core standup elements.
-- [ ] AI asks relevant follow-up questions.
-- [ ] Scheduler skips national holidays + configured joint-leave.
-- [ ] Admins can request daily report.
-- [ ] Data persisted in PostgreSQL.
+- [x] AI collects all three core standup elements.
+- [x] AI asks relevant follow-up questions.
+- [x] Scheduler skips national holidays + configured joint-leave.
+- [x] Admins can request daily report.
+- [x] Data persisted in PostgreSQL.
 - [x] Scheduled jobs recover after restart.
 - [x] Job retries do not cause duplicate standup messages.

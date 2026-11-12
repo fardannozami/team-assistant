@@ -6,7 +6,7 @@ import {
   standups,
   teams,
 } from "@repo/database";
-import { and, desc, eq, ilike, or, type SQL } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, type SQL } from "drizzle-orm";
 import type {
   CreateEmployeeInput,
   UpdateEmployeeInput,
@@ -54,12 +54,15 @@ function baseEmployeeQuery() {
     .leftJoin(roles, eq(employees.roleId, roles.id));
 }
 
-async function assertTeamExists(teamId: string | null | undefined) {
+async function assertTeamExists(
+  workspaceId: string,
+  teamId: string | null | undefined,
+) {
   if (!teamId) return;
   const [team] = await db
     .select({ id: teams.id })
     .from(teams)
-    .where(eq(teams.id, teamId))
+    .where(and(eq(teams.id, teamId), eq(teams.workspaceId, workspaceId)))
     .limit(1);
   if (!team) throw new HttpError(400, "Team not found");
 }
@@ -74,8 +77,11 @@ async function assertRoleExists(roleId: string | null | undefined) {
   if (!role) throw new HttpError(400, "Role not found");
 }
 
-export async function listEmployees(filters: EmployeeFilters = {}) {
-  const conditions: SQL[] = [];
+export async function listEmployees(
+  workspaceId: string,
+  filters: EmployeeFilters = {},
+) {
+  const conditions: SQL[] = [eq(employees.workspaceId, workspaceId)];
 
   if (filters.teamId) conditions.push(eq(employees.teamId, filters.teamId));
   if (filters.roleId) conditions.push(eq(employees.roleId, filters.roleId));
@@ -92,48 +98,75 @@ export async function listEmployees(filters: EmployeeFilters = {}) {
   }
 
   return baseEmployeeQuery()
-    .where(conditions.length ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(employees.name);
 }
 
-export async function getEmployee(id: string) {
+export async function getEmployee(workspaceId: string, id: string) {
   const [employee] = await baseEmployeeQuery()
-    .where(eq(employees.id, id))
+    .where(and(eq(employees.id, id), eq(employees.workspaceId, workspaceId)))
     .limit(1);
   return employee ?? null;
 }
 
-export async function findEmployeeByPhone(phone: string) {
+export async function findEmployeeByPhone(
+  workspaceId: string,
+  phone: string,
+) {
   const normalized = normalizePhoneNumber(phone);
   if (!normalized) return null;
+  const variants = new Set<string>([normalized]);
+  if (normalized.startsWith("0")) variants.add(`62${normalized.slice(1)}`);
+  if (normalized.startsWith("62")) variants.add(`0${normalized.slice(2)}`);
+  if (normalized.startsWith("8")) variants.add(`62${normalized}`);
   const [employee] = await baseEmployeeQuery()
-    .where(eq(employees.phone, normalized))
+    .where(
+      and(
+        eq(employees.workspaceId, workspaceId),
+        inArray(employees.phone, [...variants]),
+      ),
+    )
     .limit(1);
   return employee ?? null;
 }
 
-export async function findEmployeesByIdentifier(identifier: string) {
-  const byPhone = await findEmployeeByPhone(identifier);
+export async function findEmployeesByIdentifier(
+  workspaceId: string,
+  identifier: string,
+) {
+  const byPhone = await findEmployeeByPhone(workspaceId, identifier);
   if (byPhone) return [byPhone];
-  return listEmployees({ search: identifier.trim() });
+  return listEmployees(workspaceId, { search: identifier.trim() });
 }
 
 export async function createEmployee(
+  workspaceId: string,
   input: CreateEmployeeInput,
   actorId?: string | null,
 ) {
-  await assertTeamExists(input.teamId);
-  await assertRoleExists(input.roleId);
+  await assertTeamExists(workspaceId, input.teamId);
+
+  const [defaultRole] = input.roleId
+    ? []
+    : await db
+        .select({ id: roles.id })
+        .from(roles)
+        .where(eq(roles.name, "Employee"))
+        .limit(1);
+  const roleId = input.roleId ?? defaultRole?.id ?? null;
+  if (!roleId) throw new HttpError(400, "Default Employee role not found");
+  await assertRoleExists(roleId);
 
   let createdId: string;
   try {
     const [created] = await db
       .insert(employees)
       .values({
+        workspaceId,
         name: input.name,
         phone: input.phone,
         teamId: input.teamId ?? null,
-        roleId: input.roleId ?? null,
+        roleId,
       })
       .returning({ id: employees.id });
     if (!created) throw new Error("Failed to create employee");
@@ -142,31 +175,32 @@ export async function createEmployee(
     if (isUniqueViolation(error)) {
       throw new HttpError(
         409,
-        "An employee with that phone number already exists",
+        "An employee with that phone number already exists in this workspace",
       );
     }
     throw error;
   }
 
-  await audit(actorId ?? null, "employee.create", "employee", createdId, {
+  await audit(workspaceId, actorId ?? null, "employee.create", "employee", createdId, {
     name: input.name,
     phone: input.phone,
     teamId: input.teamId ?? null,
-    roleId: input.roleId ?? null,
+    roleId,
   });
 
-  return getEmployee(createdId);
+  return getEmployee(workspaceId, createdId);
 }
 
 export async function updateEmployee(
+  workspaceId: string,
   id: string,
   input: UpdateEmployeeInput,
   actorId?: string | null,
 ) {
-  const existing = await getEmployee(id);
+  const existing = await getEmployee(workspaceId, id);
   if (!existing) throw new HttpError(404, "Employee not found");
 
-  await assertTeamExists(input.teamId);
+  await assertTeamExists(workspaceId, input.teamId);
   await assertRoleExists(input.roleId);
 
   const changes: Partial<typeof employees.$inferInsert> = {
@@ -177,7 +211,10 @@ export async function updateEmployee(
   if (input.roleId !== undefined) changes.roleId = input.roleId;
   if (input.isActive !== undefined) changes.isActive = input.isActive;
 
-  await db.update(employees).set(changes).where(eq(employees.id, id));
+  await db
+    .update(employees)
+    .set(changes)
+    .where(and(eq(employees.id, id), eq(employees.workspaceId, workspaceId)));
 
   const action =
     input.isActive === undefined
@@ -185,44 +222,54 @@ export async function updateEmployee(
       : input.isActive
         ? "employee.activate"
         : "employee.deactivate";
-  await audit(actorId ?? null, action, "employee", id, input);
+  await audit(workspaceId, actorId ?? null, action, "employee", id, input);
 
-  return getEmployee(id);
+  return getEmployee(workspaceId, id);
 }
 
 export async function updateEmployeePhone(
+  workspaceId: string,
   id: string,
   phone: string,
   actorId?: string | null,
 ) {
-  const existing = await getEmployee(id);
+  const existing = await getEmployee(workspaceId, id);
   if (!existing) throw new HttpError(404, "Employee not found");
 
   try {
     await db
       .update(employees)
       .set({ phone, updatedAt: new Date() })
-      .where(eq(employees.id, id));
+      .where(
+        and(eq(employees.id, id), eq(employees.workspaceId, workspaceId)),
+      );
   } catch (error) {
     if (isUniqueViolation(error)) {
       throw new HttpError(
         409,
-        "An employee with that phone number already exists",
+        "An employee with that phone number already exists in this workspace",
       );
     }
     throw error;
   }
 
-  await audit(actorId ?? null, "employee.update_phone", "employee", id, {
-    from: existing.phone,
-    to: phone,
-  });
+  await audit(
+    workspaceId,
+    actorId ?? null,
+    "employee.update_phone",
+    "employee",
+    id,
+    { from: existing.phone, to: phone },
+  );
 
-  return getEmployee(id);
+  return getEmployee(workspaceId, id);
 }
 
-export async function getEmployeeStandupHistory(id: string) {
-  const employee = await getEmployee(id);
+export async function getEmployeeStandupHistory(
+  workspaceId: string,
+  id: string,
+) {
+  const employee = await getEmployee(workspaceId, id);
   if (!employee) throw new HttpError(404, "Employee not found");
 
   const rows = await db
@@ -234,7 +281,9 @@ export async function getEmployeeStandupHistory(id: string) {
     })
     .from(standups)
     .leftJoin(standupAnswers, eq(standupAnswers.standupId, standups.id))
-    .where(eq(standups.employeeId, id))
+    .where(
+      and(eq(standups.employeeId, id), eq(standups.workspaceId, workspaceId)),
+    )
     .orderBy(desc(standups.date));
 
   const history = new Map<

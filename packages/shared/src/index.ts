@@ -17,7 +17,8 @@ export function isAdminRole(role: string | null | undefined): boolean {
 }
 
 export function normalizePhoneNumber(input: string): string {
-  return (input ?? "").replace(/\D/g, "");
+  const withoutDevice = ((input ?? "").split(":")[0] ?? "");
+  return withoutDevice.replace(/\D/g, "");
 }
 
 export const phoneNumberSchema = z
@@ -72,6 +73,8 @@ export const standupDateSchema = z
 export const triggerStandupSchema = z.object({
   employeeId: z.string().uuid().optional(),
   date: standupDateSchema.optional(),
+  force: z.boolean().optional(),
+  resend: z.boolean().optional(),
 });
 
 export const remindStandupSchema = z.object({
@@ -96,6 +99,9 @@ export const createScheduleSchema = z.object({
   weekdays: weekdaysSchema,
   timezone: timezoneNameSchema.optional(),
   reminderMinutes: z.number().int().min(0).max(1440).nullish(),
+  reminderRepeatMinutes: z.number().int().min(15).max(720).nullish(),
+  closeTime: timeOfDaySchema.nullish(),
+  summaryTime: timeOfDaySchema.nullish(),
 });
 
 export const updateScheduleSchema = z.object({
@@ -104,6 +110,9 @@ export const updateScheduleSchema = z.object({
   weekdays: weekdaysSchema.optional(),
   timezone: timezoneNameSchema.optional(),
   reminderMinutes: z.number().int().min(0).max(1440).nullable().optional(),
+  reminderRepeatMinutes: z.number().int().min(15).max(720).nullable().optional(),
+  closeTime: timeOfDaySchema.nullable().optional(),
+  summaryTime: timeOfDaySchema.nullable().optional(),
   isActive: z.boolean().optional(),
 });
 

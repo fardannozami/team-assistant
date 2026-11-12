@@ -1,6 +1,233 @@
+/* ------------------------------------------------------------
+   Team Assistant — Admin Dashboard
+   Light, elegant design system: warm off-white background,
+   white surfaces, deep ink text, one refined indigo accent.
+   No dark themes, no dark backgrounds, no gradient meshes.
+------------------------------------------------------------ */
+
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------- design tokens ---------- */
 :root {
-  font-family: system-ui, sans-serif;
+  --font-body: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI Variable", "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans",
+    "Liberation Sans", sans-serif;
+  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui,
+    -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", Roboto,
+    sans-serif;
+  --font-mono: ui-monospace, Menlo, Monaco, "Cascadia Mono", "SF Mono",
+    monospace;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ---------- base ---------- */
+html {
+  background: #f7f6f2;
+  color: #1c1c1c;
+  font-family: var(--font-body);
+  line-height: 1.6;
+  font-feature-settings: "liga" 1, "calt" 1;
+  font-variant-numeric: tabular-nums;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 body {
-  margin: 0;
+  min-height: 100vh;
+}
+.mobile-nav {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+.table-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.table-scroll table {
+  min-width: 680px;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+button {
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+input,
+select,
+textarea {
+  background: transparent;
+  outline: none;
+}
+
+/* ---------- form elements ---------- */
+select {
+  padding-right: 28px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2357554f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+}
+
+/* ---------- accessibility ---------- */
+:focus-visible {
+  outline: 2px solid #3f44e2;
+  outline-offset: 2px;
+}
+
+/* ---------- subtle light atmosphere (respects reduced motion) ---------- */
+.app {
+  position: relative;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+.app::before {
+  content: "";
+  position: fixed;
+  top: -10%;
+  left: -8%;
+  width: 760px;
+  height: 760px;
+  border-radius: 50%;
+  filter: blur(140px);
+  background: radial-gradient(
+    circle at 35% 35%,
+    rgba(112, 99, 74, 0.08),
+    transparent 60%
+  );
+  z-index: -1;
+  animation: drift 24s ease-in-out infinite alternate;
+}
+
+/* ---------- animations ---------- */
+@keyframes revealUp {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translate3d(20px, -12px, 0) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+@keyframes drift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(30px, 50px, 0);
+  }
+}
+.reveal {
+  animation: revealUp 0.7s var(--ease-out) both;
+}
+.reveal-slow {
+  animation: revealUp 0.9s var(--ease-out) both;
+}
+.slide-in {
+  animation: slideIn 0.4s var(--ease-out) both;
+}
+.fade-in {
+  animation: fadeIn 0.5s var(--ease-out) both;
+}
+.fade-in-fast {
+  animation: fadeIn 0.4s var(--ease-out) both;
+}
+.spin-slow {
+  animation: spin 1s linear infinite;
+}
+.toast-in {
+  animation: toastIn 0.5s var(--ease-out) both;
+}
+
+/* table last row: no bottom border */
+table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ---------- scrollbar (light) ---------- */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #c9c7bd;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #b9b6aa;
+}
+
+/* ---------- reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .app::before {
+    animation: none;
+  }
+  .reveal,
+  .reveal-slow,
+  .slide-in,
+  .fade-in,
+  .fade-in-fast,
+  .spin-slow,
+  .toast-in {
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

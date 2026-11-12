@@ -37,6 +37,8 @@ services:
       PORT: 4000
     ports:
       - "4000:4000"
+    volumes:
+      - whatsapp-data:/app/apps/api/data
     depends_on:
       postgres:
         condition: service_healthy
@@ -68,3 +70,4 @@ services:
 volumes:
   pgdata:
   redisdata:
+  whatsapp-data:
