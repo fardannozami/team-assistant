@@ -12,6 +12,7 @@ import { reportsApi } from "./modules/reports/index.js";
 import { teamsApi } from "./modules/teams/index.js";
 import { whatsapp } from "./modules/whatsapp/index.js";
 import { aiApi } from "./modules/ai/index.js";
+import { githubApi } from "./modules/github/index.js";
 import { startAllWhatsApp, stopAllWhatsApp } from "./modules/whatsapp/service.js";
 import { HttpError } from "./lib/http-error.js";
 
@@ -59,6 +60,7 @@ app.route("/holidays", holidaysApi);
 app.route("/reports", reportsApi);
 app.route("/whatsapp", whatsapp);
 app.route("/ai", aiApi);
+app.route("/github", githubApi);
 
 export { app };
 

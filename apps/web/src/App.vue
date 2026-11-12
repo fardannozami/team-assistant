@@ -74,26 +74,28 @@ const tabs = [
   { id: "reports", label: "Laporan", icon: "▤" },
   { id: "settings", label: "Pengaturan", icon: "⚙" },
 ];
-const settingsSections = ["whatsapp", "ai", "schedules", "checkins", "holidays"];
+const settingsSections = ["whatsapp", "ai", "github", "schedules", "checkins", "holidays"];
 const views: Record<string, any> = { home: HomeView, employees: EmployeesView, standups: StandupsView, reports: ReportsView, guide: GuideView };
 const ONBOARDED_KEY = "ta_onboarded";
 
 const oauthError = consumeOAuthRedirect();
 const token = ref(getToken() ?? "");
 const me = ref<Me | null>(null);
-const currentTab = ref(consumePageParam());
-const settingsSection = ref("whatsapp");
+const initialPage = consumePageParam();
+const currentTab = ref(settingsSections.includes(initialPage) ? "settings" : initialPage);
+const settingsSection = ref(settingsSections.includes(initialPage) ? initialPage : "whatsapp");
 const apiOk = ref<boolean | null>(null);
 const toasts = ref<Toast[]>([]);
 const showTour = ref(!!token.value && !hasOnboarded());
 const currentComponent = computed(() => views[currentTab.value]);
 const apiStatusTitle = computed(() => apiOk.value === null ? "Memeriksa koneksi API" : apiOk.value ? "API terhubung" : "API tidak terhubung");
 
-// Deep links such as the admin welcome message's /?page=guide.
+// Deep links such as the admin welcome message's /?page=guide or the GitHub
+// install redirect's /?page=github (settings sections open inside Settings).
 function consumePageParam() {
   const params = new URLSearchParams(window.location.search);
   const page = params.get("page");
-  if (!page || !views[page]) return "home";
+  if (!page || !(views[page] || settingsSections.includes(page))) return "home";
   params.delete("page");
   const query = params.toString();
   history.replaceState(null, "", window.location.pathname + (query ? `?${query}` : "") + window.location.hash);

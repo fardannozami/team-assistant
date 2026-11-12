@@ -149,18 +149,18 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ## M8 — GitHub Integration (2–4 days) — P1
 
-- [ ] **T-M8-01** GitHub App setup + webhook endpoint. (GIT-001)
-- [ ] **T-M8-02** Webhook signature verification. (GIT-002)
-- [ ] **T-M8-03** Process push events. (GIT-003)
-- [ ] **T-M8-04** Process PR events (create/update/merge/close). (GIT-004)
-- [ ] **T-M8-05** Process PR review events. (GIT-005)
-- [ ] **T-M8-06** Process issue events. (GIT-006)
-- [ ] **T-M8-07** Identity mapping GitHub → employee (careful pusher/author/committer). (GIT-007)
-- [ ] **T-M8-08** Normalized activity timeline storage. (GIT-008)
-- [ ] **T-M8-09** Tracked repository configuration. (GIT-009)
-- [ ] **T-M8-10** Webhook event deduplication. (GIT-010)
+- [x] **T-M8-01** GitHub App setup + webhook endpoint. (GIT-001)
+- [x] **T-M8-02** Webhook signature verification. (GIT-002)
+- [x] **T-M8-03** Process push events. (GIT-003)
+- [x] **T-M8-04** Process PR events (create/update/merge/close). (GIT-004)
+- [x] **T-M8-05** Process PR review events. (GIT-005)
+- [x] **T-M8-06** Process issue events. (GIT-006)
+- [x] **T-M8-07** Identity mapping GitHub → employee (careful pusher/author/committer). (GIT-007)
+- [x] **T-M8-08** Normalized activity timeline storage. (GIT-008)
+- [x] **T-M8-09** Tracked repository configuration. (GIT-009)
+- [x] **T-M8-10** Webhook event deduplication. (GIT-010)
 
-**Acceptance:** events ingested and deduped; activity attributed only with sufficient identity evidence.
+**Acceptance:** events ingested and deduped; activity attributed only with sufficient identity evidence. (Covered by `apps/api/src/github.test.ts`; the install/OAuth callback needs a real GitHub App and is not exercised by tests.)
 
 ---
 
@@ -191,7 +191,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] **T-M10-06** Employee management UI.
 - [x] **T-M10-07** Schedule management UI.
 - [x] **T-M10-08** Holiday calendar UI.
-- [ ] **T-M10-09** Integrations management UI.
+- [~] **T-M10-09** Integrations management UI. (GitHub done: Settings → GitHub; Figma pending M9)
 - [x] **T-M10-10** Analytics: standup completion rate, response rate, blocker trends, PR/review activity, activity by project, standup history.
 - [x] **T-M10-11** Standup history views.
 - [ ] **T-M10-12** Audit log viewer.

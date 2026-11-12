@@ -252,6 +252,55 @@ export interface CheckinResponses {
   }[];
 }
 
+export interface GithubInstallation {
+  id: string;
+  installationId: string;
+  accountLogin: string | null;
+  accountType: string | null;
+  repositorySelection: string | null;
+  isActive: boolean;
+}
+
+export interface GithubRepository {
+  id: string;
+  githubRepoId: string;
+  fullName: string;
+  isPrivate: boolean;
+  isActive: boolean;
+}
+
+export interface GithubStatus {
+  configured: boolean;
+  appSlug: string | null;
+  installations: GithubInstallation[];
+  repositories: GithubRepository[];
+}
+
+export interface GithubMember {
+  employeeId: string;
+  name: string;
+  isActive: boolean;
+  login: string | null;
+}
+
+export interface GithubActivity {
+  id: string;
+  type: string;
+  actorLogin: string | null;
+  employeeId: string | null;
+  employeeName: string | null;
+  repository: string | null;
+  title: string | null;
+  url: string | null;
+  occurredAt: string;
+}
+
+export interface GithubSummary {
+  employeeId: string;
+  employeeName: string;
+  counts: Record<string, number>;
+}
+
 export interface Holiday {
   id: string;
   date: string;
@@ -454,6 +503,28 @@ export const checkinsApi = {
 
   responses: (kind: CheckinKind, date?: string) =>
     request<CheckinResponses>(`/checkins/${kind}/responses${date ? `?date=${date}` : ""}`),
+};
+
+export const githubApi = {
+  status: () => request<GithubStatus>("/github/status"),
+  install: () => request<{ url: string }>("/github/install", { method: "POST" }),
+  sync: (id: string) => request<{ repositories: number }>(`/github/installations/${id}/sync`, { method: "POST" }),
+  unlink: (id: string) => request<{ deleted: boolean }>(`/github/installations/${id}`, { method: "DELETE" }),
+  track: (id: string, isActive: boolean) =>
+    request<GithubRepository>(`/github/repositories/${id}`, { method: "PATCH", body: JSON.stringify({ isActive }) }),
+  members: () => request<{ members: GithubMember[] }>("/github/members").then((r) => r.members),
+  setLogin: (employeeId: string, login: string | null) =>
+    request<{ employeeId: string; login: string | null }>(`/github/members/${employeeId}`, {
+      method: "PUT",
+      body: JSON.stringify({ login }),
+    }),
+  activity: (params: { employeeId?: string; limit?: number } = {}) => {
+    const q = new URLSearchParams();
+    if (params.employeeId) q.set("employeeId", params.employeeId);
+    if (params.limit) q.set("limit", String(params.limit));
+    return request<{ activity: GithubActivity[] }>(`/github/activity?${q}`).then((r) => r.activity);
+  },
+  summary: (days = 7) => request<{ days: number; summary: GithubSummary[] }>(`/github/activity/summary?days=${days}`),
 };
 
 export const holidaysApi = {

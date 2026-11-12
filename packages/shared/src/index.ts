@@ -156,6 +156,14 @@ export const runCheckinSchema = z.object({
   force: z.boolean().optional(),
 });
 
+export const githubLoginSchema = z.object({
+  login: z.string().trim().max(40).nullable(),
+});
+
+export const githubRepoTrackSchema = z.object({
+  isActive: z.boolean(),
+});
+
 export const MOOD_EMOJI = ["😫", "😕", "😐", "🙂", "🤩"] as const;
 
 /** 1-5 from replies like "4", "4 capek tapi oke", "🙂". Null when absent. */

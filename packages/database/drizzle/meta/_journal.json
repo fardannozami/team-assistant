@@ -50,6 +50,13 @@
       "when": 1794465514569,
       "tag": "0006_checkins",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794466868692,
+      "tag": "0007_github_integration",
+      "breakpoints": true
     }
   ]
 }
