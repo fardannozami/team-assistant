@@ -25,12 +25,14 @@ import HolidaysView from "./HolidaysView.vue";
 import AiView from "./AiView.vue";
 import CheckinsView from "./CheckinsView.vue";
 import GithubView from "./GithubView.vue";
+import UsersView from "./UsersView.vue";
 
 const props = defineProps<{ section: string }>();
 const emit = defineEmits<{ (event: "section", id: string): void }>();
 
 const sections = [
   { id: "whatsapp", label: "WhatsApp", view: WhatsAppView },
+  { id: "users", label: "Pengguna", view: UsersView },
   { id: "ai", label: "AI", view: AiView },
   { id: "github", label: "GitHub", view: GithubView },
   { id: "schedules", label: "Jadwal", view: SchedulesView },

@@ -4,6 +4,7 @@ import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { createDbClient, createWorkspace } from "@repo/database";
 import { users, roles, employees, auditLogs, workspaces } from "@repo/database";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { acceptPendingInvite } from "../users/service.js";
 
 const db = createDbClient(process.env.DATABASE_URL ?? "postgres://teamassistant:teamassistant@localhost:5432/teamassistant");
 const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-change-me";
@@ -107,6 +108,15 @@ auth.get("/google/callback", async (c) => {
 
   const email = profile.email.toLowerCase();
   let [user] = await db.select().from(users).where(sql`lower(${users.email}) = ${email}`).limit(1);
+  if (!user) {
+    // Invited emails join the inviting workspace, even with signup closed.
+    const name = profile.name || email.split("@")[0]!;
+    const invited = await acceptPendingInvite(email, name).catch(() => null);
+    if (invited) {
+      await audit(invited.workspaceId, invited.id, "auth.invite_accepted", "users", invited.id, { provider: "google" });
+      user = invited;
+    }
+  }
   if (!user) {
     if (!GOOGLE_SIGNUP_ENABLED) return fail("not_registered");
     const [owner] = await db.select().from(roles).where(eq(roles.name, "Owner")).limit(1);

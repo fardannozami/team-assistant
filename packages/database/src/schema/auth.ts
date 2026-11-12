@@ -36,3 +36,19 @@ export const admins = pgTable("admins", {
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+// Web dashboard invites: the invitee joins this workspace by signing in with
+// Google as `email`. The link only carries the token for the landing page;
+// the verified Google email is what grants access.
+export const workspaceInvites = pgTable("workspace_invites", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: workspaceRef(),
+  email: text("email").notNull(), // lowercase
+  roleId: uuid("role_id").notNull().references(() => roles.id),
+  tokenHash: text("token_hash").notNull().unique(), // sha256 hex of the link token
+  invitedBy: uuid("invited_by").references(() => users.id, { onDelete: "set null" }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});

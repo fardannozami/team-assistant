@@ -9,7 +9,14 @@
     <div class="bg-panel border border-border rounded-2xl shadow-soft-lg p-6 sm:p-8 reveal-slow">
       <div v-if="error" class="mb-6 px-4 py-3.5 rounded-xl border border-danger/30 bg-danger/5 text-danger text-[12px] font-extrabold slide-in">{{ error }}</div>
 
-      <p class="mb-5 text-center text-sm text-text-muted">Masuk dengan akun Google Anda. Akun baru otomatis mendapat workspace sendiri.</p>
+      <div v-if="invite" class="mb-5 rounded-xl border border-accent/30 bg-accent/5 p-4 text-sm text-text" role="status">
+        Anda diundang sebagai <b>{{ invite.role }}</b> di <b>{{ invite.workspaceName }}</b>.
+        Masuk dengan akun Google <b>{{ invite.email }}</b> untuk bergabung.
+      </div>
+      <p v-else-if="inviteInvalid" class="mb-5 rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger" role="alert">
+        Link undangan ini sudah tidak berlaku atau sudah dipakai. Minta link baru ke admin workspace.
+      </p>
+      <p v-if="!invite" class="mb-5 text-center text-sm text-text-muted">Masuk dengan akun Google Anda. Akun baru otomatis mendapat workspace sendiri, kecuali email Anda sudah diundang.</p>
       <div v-if="googleEnabled === null" class="flex justify-center py-3" aria-label="Memuat">
         <span class="h-5 w-5 animate-spin rounded-full border-2 border-accent/20 border-t-accent"></span>
       </div>
@@ -36,15 +43,30 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
-import { authApi } from "../api";
+import { authApi, usersApi, type InviteInfo } from "../api";
 
 const props = defineProps<{ initialError?: string }>();
 
 const error = ref(props.initialError ?? "");
 // null while loading the providers.
 const googleEnabled = ref<boolean | null>(null);
+const invite = ref<InviteInfo | null>(null);
+const inviteInvalid = ref(false);
+
+/** ?invite=<token> from an invite link; the token only drives this banner. */
+async function loadInvite() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("invite");
+  if (!token) return;
+  try {
+    invite.value = await usersApi.inviteInfo(token);
+  } catch {
+    inviteInvalid.value = true;
+  }
+}
 
 onMounted(async () => {
+  loadInvite();
   googleEnabled.value = (await authApi.providers()).google;
 });
 </script>

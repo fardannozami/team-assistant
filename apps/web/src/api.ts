@@ -397,13 +397,52 @@ export const authApi = {
   me: () => request<Me>("/auth/me"),
 };
 
+export type InvitableRole = "Admin" | "Manager";
+
+export interface WebUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string | null;
+  isActive: boolean;
+  isOwner: boolean;
+}
+
+export interface WebInvite {
+  id: string;
+  email: string;
+  role: string;
+  invitedBy: string | null;
+  expiresAt: string;
+}
+
+export interface InviteInfo {
+  email: string;
+  role: string;
+  workspaceName: string;
+  expiresAt: string;
+}
+
+export const usersApi = {
+  list: () => request<{ users: WebUser[]; invites: WebInvite[] }>("/users"),
+  invite: (email: string, role: InvitableRole) =>
+    request<{ invite: WebInvite; url: string }>("/users/invites", {
+      method: "POST",
+      body: JSON.stringify({ email, role }),
+    }),
+  revoke: (id: string) => request<{ revoked: boolean }>(`/users/invites/${id}`, { method: "DELETE" }),
+  update: (id: string, input: { role?: InvitableRole; isActive?: boolean }) =>
+    request<WebUser>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+  inviteInfo: (token: string) => request<InviteInfo>(`/users/invites/info/${encodeURIComponent(token)}`),
+};
+
 export interface Me {
   user: { name: string; email: string; role: string | null };
   workspace: { id: string; name: string };
 }
 
 const OAUTH_ERRORS: Record<string, string> = {
-  not_registered: "Akun Google ini belum terdaftar atau sudah dinonaktifkan. Pendaftaran baru sedang ditutup.",
+  not_registered: "Akun Google ini belum terdaftar, belum diundang, atau sudah dinonaktifkan.",
   unverified_email: "Email Google Anda belum terverifikasi.",
   cancelled: "Login dengan Google dibatalkan.",
   invalid_state: "Sesi login kedaluwarsa. Silakan coba lagi.",

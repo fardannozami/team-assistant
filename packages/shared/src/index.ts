@@ -156,6 +156,24 @@ export const runCheckinSchema = z.object({
   force: z.boolean().optional(),
 });
 
+// Web dashboard users invited by email (Owner stays the workspace creator).
+export const INVITABLE_ROLES = ["Admin", "Manager"] as const;
+
+export const inviteUserSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Email tidak valid").max(254),
+  role: z.enum(INVITABLE_ROLES),
+});
+
+export const updateWebUserSchema = z
+  .object({
+    role: z.enum(INVITABLE_ROLES).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine((v) => v.role !== undefined || v.isActive !== undefined, "Nothing to update");
+
+export type InviteUserInput = z.infer<typeof inviteUserSchema>;
+export type UpdateWebUserInput = z.infer<typeof updateWebUserSchema>;
+
 export const githubLoginSchema = z.object({
   login: z.string().trim().max(40).nullable(),
 });

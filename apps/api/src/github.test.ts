@@ -107,6 +107,10 @@ describe.skipIf(!url)("github webhooks", () => {
     hook("push", { ref: "refs/heads/main", repository: { id: Number(repoId), full_name: "acme/api" }, pusher: { name: "lead" }, commits });
 
   beforeAll(async () => {
+    // Offline: no real App credentials, so username checks never reach GitHub.
+    for (const key of ["GITHUB_APP_ID", "GITHUB_APP_SLUG", "GITHUB_APP_PRIVATE_KEY", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"]) {
+      delete process.env[key];
+    }
     process.env.GITHUB_WEBHOOK_SECRET = SECRET;
     repoIds.untracked = String(Number(repoIds.tracked) + 1);
     schema = await import("@repo/database");
@@ -177,9 +181,9 @@ describe.skipIf(!url)("github webhooks", () => {
     const first = await push(repoIds.tracked, commits);
     expect(await first.json()).toEqual({ status: "processed", stored: 3 });
 
-    const again = await hook("push", { ref: "refs/heads/main", repository: { id: Number(repoIds.tracked) }, commits }, { id: "fixed-delivery" });
+    const again = await hook("push", { ref: "refs/heads/main", repository: { id: Number(repoIds.tracked) }, commits }, { id: `fixed-${installationId}` });
     expect((await again.json()).stored).toBe(0); // same commits, new delivery
-    expect((await (await hook("push", {}, { id: "fixed-delivery" })).json()).status).toBe("duplicate");
+    expect((await (await hook("push", {}, { id: `fixed-${installationId}` })).json()).status).toBe("duplicate");
 
     expect((await (await push(repoIds.untracked, commits)).json()).reason).toBe("repository not tracked");
 

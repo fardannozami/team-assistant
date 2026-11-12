@@ -129,6 +129,7 @@ const standupCommands = [
 const webTasks = [
   { tab: "employees", title: "Anggota", desc: "Tambah anggota, atur tim dan role (termasuk menjadikan Admin)." },
   { tab: "whatsapp", title: "WhatsApp", desc: "Hubungkan nomor bot dan pantau statusnya." },
+  { tab: "users", title: "Pengguna", desc: "Undang admin/manager dashboard lewat email Google dan atur aksesnya." },
   { tab: "ai", title: "AI", desc: "Pasang API key dan atur batas pemakaian per role." },
   { tab: "schedules", title: "Jadwal", desc: "Atur jam standup dan pengingat." },
   { tab: "checkins", title: "Check-in", desc: "Atur check-out Jumat dan ice breaking Senin beserta pertanyaannya." },

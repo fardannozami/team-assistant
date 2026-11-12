@@ -74,7 +74,7 @@ const tabs = [
   { id: "reports", label: "Laporan", icon: "▤" },
   { id: "settings", label: "Pengaturan", icon: "⚙" },
 ];
-const settingsSections = ["whatsapp", "ai", "github", "schedules", "checkins", "holidays"];
+const settingsSections = ["whatsapp", "users", "ai", "github", "schedules", "checkins", "holidays"];
 const views: Record<string, any> = { home: HomeView, employees: EmployeesView, standups: StandupsView, reports: ReportsView, guide: GuideView };
 const ONBOARDED_KEY = "ta_onboarded";
 
