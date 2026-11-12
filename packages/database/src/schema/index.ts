@@ -13,3 +13,4 @@ export * from "./github.js";
 export * from "./figma.js";
 export * from "./reporting.js";
 export * from "./security.js";
+export * from "./checkins.js";

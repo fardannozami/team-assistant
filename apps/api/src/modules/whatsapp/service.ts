@@ -15,6 +15,7 @@ import { and, eq, ne } from "drizzle-orm";
 import { getEmployeeByPhone, getRoleName } from "../auth/index.js";
 import { handleAdminMessage } from "./admin.js";
 import { handleStandupMessage } from "../standups/engine.js";
+import { handleCheckinMessage } from "../checkins/engine.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 const db = createDbClient(process.env.DATABASE_URL ?? "postgres://teamassistant:teamassistant@localhost:5432/teamassistant");
@@ -351,6 +352,12 @@ async function openSocket(workspaceId: string, pairingPhone?: string): Promise<S
         }
 
         if (employee) {
+          const checkinReply = await handleCheckinMessage({ employee, body });
+          if (checkinReply) {
+            await sendText(workspaceId, from, checkinReply);
+            continue;
+          }
+
           const standupReply = await handleStandupMessage({ employee, body });
           if (standupReply) {
             await sendText(workspaceId, from, standupReply);

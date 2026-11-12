@@ -119,6 +119,53 @@ export const updateScheduleSchema = z.object({
 export type CreateScheduleInput = z.infer<typeof createScheduleSchema>;
 export type UpdateScheduleInput = z.infer<typeof updateScheduleSchema>;
 
+// Check-ins besides the standup: end-of-week check-out, start-of-week ice breaker.
+export const CHECKIN_KINDS = ["checkout", "icebreaker"] as const;
+export type CheckinKind = (typeof CHECKIN_KINDS)[number];
+export const checkinKindSchema = z.enum(CHECKIN_KINDS);
+
+export const checkinQuestionSchema = z.object({
+  key: z.string().trim().min(1).max(40).regex(/^[a-z0-9_]+$/, "Key: lowercase letters, digits, _"),
+  text: z.string().trim().min(1, "Question text is required").max(300),
+  // mood: answered with a 1-5 score (digits or emoji); text: free answer.
+  type: z.enum(["text", "mood"]).default("text"),
+});
+export type CheckinQuestion = z.infer<typeof checkinQuestionSchema>;
+
+export const saveCheckinConfigSchema = z
+  .object({
+    weekdays: weekdaysSchema,
+    timeOfDay: timeOfDaySchema,
+    timezone: timezoneNameSchema.optional(),
+    reminderMinutes: z.number().int().min(1).max(1440).nullish(),
+    closeTime: timeOfDaySchema.nullish(),
+    questions: z.array(checkinQuestionSchema).min(1, "Add at least one question").max(10),
+    isActive: z.boolean(),
+  })
+  .refine((c) => new Set(c.questions.map((q) => q.key)).size === c.questions.length, {
+    message: "Question keys must be unique",
+    path: ["questions"],
+  });
+export type SaveCheckinConfigInput = z.infer<typeof saveCheckinConfigSchema>;
+
+// Worker runs send `configId`; dashboard runs send `kind`.
+export const runCheckinSchema = z.object({
+  kind: checkinKindSchema.optional(),
+  configId: z.string().uuid().optional(),
+  resend: z.boolean().optional(),
+  force: z.boolean().optional(),
+});
+
+export const MOOD_EMOJI = ["😫", "😕", "😐", "🙂", "🤩"] as const;
+
+/** 1-5 from replies like "4", "4 capek tapi oke", "🙂". Null when absent. */
+export function parseMoodScore(answer: string): number | null {
+  const digit = answer.trim().match(/^([1-5])(?!\d)/);
+  if (digit) return Number(digit[1]);
+  const emoji = MOOD_EMOJI.findIndex((e) => answer.includes(e));
+  return emoji >= 0 ? emoji + 1 : null;
+}
+
 export type StandupElement = (typeof CORE_STANDUP_ELEMENTS)[number];
 
 export function dateInTimezone(

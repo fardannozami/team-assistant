@@ -43,6 +43,13 @@
       "when": 1794399690074,
       "tag": "0005_standup_reminders",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794465514569,
+      "tag": "0006_checkins",
+      "breakpoints": true
     }
   ]
 }

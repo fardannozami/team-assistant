@@ -245,6 +245,8 @@ export const EMPLOYEE_MENU = [
   "STANDUP - mulai atau lanjutkan standup hari ini",
   "STANDUP kemarin: ... hari ini: ... kendala: ... - isi sekaligus",
   "UBAH STANDUP kendala: ... - ubah jawaban yang sudah terkirim",
+  "CHECKOUT - isi/lanjutkan check-out mingguan",
+  "MOOD - isi/lanjutkan ice breaking awal minggu",
   "BANTUAN - tampilkan pesan ini",
 ].join("\n");
 

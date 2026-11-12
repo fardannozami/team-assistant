@@ -1,6 +1,8 @@
 import {
+  MOOD_EMOJI,
   isAdminRole,
   phoneNumberSchema,
+  type CheckinKind,
 } from "@repo/shared";
 import { HttpError } from "../../lib/http-error.js";
 import {
@@ -16,6 +18,8 @@ import {
   listSchedules,
   upsertStandupSchedule,
 } from "../schedules/service.js";
+import { listCheckinResponses, sendCheckinPrompts } from "../checkins/service.js";
+import { CHECKIN_LABEL } from "../checkins/defaults.js";
 
 type AdminSender = {
   id: string;
@@ -54,6 +58,8 @@ type CommandName =
   | "REPORT_WEEKLY"
   | "SET_SCHEDULE"
   | "SET_REMINDER"
+  | "START_CHECKIN"
+  | "REPORT_CHECKIN"
   | "MENU"
   | "HELP";
 
@@ -62,6 +68,8 @@ const COMMAND_PATTERNS: { name: CommandName; re: RegExp }[] = [
   { name: "UPDATE_PHONE", re: /^(?:update|change|set)\s+(?:employee\s+)?(?:phone|whatsapp)\b/i },
   { name: "EMPLOYEE_LIST", re: /^employees?\s+list$/i },
   { name: "START_STANDUP", re: /^(?:start|trigger|run)\s+standup\b/i },
+  { name: "START_CHECKIN", re: /^(?:start|trigger|run)\s+(?=(?:check[\s-]?out|mood|ice[\s-]?break(?:ing|er)?)$)/i },
+  { name: "REPORT_CHECKIN", re: /^report\s+(?=(?:check[\s-]?out|mood|ice[\s-]?break(?:ing|er)?)$)/i },
   { name: "SHOW_SCHEDULE", re: /^(?:schedule|schedules)(?:\s+(?:show|list))?$/i },
   { name: "REPORT_TODAY", re: /^report\s+today\b/i },
   { name: "REPORT_WEEKLY", re: /^report\s+weekly\b/i },
@@ -90,6 +98,8 @@ const MENU_TEXT = [
   "SCHEDULE - lihat jadwal standup",
   "SET SCHEDULE <HH:mm> [HARI] - ubah waktu standup",
   "SET REMINDER <menit>|OFF - ubah pengingat standup",
+  "START CHECKOUT / START MOOD - kirim check-out mingguan / ice breaking sekarang",
+  "REPORT CHECKOUT / REPORT MOOD - hasil check-out / mood terakhir",
   "Atau ketik: jadwalkan standup senin sampai jumat jam 9 pagi WIB",
   "Dengan API key AI, cukup tulis biasa, mis. \"ganti nomor Budi jadi 0812...\", \"siapa saja anggota tim Design?\", \"liburkan standup tanggal 24\"",
   "CANCEL - batalkan langkah saat ini",
@@ -388,6 +398,31 @@ function getFlow(key: string): PendingFlow | null {
     return null;
   }
   return entry.flow;
+}
+
+function checkinKindFrom(rest: string): CheckinKind {
+  return /^check/i.test(rest) ? "checkout" : "icebreaker";
+}
+
+async function checkinReportText(ws: string, kind: CheckinKind) {
+  const r = await listCheckinResponses(ws, kind);
+  if (!r.date) return `Belum ada data ${CHECKIN_LABEL[kind].toLowerCase()}.`;
+  const done = r.rows.filter((row) => row.status === "completed");
+  const pending = r.rows.filter((row) => row.status !== "completed");
+  const lines = [
+    `${CHECKIN_LABEL[kind]} ${r.date}: ${done.length}/${r.rows.length} selesai` +
+      (r.averageMood ? `, rata-rata mood ${r.averageMood}/5` : ""),
+  ];
+  for (const row of done) {
+    lines.push("", `*${row.employeeName}*${row.mood ? ` ${row.mood} ${MOOD_EMOJI[row.mood - 1]}` : ""}`);
+    for (const q of r.questions) {
+      const answer = row.answers[q.key];
+      if (q.type === "mood" || !answer || answer === "-") continue;
+      lines.push(`- ${q.text.replace(/\s*\(.*\)$/, "")}: ${answer}`);
+    }
+  }
+  if (pending.length) lines.push("", `Belum selesai: ${pending.map((row) => row.employeeName).join(", ")}`);
+  return lines.join("\n");
 }
 
 function parseCommand(text: string): { name: CommandName; rest: string } | null {
@@ -735,6 +770,18 @@ export async function handleAdminMessage(args: {
         const r = await generateWeeklyReport(ws);
         return r.text;
       }
+      case "START_CHECKIN": {
+        const kind = checkinKindFrom(command.rest);
+        const result = await sendCheckinPrompts(ws, { kind, resend: true }).catch((error: Error) => error);
+        if (result instanceof Error) {
+          return `${CHECKIN_LABEL[kind]} belum diatur. Aktifkan dulu di dashboard web: Pengaturan → Check-in.`;
+        }
+        if ("whatsappConnected" in result) return "WhatsApp belum terhubung.";
+        if ("excluded" in result) return `Hari ini hari libur (${result.reason ?? "dikecualikan"}), ${CHECKIN_LABEL[kind].toLowerCase()} tidak dikirim.`;
+        return `${CHECKIN_LABEL[kind]} dikirim ke ${result.sent} orang${result.skipped ? `, ${result.skipped} sudah selesai` : ""}${result.failed ? `, ${result.failed} gagal` : ""}.`;
+      }
+      case "REPORT_CHECKIN":
+        return checkinReportText(ws, checkinKindFrom(command.rest));
       case "START_STANDUP": {
         if (command.rest) {
           const matches = await findEmployeesByIdentifier(ws, command.rest);

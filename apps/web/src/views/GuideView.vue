@@ -56,7 +56,7 @@
     </section>
 
     <section class="rounded-3xl border border-border bg-panel p-5 shadow-soft sm:p-6" aria-labelledby="guide-standup">
-      <h3 id="guide-standup" class="font-display text-lg font-extrabold tracking-tight text-text">Standup pribadi (semua anggota)</h3>
+      <h3 id="guide-standup" class="font-display text-lg font-extrabold tracking-tight text-text">Standup & check-in pribadi (semua anggota)</h3>
       <p class="mt-1 text-sm text-text-muted">Admin juga mengisi standup sendiri dengan perintah yang sama seperti karyawan.</p>
       <dl class="mt-4 space-y-2">
         <div v-for="cmd in standupCommands" :key="cmd.cmd" class="flex flex-col gap-1 rounded-2xl bg-panel-hover p-3 sm:flex-row sm:items-baseline sm:gap-4">
@@ -105,6 +105,8 @@ const adminCommands = [
   { cmd: "SET REMINDER 30 / OFF", desc: "Kirim pengingat sekian menit setelah prompt standup, atau matikan." },
   { cmd: "REPORT TODAY", desc: "Laporan standup hari ini." },
   { cmd: "REPORT WEEKLY", desc: "Laporan standup minggu ini." },
+  { cmd: "START CHECKOUT / START MOOD", desc: "Kirim check-out mingguan / ice breaking sekarang juga." },
+  { cmd: "REPORT CHECKOUT / REPORT MOOD", desc: "Hasil check-out / mood periode terakhir." },
   { cmd: "CANCEL / BATAL", desc: "Batalkan langkah yang sedang berjalan." },
 ];
 
@@ -119,6 +121,8 @@ const standupCommands = [
   { cmd: "STANDUP", desc: "Mulai atau lanjutkan standup hari ini." },
   { cmd: "STANDUP kemarin: … hari ini: … kendala: …", desc: "Isi semua jawaban sekaligus." },
   { cmd: "UBAH STANDUP kendala: …", desc: "Ubah jawaban yang sudah terkirim." },
+  { cmd: "CHECKOUT", desc: "Isi atau lanjutkan check-out mingguan (juga setelah hari Jumat)." },
+  { cmd: "MOOD", desc: "Isi atau lanjutkan ice breaking awal minggu." },
   { cmd: "BANTUAN", desc: "Tampilkan bantuan standup." },
 ];
 
@@ -127,6 +131,7 @@ const webTasks = [
   { tab: "whatsapp", title: "WhatsApp", desc: "Hubungkan nomor bot dan pantau statusnya." },
   { tab: "ai", title: "AI", desc: "Pasang API key dan atur batas pemakaian per role." },
   { tab: "schedules", title: "Jadwal", desc: "Atur jam standup dan pengingat." },
+  { tab: "checkins", title: "Check-in", desc: "Atur check-out Jumat dan ice breaking Senin beserta pertanyaannya." },
   { tab: "holidays", title: "Hari libur", desc: "Tandai hari tanpa standup." },
   { tab: "reports", title: "Laporan", desc: "Lihat rekap harian dan mingguan." },
 ];
