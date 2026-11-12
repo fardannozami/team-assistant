@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import {
   createEmployeeSchema,
+  isAdminRole,
   updateEmployeePhoneSchema,
   updateEmployeeSchema,
 } from "@repo/shared";
@@ -15,12 +16,31 @@ import {
   listEmployees,
   updateEmployee,
   updateEmployeePhone,
+  type EmployeeRecord,
 } from "./service.js";
+import { buildAdminWelcomeText } from "../whatsapp/admin.js";
+import { sendText } from "../whatsapp/service.js";
 
 export const employeesApi = new Hono();
 
 const canManage = requireRole("Owner", "Admin");
 const canView = requireRole("Owner", "Admin", "Manager");
+
+const WEB_URL = process.env.WEB_URL ?? "http://localhost:3000";
+
+// Fire-and-forget: a disconnected bot must not fail the dashboard request.
+function welcomeNewAdmin(
+  workspaceId: string,
+  before: EmployeeRecord | null | undefined,
+  after: EmployeeRecord | null | undefined,
+) {
+  if (!after?.isActive || !isAdminRole(after.roleName)) return;
+  if (before && isAdminRole(before.roleName)) return;
+  const text = buildAdminWelcomeText(after.name, after.roleName!, WEB_URL);
+  sendText(workspaceId, `${after.phone}@s.whatsapp.net`, text).catch((error) =>
+    console.error("Failed to send admin welcome to", after.phone, error),
+  );
+}
 
 employeesApi.get("/", canView, async (c) => {
   const activeParam = c.req.query("active");
@@ -41,6 +61,7 @@ employeesApi.post("/", canManage, async (c) => {
     input,
     getActorId(c),
   );
+  welcomeNewAdmin(getWorkspaceId(c), null, employee);
   return c.json(employee, 201);
 });
 
@@ -70,11 +91,13 @@ employeesApi.get("/:id", canView, async (c) => {
 
 employeesApi.patch("/:id", canManage, async (c) => {
   const input = parseWith(updateEmployeeSchema, await c.req.json());
+  const before = await getEmployee(getWorkspaceId(c), c.req.param("id"));
   const employee = await updateEmployee(
     getWorkspaceId(c),
     c.req.param("id"),
     input,
     getActorId(c),
   );
+  welcomeNewAdmin(getWorkspaceId(c), before, employee);
   return c.json(employee);
 });

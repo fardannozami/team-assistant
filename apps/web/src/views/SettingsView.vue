@@ -23,6 +23,7 @@ import WhatsAppView from "./WhatsAppView.vue";
 import SchedulesView from "./SchedulesView.vue";
 import HolidaysView from "./HolidaysView.vue";
 import AiView from "./AiView.vue";
+import CheckinsView from "./CheckinsView.vue";
 
 const props = defineProps<{ section: string }>();
 const emit = defineEmits<{ (event: "section", id: string): void }>();
@@ -31,6 +32,7 @@ const sections = [
   { id: "whatsapp", label: "WhatsApp", view: WhatsAppView },
   { id: "ai", label: "AI", view: AiView },
   { id: "schedules", label: "Jadwal", view: SchedulesView },
+  { id: "checkins", label: "Check-in", view: CheckinsView },
   { id: "holidays", label: "Hari libur", view: HolidaysView },
 ];
 const current = computed(() => (sections.find((s) => s.id === props.section) ?? sections[0]!).view);

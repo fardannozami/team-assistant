@@ -129,7 +129,7 @@ export async function sendStandupPrompts(
 }
 
 /** Employees expected to send a standup: active, admins only when enabled. */
-async function standupTargets(workspaceId: string) {
+export async function standupTargets(workspaceId: string) {
   const active = await listEmployees(workspaceId, { active: true });
   if (process.env.STANDUP_INCLUDE_ADMINS === "true") return active;
   return active.filter((employee) => !isAdminRole(employee.roleName));

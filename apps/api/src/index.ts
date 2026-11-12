@@ -5,6 +5,7 @@ import { auth } from "./modules/auth/index.js";
 import { employeesApi } from "./modules/employees/index.js";
 import { rolesApi } from "./modules/roles/index.js";
 import { schedulesApi } from "./modules/schedules/index.js";
+import { checkinsApi } from "./modules/checkins/index.js";
 import { standupsApi } from "./modules/standups/index.js";
 import { holidaysApi } from "./modules/holidays/index.js";
 import { reportsApi } from "./modules/reports/index.js";
@@ -22,7 +23,7 @@ app.use(
   "*",
   cors({
     origin: (origin) => origin ?? "*",
-    allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization", "x-internal-token"],
     credentials: true,
   }),
@@ -53,6 +54,7 @@ app.route("/teams", teamsApi);
 app.route("/roles", rolesApi);
 app.route("/schedules", schedulesApi);
 app.route("/standups", standupsApi);
+app.route("/checkins", checkinsApi);
 app.route("/holidays", holidaysApi);
 app.route("/reports", reportsApi);
 app.route("/whatsapp", whatsapp);

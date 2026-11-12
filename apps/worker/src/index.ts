@@ -2,6 +2,7 @@ import { Worker, Queue, type Job } from "bullmq";
 import pino from "pino";
 import {
   calendarSettings,
+  checkinConfigs,
   createDbClient,
   jobExecutions,
   schedules,
@@ -46,7 +47,13 @@ const OWNED_PREFIXES = [
   "standup-summary",
   "standup-close",
   "daily-report",
+  "checkin-prompts",
+  "checkin-reminders",
+  "checkin-close",
 ];
+
+// Check-in jobs carry a checkin_configs id as their suffix.
+const CHECKIN_PREFIXES = new Set(["checkin-prompts", "checkin-reminders", "checkin-close"]);
 
 const API_PATHS: Record<string, string> = {
   "standup-prompts": "/standups/trigger",
@@ -54,6 +61,9 @@ const API_PATHS: Record<string, string> = {
   "standup-summary": "/standups/summary",
   "standup-close": "/standups/close",
   "daily-report": "/reports/daily/notify",
+  "checkin-prompts": "/checkins/trigger",
+  "checkin-reminders": "/checkins/reminders",
+  "checkin-close": "/checkins/close",
 };
 
 /**
@@ -164,6 +174,42 @@ async function desiredRepeatables(): Promise<DesiredRepeatable[]> {
     });
   }
 
+  const checkins = await db
+    .select({ config: checkinConfigs })
+    .from(checkinConfigs)
+    .innerJoin(workspaces, eq(checkinConfigs.workspaceId, workspaces.id))
+    .where(and(eq(checkinConfigs.isActive, true), eq(workspaces.isActive, true)));
+
+  for (const { config } of checkins) {
+    const weekdays = Array.isArray(config.weekdays) ? (config.weekdays as number[]) : [];
+    if (weekdays.length === 0) continue;
+    // scheduleId stays null: scheduled_jobs.schedule_id references `schedules`.
+    const owner = { scheduleId: null, workspaceId: config.workspaceId };
+    const tz = config.timezone || "Asia/Jakarta";
+    desired.push({
+      name: `checkin-prompts:${config.id}`,
+      pattern: cronFor(config.timeOfDay, weekdays),
+      tz,
+      ...owner,
+    });
+    for (const time of reminderTimes({ ...config, reminderRepeatMinutes: null })) {
+      desired.push({
+        name: `checkin-reminders:${config.id}@${time.replace(":", "")}`,
+        pattern: cronFor(time, weekdays),
+        tz,
+        ...owner,
+      });
+    }
+    if (config.closeTime) {
+      desired.push({
+        name: `checkin-close:${config.id}`,
+        pattern: cronFor(config.closeTime, weekdays),
+        tz,
+        ...owner,
+      });
+    }
+  }
+
   // Legacy global `:env` repeatables are no longer desired; they fall under
   // OWNED_PREFIXES, so reconcileSchedules removes them.
   return desired;
@@ -258,7 +304,7 @@ async function resolveJobOwner(
   baseName: string,
   suffix: string | null,
   data: { scheduleId?: unknown } | undefined,
-): Promise<{ workspaceId: string; scheduleId: string | null } | null> {
+): Promise<{ workspaceId: string; scheduleId: string | null; configId?: string } | null> {
   if (baseName === "daily-report") {
     if (!suffix) return null;
     const [ws] = await db
@@ -267,6 +313,17 @@ async function resolveJobOwner(
       .where(and(eq(workspaces.id, suffix), eq(workspaces.isActive, true)))
       .limit(1);
     return ws ? { workspaceId: ws.id, scheduleId: null } : null;
+  }
+
+  if (CHECKIN_PREFIXES.has(baseName)) {
+    if (!suffix) return null;
+    const [row] = await db
+      .select({ workspaceId: checkinConfigs.workspaceId })
+      .from(checkinConfigs)
+      .innerJoin(workspaces, eq(checkinConfigs.workspaceId, workspaces.id))
+      .where(and(eq(checkinConfigs.id, suffix), eq(workspaces.isActive, true)))
+      .limit(1);
+    return row ? { workspaceId: row.workspaceId, scheduleId: null, configId: suffix } : null;
   }
 
   const scheduleId =
@@ -295,7 +352,7 @@ async function processSchedulerJob(job: Job): Promise<SchedulerJobResult> {
   if (!owner) {
     return { skipped: true, reason: "workspace missing or inactive" };
   }
-  const { workspaceId, scheduleId } = owner;
+  const { workspaceId, scheduleId, configId } = owner;
 
   const manual = job.data?.manual === true;
   const date = dateInTimezone();
@@ -341,7 +398,7 @@ async function processSchedulerJob(job: Job): Promise<SchedulerJobResult> {
   try {
     const result = await callApi(
       apiPath,
-      manual ? { resend: true } : {},
+      { ...(manual ? { resend: true } : {}), ...(configId ? { configId } : {}) },
       workspaceId,
     );
     if (execution) {

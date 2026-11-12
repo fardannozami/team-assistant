@@ -204,6 +204,54 @@ export interface ScheduleInput {
   isActive?: boolean;
 }
 
+export type CheckinKind = "checkout" | "icebreaker";
+
+export interface CheckinQuestion {
+  key: string;
+  text: string;
+  type: "text" | "mood";
+}
+
+export interface CheckinConfig {
+  id: string | null;
+  kind: CheckinKind;
+  weekdays: number[];
+  timeOfDay: string;
+  timezone: string;
+  reminderMinutes: number | null;
+  closeTime: string | null;
+  questions: CheckinQuestion[];
+  isActive: boolean;
+}
+
+export type CheckinConfigInput = Omit<CheckinConfig, "id" | "kind">;
+
+export interface CheckinRunResult {
+  sent: number;
+  skipped?: number;
+  failed: number;
+  whatsappConnected?: boolean;
+  excluded?: boolean;
+  reason?: string;
+}
+
+export interface CheckinResponses {
+  kind: CheckinKind;
+  date: string | null;
+  dates: string[];
+  questions: CheckinQuestion[];
+  averageMood: number | null;
+  rows: {
+    employeeId: string;
+    employeeName: string;
+    teamName: string | null;
+    status: string;
+    answers: Record<string, string>;
+    mood: number | null;
+    motivation: string | null;
+  }[];
+}
+
 export interface Holiday {
   id: string;
   date: string;
@@ -386,6 +434,26 @@ export const schedulesApi = {
     request<{ queued: boolean; scheduleId: string }>(`/schedules/${id}/trigger`, {
       method: "POST",
     }),
+};
+
+export const checkinsApi = {
+  configs: () =>
+    request<{ configs: CheckinConfig[] }>("/checkins/config").then((r) => r.configs),
+
+  save: (kind: CheckinKind, input: CheckinConfigInput) =>
+    request<CheckinConfig>(`/checkins/config/${kind}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }),
+
+  trigger: (kind: CheckinKind) =>
+    request<CheckinRunResult>("/checkins/trigger", {
+      method: "POST",
+      body: JSON.stringify({ kind, resend: true }),
+    }),
+
+  responses: (kind: CheckinKind, date?: string) =>
+    request<CheckinResponses>(`/checkins/${kind}/responses${date ? `?date=${date}` : ""}`),
 };
 
 export const holidaysApi = {

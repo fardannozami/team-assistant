@@ -10,7 +10,7 @@
 
   <div v-if="error" class="mb-5 px-4 py-3.5 rounded-xl border border-danger/30 bg-danger/5 text-danger text-[12px] font-extrabold slide-in">{{ error }}</div>
 
-  <div class="border-b border-border mb-7">
+  <div class="mb-7 flex overflow-x-auto border-b border-border">
     <button
       v-for="t in TABS"
       :key="t.id"
@@ -145,10 +145,14 @@
       <p class="text-text-muted text-sm">Buat laporan mingguan untuk melihat progres tim.</p>
     </div>
   </div>
+
+  <CheckinResults v-if="reportTab === 'checkout'" key="checkout" kind="checkout" />
+  <CheckinResults v-if="reportTab === 'icebreaker'" key="icebreaker" kind="icebreaker" />
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
+import CheckinResults from "./CheckinResults.vue";
 import {
   reportsApi,
   ApiError,
@@ -159,6 +163,8 @@ import {
 const TABS = [
   { id: "daily", label: "Harian" },
   { id: "weekly", label: "Mingguan" },
+  { id: "checkout", label: "Check-out" },
+  { id: "icebreaker", label: "Mood" },
 ];
 
 const reportTab = ref("daily");

@@ -26,7 +26,7 @@
           </nav>
 
           <div class="flex shrink-0 items-center gap-1">
-            <button class="grid h-10 w-10 place-items-center rounded-xl text-base font-bold text-text-muted transition hover:bg-panel-hover" @click="showTour = true" aria-label="Lihat panduan" title="Lihat panduan">?</button>
+            <button class="grid h-10 w-10 place-items-center rounded-xl text-base font-bold text-text-muted transition hover:bg-panel-hover" @click="navigateTo('guide')" aria-label="Panduan admin" title="Panduan admin">?</button>
             <button class="min-h-10 rounded-xl px-3 text-sm font-semibold text-text-muted transition hover:bg-danger/5 hover:text-danger" @click="handleLogout">Keluar</button>
           </div>
         </div>
@@ -65,6 +65,7 @@ import StandupsView from "./views/StandupsView.vue";
 import ReportsView from "./views/ReportsView.vue";
 import SettingsView from "./views/SettingsView.vue";
 import OnboardingTour from "./views/OnboardingTour.vue";
+import GuideView from "./views/GuideView.vue";
 
 const tabs = [
   { id: "home", label: "Beranda", icon: "⌂" },
@@ -73,14 +74,14 @@ const tabs = [
   { id: "reports", label: "Laporan", icon: "▤" },
   { id: "settings", label: "Pengaturan", icon: "⚙" },
 ];
-const settingsSections = ["whatsapp", "ai", "schedules", "holidays"];
-const views: Record<string, any> = { home: HomeView, employees: EmployeesView, standups: StandupsView, reports: ReportsView };
+const settingsSections = ["whatsapp", "ai", "schedules", "checkins", "holidays"];
+const views: Record<string, any> = { home: HomeView, employees: EmployeesView, standups: StandupsView, reports: ReportsView, guide: GuideView };
 const ONBOARDED_KEY = "ta_onboarded";
 
 const oauthError = consumeOAuthRedirect();
 const token = ref(getToken() ?? "");
 const me = ref<Me | null>(null);
-const currentTab = ref("home");
+const currentTab = ref(consumePageParam());
 const settingsSection = ref("whatsapp");
 const apiOk = ref<boolean | null>(null);
 const toasts = ref<Toast[]>([]);
@@ -88,6 +89,16 @@ const showTour = ref(!!token.value && !hasOnboarded());
 const currentComponent = computed(() => views[currentTab.value]);
 const apiStatusTitle = computed(() => apiOk.value === null ? "Memeriksa koneksi API" : apiOk.value ? "API terhubung" : "API tidak terhubung");
 
+// Deep links such as the admin welcome message's /?page=guide.
+function consumePageParam() {
+  const params = new URLSearchParams(window.location.search);
+  const page = params.get("page");
+  if (!page || !views[page]) return "home";
+  params.delete("page");
+  const query = params.toString();
+  history.replaceState(null, "", window.location.pathname + (query ? `?${query}` : "") + window.location.hash);
+  return page;
+}
 function hasOnboarded() {
   try {
     return localStorage.getItem(ONBOARDED_KEY) === "1";
