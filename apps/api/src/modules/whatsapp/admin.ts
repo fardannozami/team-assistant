@@ -96,6 +96,18 @@ const MENU_TEXT = [
   "Standup pribadi: STANDUP, UBAH STANDUP (lihat BANTUAN)",
 ].join("\n");
 
+/** Sent once when someone is given an admin role from the web dashboard. */
+export function buildAdminWelcomeText(name: string, roleName: string, webUrl: string) {
+  return [
+    `Halo ${name}, kamu sekarang ${roleName} di Team Assistant.`,
+    "Kamu bisa mengelola tim langsung dari WhatsApp ini. Ketik MENU kapan saja untuk melihat perintah.",
+    "",
+    MENU_TEXT,
+    "",
+    `Panduan lengkap di dashboard web: ${webUrl.replace(/\/$/, "")}/?page=guide`,
+  ].join("\n");
+}
+
 const DAY_INDEX: Record<string, number> = {
   SUN: 0,
   MON: 1,
