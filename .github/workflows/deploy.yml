@@ -87,9 +87,13 @@ jobs:
             compose="docker compose -f docker-compose.prod.yml"
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             $compose pull api worker web
-            $compose up -d postgres redis
+            $compose up -d --wait postgres redis
             # Migrate with the API stopped so it never runs against a half-migrated schema.
-            $compose stop api worker
+            $compose stop api worker 2>/dev/null || true
+            for i in $(seq 1 30); do
+              $compose exec -T postgres pg_isready -U "${POSTGRES_USER:-teamassistant}" >/dev/null 2>&1 && break
+              echo "waiting for postgres... ($i)"; sleep 2
+            done
             $compose run --rm --no-deps -w /app/packages/database api bunx drizzle-kit migrate
             $compose run --rm --no-deps -w /app/packages/database api bun run src/seed.ts
             $compose up -d --remove-orphans
