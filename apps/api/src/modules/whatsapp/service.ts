@@ -28,6 +28,10 @@ const LEGACY_SESSION_PATH = process.env.WHATSAPP_SESSION_PATH ?? "./data/whatsap
 const MAX_RECONNECT_DELAY_MS = 60_000;
 const MAX_PROCESSED_IDS = 5_000;
 const START_SPACING_MS = 1_500;
+// Replies "type" for a while before sending so the bot feels less instant.
+const TYPING_MIN_MS = 1_000;
+const TYPING_MAX_MS = 4_000;
+const TYPING_MS_PER_CHAR = 25;
 
 type Socket = ReturnType<typeof makeWASocket>;
 
@@ -347,20 +351,20 @@ async function openSocket(workspaceId: string, pairingPhone?: string): Promise<S
           roleName,
         });
         if (reply) {
-          await sendText(workspaceId, from, reply);
+          await replyText(workspaceId, from, reply);
           continue;
         }
 
         if (employee) {
           const checkinReply = await handleCheckinMessage({ employee, body });
           if (checkinReply) {
-            await sendText(workspaceId, from, checkinReply);
+            await replyText(workspaceId, from, checkinReply);
             continue;
           }
 
           const standupReply = await handleStandupMessage({ employee, body });
           if (standupReply) {
-            await sendText(workspaceId, from, standupReply);
+            await replyText(workspaceId, from, standupReply);
             continue;
           }
 
@@ -369,7 +373,7 @@ async function openSocket(workspaceId: string, pairingPhone?: string): Promise<S
           const { handleAiMessage } = await import("../ai/service.js");
           const aiReply = await handleAiMessage({ workspaceId, phone, body, employee, roleName });
           if (aiReply) {
-            await sendText(workspaceId, from, aiReply);
+            await replyText(workspaceId, from, aiReply);
             continue;
           }
 
@@ -380,7 +384,7 @@ async function openSocket(workspaceId: string, pairingPhone?: string): Promise<S
           // Without AI nothing else understands free text; point to the keywords.
           // Stickers, images and reactions have no text: stay quiet for those.
           if (body.trim()) {
-            await sendText(workspaceId, from, "Pesan belum dikenali. Ketik BANTUAN untuk melihat perintah standup.");
+            await replyText(workspaceId, from, "Pesan belum dikenali. Ketik BANTUAN untuk melihat perintah standup.");
           }
           continue;
         }
@@ -393,6 +397,30 @@ async function openSocket(workspaceId: string, pairingPhone?: string): Promise<S
   });
 
   return socket;
+}
+
+function typingDelay(text: string) {
+  const jitter = Math.random() * 500;
+  return Math.min(TYPING_MAX_MS, TYPING_MIN_MS + text.length * TYPING_MS_PER_CHAR + jitter);
+}
+
+// Reply to an incoming message: show "typing…", wait, then send.
+async function replyText(workspaceId: string, jid: string, text: string) {
+  const socket = bots.get(workspaceId)?.sock;
+  try {
+    await socket?.presenceSubscribe(jid);
+    await socket?.sendPresenceUpdate("composing", jid);
+  } catch (error) {
+    // Presence is cosmetic; never block the reply on it.
+    logger.warn({ workspaceId, jid, error }, "Failed to send typing presence");
+  }
+  await new Promise((resolve) => setTimeout(resolve, typingDelay(text)));
+  try {
+    await socket?.sendPresenceUpdate("paused", jid);
+  } catch {
+    // ignore
+  }
+  await sendText(workspaceId, jid, text);
 }
 
 export async function sendText(workspaceId: string, jid: string, text: string) {
