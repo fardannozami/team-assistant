@@ -26,27 +26,30 @@
           </nav>
 
           <div class="flex shrink-0 items-center gap-1">
-            <button class="grid h-10 w-10 place-items-center rounded-xl text-base font-bold text-text-muted transition hover:bg-panel-hover" aria-label="Panduan admin" title="Panduan admin" @click="navigateTo('guide')">?</button>
+            <button v-if="!isPm" class="grid h-10 w-10 place-items-center rounded-xl text-base font-bold text-text-muted transition hover:bg-panel-hover" aria-label="Panduan admin" title="Panduan admin" @click="navigateTo('guide')">?</button>
             <button class="min-h-10 rounded-xl px-3 text-sm font-semibold text-text-muted transition hover:bg-danger/5 hover:text-danger" @click="handleLogout">Keluar</button>
           </div>
         </div>
       </header>
 
       <main class="mx-auto w-full max-w-[1080px] flex-1 px-4 pb-28 pt-5 sm:px-6 sm:pt-8 md:pb-10">
-        <section :key="currentTab" class="reveal" aria-live="polite">
+        <div v-if="!meLoaded" class="flex justify-center py-24" aria-label="Memuat">
+          <span class="h-10 w-10 rounded-full border-2 border-accent/20 border-t-accent spin-slow" aria-hidden="true"></span>
+        </div>
+        <section v-else :key="currentTab" class="reveal" aria-live="polite">
           <SettingsView v-if="currentTab === 'settings'" :section="settingsSection" @section="settingsSection = $event" />
           <component :is="currentComponent" v-else @navigate="navigateTo" @tour="showTour = true" />
         </section>
       </main>
 
-      <nav class="mobile-nav fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-border bg-panel/95 px-1 pt-2 backdrop-blur md:hidden" aria-label="Navigasi utama">
+      <nav v-if="tabs.length > 1" class="mobile-nav fixed inset-x-0 bottom-0 z-30 grid border-t border-border bg-panel/95 px-1 pt-2 backdrop-blur md:hidden" :style="{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }" aria-label="Navigasi utama">
         <button v-for="tab in tabs" :key="tab.id" class="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[11px] font-semibold" :class="currentTab === tab.id ? 'text-accent' : 'text-text-muted'" :aria-current="currentTab === tab.id ? 'page' : undefined" @click="navigateTo(tab.id)">
           <span class="text-lg leading-none" aria-hidden="true">{{ tab.icon }}</span>
           <span>{{ tab.label }}</span>
         </button>
       </nav>
 
-      <OnboardingTour v-if="showTour" @close="closeTour" />
+      <OnboardingTour v-if="showTour && meLoaded && !isPm" @close="closeTour" />
     </div>
 
     <div v-else class="relative z-10 flex min-h-screen items-center justify-center px-4 py-8 sm:px-6">
@@ -66,21 +69,33 @@ import ReportsView from "./views/ReportsView.vue";
 import SettingsView from "./views/SettingsView.vue";
 import OnboardingTour from "./views/OnboardingTour.vue";
 import GuideView from "./views/GuideView.vue";
+import ProjectsView from "./views/ProjectsView.vue";
 
-const tabs = [
+const ALL_TABS = [
   { id: "home", label: "Beranda", icon: "⌂" },
   { id: "standups", label: "Standup", icon: "☷" },
   { id: "employees", label: "Anggota", icon: "♧" },
+  { id: "projects", label: "Project", icon: "◫" },
   { id: "reports", label: "Laporan", icon: "▤" },
   { id: "settings", label: "Pengaturan", icon: "⚙" },
 ];
+// Who sees which tab; the API enforces the same split.
+const PM_TABS = ["projects"];
+const PROJECT_ROLES = ["Owner", "Admin", "PM"];
 const settingsSections = ["whatsapp", "users", "ai", "github", "schedules", "checkins", "holidays"];
-const views: Record<string, any> = { home: HomeView, employees: EmployeesView, standups: StandupsView, reports: ReportsView, guide: GuideView };
+const views: Record<string, any> = { home: HomeView, employees: EmployeesView, standups: StandupsView, projects: ProjectsView, reports: ReportsView, guide: GuideView };
 const ONBOARDED_KEY = "ta_onboarded";
 
 const oauthError = consumeOAuthRedirect();
 const token = ref(getToken() ?? "");
 const me = ref<Me | null>(null);
+const meLoaded = ref(false);
+const isPm = computed(() => me.value?.user.role === "PM");
+const tabs = computed(() =>
+  isPm.value
+    ? ALL_TABS.filter((t) => PM_TABS.includes(t.id))
+    : ALL_TABS.filter((t) => t.id !== "projects" || PROJECT_ROLES.includes(me.value?.user.role ?? "")),
+);
 const initialPage = consumePageParam();
 const currentTab = ref(settingsSections.includes(initialPage) ? "settings" : initialPage);
 const settingsSection = ref(settingsSections.includes(initialPage) ? initialPage : "whatsapp");
@@ -129,12 +144,16 @@ onUnauthorized(() => {
 });
 async function loadMe() {
   me.value = token.value ? await authApi.me().catch(() => null) : null;
+  // PMs only have the Projects page, whatever the link asked for.
+  if (isPm.value && !PM_TABS.includes(currentTab.value)) currentTab.value = "projects";
+  meLoaded.value = true;
 }
 onMounted(async () => {
   loadMe();
   apiOk.value = await apiHealth();
 });
 function navigateTo(tab: string) {
+  if (isPm.value && !PM_TABS.includes(tab)) tab = "projects";
   if (settingsSections.includes(tab)) {
     settingsSection.value = tab;
     currentTab.value = "settings";

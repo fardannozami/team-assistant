@@ -14,3 +14,4 @@ export * from "./figma.js";
 export * from "./reporting.js";
 export * from "./security.js";
 export * from "./checkins.js";
+export * from "./projects.js";

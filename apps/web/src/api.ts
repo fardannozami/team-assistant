@@ -414,7 +414,7 @@ export const authApi = {
   me: () => request<Me>("/auth/me"),
 };
 
-export type InvitableRole = "Admin" | "Manager";
+export type InvitableRole = "Admin" | "Manager" | "PM";
 
 export interface WebUser {
   id: string;
@@ -734,6 +734,71 @@ export const aiApi = {
     request<AiSettings>("/ai/settings", {
       method: "DELETE",
     }),
+};
+
+export type ProjectStatus = "ongoing" | "completed" | "cancelled";
+export type PaymentType = "fixed" | "hourly";
+export type PaymentStatus = "pending" | "accepted" | "paid";
+export type ProjectMemberRole = "pm_sales" | "designer" | "developer";
+
+export interface ProjectMember {
+  employeeId: string;
+  employeeName: string;
+  role: ProjectMemberRole;
+  sharePercent: number;
+  fee: number;
+}
+
+export interface Project {
+  id: string;
+  platform: string;
+  name: string;
+  startDate: string | null;
+  endDate: string | null;
+  status: ProjectStatus;
+  paymentType: PaymentType;
+  currency: string;
+  feeReceived: number;
+  platformFeePercent: number;
+  totalFee: number | null;
+  feeGross: number;
+  splitBase: number;
+  paymentStatus: PaymentStatus;
+  notes: string | null;
+  updatedAt: string;
+  members: ProjectMember[];
+}
+
+export interface ProjectInput {
+  platform: string;
+  name: string;
+  startDate: string | null;
+  endDate: string | null;
+  status: ProjectStatus;
+  paymentType: PaymentType;
+  currency: string;
+  feeReceived: number;
+  platformFeePercent: number;
+  totalFee: number | null;
+  paymentStatus: PaymentStatus;
+  notes: string | null;
+  members: { employeeId: string; role: ProjectMemberRole; sharePercent: number }[];
+}
+
+export interface ProjectPerson {
+  id: string;
+  name: string;
+  isActive: boolean;
+}
+
+export const projectsApi = {
+  list: () => request<{ projects: Project[] }>("/projects").then((r) => r.projects),
+  people: () => request<{ people: ProjectPerson[] }>("/projects/people").then((r) => r.people),
+  create: (input: ProjectInput) =>
+    request<Project>("/projects", { method: "POST", body: JSON.stringify(input) }),
+  update: (id: string, input: ProjectInput) =>
+    request<Project>(`/projects/${id}`, { method: "PUT", body: JSON.stringify(input) }),
+  remove: (id: string) => request<{ deleted: boolean }>(`/projects/${id}`, { method: "DELETE" }),
 };
 
 export const rolesApi = {

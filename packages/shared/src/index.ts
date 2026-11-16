@@ -9,7 +9,7 @@ export const CORE_STANDUP_ELEMENTS = [
   "blockers",
 ] as const;
 
-export const ROLE_NAMES = ["Owner", "Admin", "Manager", "Employee"] as const;
+export const ROLE_NAMES = ["Owner", "Admin", "Manager", "Employee", "PM"] as const;
 export const ADMIN_ROLES = ["Owner", "Admin"] as const;
 
 export function isAdminRole(role: string | null | undefined): boolean {
@@ -157,7 +157,8 @@ export const runCheckinSchema = z.object({
 });
 
 // Web dashboard users invited by email (Owner stays the workspace creator).
-export const INVITABLE_ROLES = ["Admin", "Manager"] as const;
+// PM is web-only: projects and fee splits, nothing else.
+export const INVITABLE_ROLES = ["Admin", "Manager", "PM"] as const;
 
 export const inviteUserSchema = z.object({
   email: z.string().trim().toLowerCase().email("Email tidak valid").max(254),
@@ -172,6 +173,60 @@ export const updateWebUserSchema = z
   .refine((v) => v.role !== undefined || v.isActive !== undefined, "Nothing to update");
 
 export type InviteUserInput = z.infer<typeof inviteUserSchema>;
+
+// ---- Projects & fee splits (PM) ----
+
+export const PROJECT_STATUSES = ["ongoing", "completed", "cancelled"] as const;
+export const PAYMENT_TYPES = ["fixed", "hourly"] as const;
+export const PAYMENT_STATUSES = ["pending", "accepted", "paid"] as const;
+export const PROJECT_MEMBER_ROLES = ["pm_sales", "designer", "developer"] as const;
+
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal harus YYYY-MM-DD");
+const money = z.number().finite().min(0).max(1_000_000_000);
+const percent = z.number().finite().min(0).max(100);
+
+export const projectInputSchema = z
+  .object({
+    platform: z.string().trim().min(1, "Platform wajib diisi").max(100),
+    name: z.string().trim().min(1, "Nama project wajib diisi").max(300),
+    startDate: isoDate.nullish(),
+    endDate: isoDate.nullish(),
+    status: z.enum(PROJECT_STATUSES),
+    paymentType: z.enum(PAYMENT_TYPES),
+    currency: z.string().trim().toUpperCase().length(3, "Kode mata uang 3 huruf").default("USD"),
+    feeReceived: money,
+    platformFeePercent: z.number().finite().min(0).max(99).default(10),
+    totalFee: money.nullish(),
+    paymentStatus: z.enum(PAYMENT_STATUSES),
+    notes: z.string().trim().max(2000).nullish(),
+    members: z
+      .array(
+        z.object({
+          employeeId: z.string().uuid(),
+          role: z.enum(PROJECT_MEMBER_ROLES),
+          sharePercent: percent,
+        }),
+      )
+      .max(50),
+  })
+  .superRefine((p, ctx) => {
+    if (p.startDate && p.endDate && p.endDate < p.startDate) {
+      ctx.addIssue({ code: "custom", path: ["endDate"], message: "End date sebelum start date" });
+    }
+    const seen = new Set<string>();
+    for (const m of p.members) {
+      const key = `${m.role}:${m.employeeId}`;
+      if (seen.has(key)) ctx.addIssue({ code: "custom", path: ["members"], message: "Anggota yang sama tercatat dua kali di peran yang sama" });
+      seen.add(key);
+    }
+    // PM & Sales share one pool, designers and developers another.
+    const pool = (pm: boolean) =>
+      p.members.filter((m) => (m.role === "pm_sales") === pm).reduce((sum, m) => sum + m.sharePercent, 0);
+    if (pool(true) > 100.001) ctx.addIssue({ code: "custom", path: ["members"], message: "Total bagian PM & Sales lebih dari 100%" });
+    if (pool(false) > 100.001) ctx.addIssue({ code: "custom", path: ["members"], message: "Total kontribusi designer & developer lebih dari 100%" });
+  });
+
+export type ProjectInput = z.infer<typeof projectInputSchema>;
 export type UpdateWebUserInput = z.infer<typeof updateWebUserSchema>;
 
 export const githubLoginSchema = z.object({

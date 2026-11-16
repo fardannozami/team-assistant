@@ -19,6 +19,7 @@
         <select id="invite-role" v-model="role" :class="inputClass" class="sm:w-44">
           <option value="Admin">Admin</option>
           <option value="Manager">Manager</option>
+          <option value="PM">PM</option>
         </select>
         <button type="submit" class="min-h-12 rounded-xl bg-accent px-5 text-sm font-bold text-white disabled:opacity-60" :disabled="busy === 'invite'">
           {{ busy === "invite" ? "Membuat…" : "Buat undangan" }}
@@ -75,9 +76,10 @@
           </template>
           <div v-else class="flex gap-2">
             <select :value="u.role ?? ''" :aria-label="`Peran ${u.name}`" class="min-h-11 rounded-xl border border-border bg-panel px-3 text-sm" :disabled="!u.isActive || busy === u.id" @change="update(u, { role: ($event.target as HTMLSelectElement).value as InvitableRole })">
-              <option v-if="u.role !== 'Admin' && u.role !== 'Manager'" :value="u.role ?? ''" disabled>{{ u.role ?? "Tanpa peran" }}</option>
+              <option v-if="!['Admin', 'Manager', 'PM'].includes(u.role ?? '')" :value="u.role ?? ''" disabled>{{ u.role ?? "Tanpa peran" }}</option>
               <option value="Admin">Admin</option>
               <option value="Manager">Manager</option>
+              <option value="PM">PM</option>
             </select>
             <button type="button" class="min-h-11 rounded-xl border border-border px-3 text-sm font-semibold disabled:opacity-50" :class="u.isActive ? 'text-text-muted hover:bg-danger/5 hover:text-danger' : 'text-text hover:bg-panel-hover'" :disabled="busy === u.id" @click="toggleActive(u)">
               {{ u.isActive ? "Nonaktifkan" : "Aktifkan" }}
@@ -96,6 +98,7 @@ import { ApiError, authApi, showToast, usersApi, type InvitableRole, type Me, ty
 const ROLE_HELP: Record<InvitableRole, string> = {
   Admin: "Admin: mengelola anggota, jadwal, WhatsApp, AI, integrasi, dan pengguna lain (kecuali Owner).",
   Manager: "Manager: melihat anggota, standup, dan laporan tanpa bisa mengubah pengaturan.",
+  PM: "PM: hanya lewat web, mengisi project dan pembagian fee. Tidak melihat menu lain.",
 };
 const inputClass =
   "min-h-12 rounded-xl border border-border bg-panel px-4 text-base placeholder-text-dim focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20";

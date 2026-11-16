@@ -272,7 +272,8 @@ async function loadEmployees() {
 
 async function loadRoles() {
   try {
-    roles.value = await rolesApi.list();
+    // PM is a dashboard-only role, never a WhatsApp member's.
+    roles.value = (await rolesApi.list()).filter((r) => r.name !== "PM");
   } catch {
     roles.value = [];
   }

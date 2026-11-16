@@ -9,7 +9,7 @@ async function seed() {
   // Roles and permissions are global. Workspaces (with their default
   // schedule and calendar settings) are created on sign-up via createWorkspace.
 
-  const defaultRoles = ["Owner", "Admin", "Manager", "Employee"];
+  const defaultRoles = ["Owner", "Admin", "Manager", "Employee", "PM"];
   for (const name of defaultRoles) {
     await db.insert(roles).values({ name }).onConflictDoNothing();
   }
