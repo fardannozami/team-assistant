@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import babelParser from "@babel/eslint-parser";
 import js from "@eslint/js";
 import eslintConfigPrettier from "eslint-config-prettier";
@@ -18,7 +19,8 @@ export const config = [
       parserOptions: {
         requireConfigFile: false,
         babelOptions: {
-          presets: ["@babel/preset-typescript"],
+          // Resolved here: Babel would look for it next to the package being linted.
+          presets: [fileURLToPath(import.meta.resolve("@babel/preset-typescript"))],
         },
       },
     },

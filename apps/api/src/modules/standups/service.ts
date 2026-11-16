@@ -5,8 +5,11 @@ import { getWhatsAppStatus, sendText } from "../whatsapp/service.js";
 import { getEmployee, listEmployees } from "../employees/service.js";
 import { HttpError } from "../../lib/http-error.js";
 import { isUniqueViolation } from "../../lib/db.js";
+import { describeCounts, notableItems } from "../github/digest.js";
+import { standupActivity } from "../github/service.js";
 import {
   getStandupSession,
+  githubHints,
   standupPromptText,
   standupReminderText,
 } from "./engine.js";
@@ -81,6 +84,8 @@ export async function sendStandupPrompts(
   let sent = 0;
   let skipped = 0;
   let failed = 0;
+  const hints = await githubHints(workspaceId, date, targets.map((t) => t.id));
+  const prompt = (employeeId: string) => standupPromptText(date, hints.get(employeeId));
 
   for (const employee of targets) {
     const existing = await getStandupSession(employee.id, date);
@@ -92,7 +97,7 @@ export async function sendStandupPrompts(
         (existing.status === "pending" || existing.status === "in_progress")
       ) {
         try {
-          await send(jidFor(employee.phone), standupPromptText(date));
+          await send(jidFor(employee.phone), prompt(employee.id));
           sent++;
         } catch {
           failed++;
@@ -115,7 +120,7 @@ export async function sendStandupPrompts(
     }
 
     try {
-      await send(jidFor(employee.phone), standupPromptText(date));
+      await send(jidFor(employee.phone), prompt(employee.id));
       sent++;
     } catch {
       await db
@@ -352,5 +357,18 @@ export async function listStandupsByDate(workspaceId: string, date: string) {
     grouped.set(row.sessionId, entry);
   }
 
-  return [...grouped.values()];
+  const sessions = [...grouped.values()];
+  const { from, byEmployee } = await standupActivity(
+    workspaceId,
+    date,
+    sessions.map((s) => s.employeeId),
+  );
+  return sessions.map((s) => {
+    const activity = byEmployee.get(s.employeeId);
+    return {
+      ...s,
+      githubSince: from,
+      github: activity ? { summary: describeCounts(activity.counts), ...notableItems(activity.items) } : null,
+    };
+  });
 }

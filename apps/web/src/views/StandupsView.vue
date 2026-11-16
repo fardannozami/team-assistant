@@ -18,9 +18,9 @@
       />
     </div>
     <button
-      @click="load"
       :disabled="loading"
       class="inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+      @click="load"
     >
       Muat standup
     </button>
@@ -45,6 +45,7 @@
       </div>
       <dl class="mt-4 space-y-3 border-t border-border pt-3 text-sm">
         <div><dt class="text-xs font-bold text-text-dim">Kemarin</dt><dd class="mt-0.5 whitespace-pre-wrap text-text">{{ s.answers.yesterday || 'Belum ada jawaban' }}</dd></div>
+        <div v-if="s.github"><dt class="text-xs font-bold text-text-dim">GitHub sejak {{ s.githubSince }}</dt><dd class="mt-0.5"><GithubActivity :activity="s.github" /></dd></div>
         <div><dt class="text-xs font-bold text-text-dim">Hari ini</dt><dd class="mt-0.5 whitespace-pre-wrap text-text">{{ s.answers.today || 'Belum ada jawaban' }}</dd></div>
         <div><dt class="text-xs font-bold text-text-dim">Hambatan</dt><dd class="mt-0.5 whitespace-pre-wrap text-text">{{ s.answers.blockers || 'Tidak ada' }}</dd></div>
       </dl>
@@ -73,7 +74,13 @@
           <td class="px-5 py-4 border-b border-border align-middle text-text">
             <span class="badge" :class="statusBadgeUtils(s.status)">{{ statusLabel(s.status) }}</span>
           </td>
-          <td class="px-5 py-4 border-b border-border align-middle text-text answers">{{ s.answers.yesterday || "—" }}</td>
+          <td class="px-5 py-4 border-b border-border align-middle text-text answers">
+            {{ s.answers.yesterday || "—" }}
+            <div v-if="s.github" class="mt-2 pt-2 border-t border-border">
+              <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1">GitHub sejak {{ s.githubSince }}</div>
+              <GithubActivity :activity="s.github" />
+            </div>
+          </td>
           <td class="px-5 py-4 border-b border-border align-middle text-text answers">{{ s.answers.today || "—" }}</td>
           <td class="px-5 py-4 border-b border-border align-middle text-text answers">{{ s.answers.blockers || "—" }}</td>
         </tr>
@@ -89,6 +96,7 @@ import {
   ApiError,
   type StandupSession,
 } from "../api";
+import GithubActivity from "./GithubActivity.vue";
 
 const date = ref(new Date().toISOString().slice(0, 10));
 const standups = ref<StandupSession[]>([]);

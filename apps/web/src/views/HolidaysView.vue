@@ -25,7 +25,7 @@
   <!-- Settings -->
   <div v-if="tab === 'settings'" class="max-w-[560px] rounded-2xl border border-border bg-panel p-4 shadow-soft-lg sm:p-6 reveal">
     <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-4">Pengaturan kalender</div>
-    <form @submit.prevent="saveSettings" class="flex flex-col gap-5">
+    <form class="flex flex-col gap-5" @submit.prevent="saveSettings">
       <div>
         <label class="mb-1.5 block text-sm font-semibold text-text">Negara</label>
         <input v-model="settings.country" type="text"
@@ -39,15 +39,15 @@
         />
       </div>
       <div class="flex items-center gap-2.5 mb-3 cursor-pointer leading-none">
-        <input type="checkbox" v-model="settings.skipWeekends" id="skipWeekends" class="w-4 h-4 shrink-0 accent-accent cursor-pointer" />
+        <input id="skipWeekends" v-model="settings.skipWeekends" type="checkbox" class="w-4 h-4 shrink-0 accent-accent cursor-pointer" />
         <label for="skipWeekends" class="text-[11px] font-extrabold tracking-tight text-text">Lewati akhir pekan</label>
       </div>
       <div class="flex items-center gap-2.5 mb-3 cursor-pointer leading-none">
-        <input type="checkbox" v-model="settings.skipNationalHolidays" id="skipNational" class="w-4 h-4 shrink-0 accent-accent cursor-pointer" />
+        <input id="skipNational" v-model="settings.skipNationalHolidays" type="checkbox" class="w-4 h-4 shrink-0 accent-accent cursor-pointer" />
         <label for="skipNational" class="text-[11px] font-extrabold tracking-tight text-text">Lewati hari libur nasional</label>
       </div>
       <div class="flex items-center gap-2.5 mb-3 cursor-pointer leading-none">
-        <input type="checkbox" v-model="settings.skipJointHolidays" id="skipJoint" class="w-4 h-4 shrink-0 accent-accent cursor-pointer" />
+        <input id="skipJoint" v-model="settings.skipJointHolidays" type="checkbox" class="w-4 h-4 shrink-0 accent-accent cursor-pointer" />
         <label for="skipJoint" class="text-[11px] font-extrabold tracking-tight text-text">Lewati cuti bersama</label>
       </div>
       <div class="flex gap-2 items-end">
@@ -74,14 +74,14 @@
           type="number"
           min="2000"
           max="2100"
-          @change="loadHolidays"
           class="w-full px-4 py-3.5 rounded-xl border text-sm placeholder-text-dim transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none bg-panel border-border"
+          @change="loadHolidays"
         />
       </div>
       <button
         class="inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
-        @click="loadHolidays"
         :disabled="loadingHolidays"
+        @click="loadHolidays"
       >
         Muat
       </button>
@@ -132,8 +132,8 @@
         </div>
         <button
           class="inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
-          @click="syncHolidays"
           :disabled="syncing"
+          @click="syncHolidays"
         >
           Sinkronkan hari libur
         </button>
@@ -179,8 +179,8 @@
     <div class="flex items-center gap-3 mb-4 flex-wrap mt-4">
       <div class="min-w-[170px]" :class="{ 'border-danger': excError, 'border-border': !excError }">
         <label class="mb-1.5 block text-sm font-semibold text-text">Tanggal</label>
-        <input v-model="excDate" type="date" @input="excError = ''"
-          class="w-full px-4 py-3.5 rounded-xl border text-sm placeholder-text-dim transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none bg-panel border-border"
+        <input v-model="excDate" type="date" class="w-full px-4 py-3.5 rounded-xl border text-sm placeholder-text-dim transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none bg-panel border-border"
+          @input="excError = ''"
         />
       </div>
       <div class="min-w-[200px]">
@@ -190,14 +190,14 @@
         />
       </div>
       <div class="flex items-center gap-2.5 mb-3 cursor-pointer leading-none">
-        <input type="checkbox" v-model="excSkip" id="excSkip" class="w-4 h-4 shrink-0 accent-accent cursor-pointer" />
+        <input id="excSkip" v-model="excSkip" type="checkbox" class="w-4 h-4 shrink-0 accent-accent cursor-pointer" />
         <label for="excSkip" class="text-[11px] font-extrabold tracking-tight text-text">Lewati standup pada tanggal ini</label>
       </div>
       <p v-if="excError" class="col-span-full text-danger text-[11px] font-extrabold mt-1.5 slide-in">{{ excError }}</p>
       <button
         class="inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
-        @click="addException"
         :disabled="addingException"
+        @click="addException"
       >
         Tambah pengecualian
       </button>
@@ -216,8 +216,8 @@
       </div>
       <button
         class="inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
-        @click="checkExcluded"
         :disabled="checking"
+        @click="checkExcluded"
       >
         Periksa
       </button>

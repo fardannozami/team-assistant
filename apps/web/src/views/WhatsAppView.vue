@@ -44,7 +44,7 @@
       <span class="font-mono text-[14px] text-text">+62 812-3456-7890</span>). Kode penautan akan dikirim ke nomor tersebut.
     </p>
 
-    <form v-if="!status.connected && !status.registered" @submit.prevent="pairPhone" class="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-4 items-end mb-6">
+    <form v-if="!status.connected && !status.registered" class="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-4 items-end mb-6" @submit.prevent="pairPhone">
       <div>
         <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Nomor telepon</label>
         <input
@@ -52,9 +52,9 @@
           type="tel"
           placeholder="+62 812-3456-7890"
           required
-          @input="pairError = ''"
           class="w-full px-4 py-3.5 rounded-xl border text-sm placeholder-text-dim transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none bg-panel border-border"
           :class="{ 'border-danger': pairError, 'border-border': !pairError }"
+          @input="pairError = ''"
         />
       </div>
       <p v-if="pairError" class="col-span-full text-danger text-[11px] font-extrabold mt-1.5 slide-in">{{ pairError }}</p>
@@ -72,8 +72,8 @@
       <button
         type="button"
         :disabled="disconnecting"
-        @click="disconnect"
         class="inline-flex items-center justify-center gap-2.5 px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight bg-danger text-white transition-all duration-200 ease-in hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+        @click="disconnect"
       >
         {{ disconnecting ? "Memutuskan koneksi…" : "Putuskan koneksi" }}
       </button>

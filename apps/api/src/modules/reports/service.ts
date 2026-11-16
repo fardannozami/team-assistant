@@ -1,6 +1,8 @@
 import { createDbClient, employees, roles, standupAnswers, standupSessions, standups } from "@repo/database";
 import { and, eq, gte, isNull, lte, notInArray, or } from "drizzle-orm";
 import { dateInTimezone, DEFAULT_TIMEZONE } from "@repo/shared";
+import { describeCounts } from "../github/digest.js";
+import { standupActivity } from "../github/service.js";
 
 const db = createDbClient(
   process.env.DATABASE_URL ??
@@ -60,6 +62,21 @@ export async function generateDailyReport(workspaceId: string, date?: string) {
       ),
     );
 
+  // GitHub activity behind each standup's "kemarin" (GIT-008 timeline).
+  const activity = await standupActivity(
+    workspaceId,
+    d,
+    allEmployees.map((e) => e.id),
+  );
+  const github = allEmployees
+    .filter((e) => activity.byEmployee.has(e.id))
+    .map((e) => ({
+      id: e.id,
+      name: e.name,
+      counts: activity.byEmployee.get(e.id)!.counts,
+      summary: describeCounts(activity.byEmployee.get(e.id)!.counts),
+    }));
+
   const submitted = [...byEmployee.entries()]
     .filter(([, v]) => v.status === "completed")
     .map(([id, v]) => ({ id, name: v.name, answers: v.answers }));
@@ -85,10 +102,17 @@ export async function generateDailyReport(workspaceId: string, date?: string) {
     ...(blockers.length
       ? blockers.map((b) => `- ${b.name}: ${b.blocker}`)
       : ["- none"]),
+    "",
+    `GitHub activity (since ${activity.from}):`,
+    ...(github.length
+      ? github.map((g) => `- ${g.name}: ${g.summary}`)
+      : ["- none"]),
   ];
 
   return {
     date: d,
+    githubSince: activity.from,
+    github,
     total: allEmployees.length,
     submittedCount: submitted.length,
     notSubmittedCount: notSubmitted.length,

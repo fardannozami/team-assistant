@@ -34,8 +34,8 @@
       </div>
       <button
         class="inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
-        @click="loadDaily"
         :disabled="loadingDaily"
+        @click="loadDaily"
       >
         Muat laporan
       </button>
@@ -80,8 +80,8 @@
     <div class="flex items-center gap-3 mb-5 flex-wrap">
       <button
         class="inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
-        @click="loadWeekly"
         :disabled="loadingWeekly"
+        @click="loadWeekly"
       >
         Buat laporan mingguan
       </button>

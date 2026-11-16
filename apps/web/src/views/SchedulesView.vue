@@ -7,9 +7,9 @@
       </p>
     </div>
     <button
-      @click="showCreateForm = true; createStep = 1"
       :disabled="loading"
       class="inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover hover:shadow-[0_0_0_12px_rgba(63,68,226,0.45)] active:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+      @click="showCreateForm = true; createStep = 1"
     >
       Buat jadwal
     </button>
@@ -26,15 +26,15 @@
       <button type="button" class="min-h-10 rounded-xl px-3 text-sm font-semibold text-text-muted hover:bg-panel-hover" @click="showCreateForm = false">Batal</button>
     </div>
     <div class="mb-5 h-1.5 overflow-hidden rounded-full bg-panel-hover"><div class="h-full rounded-full bg-accent transition-all" :style="{ width: createStep === 1 ? '50%' : '100%' }"></div></div>
-    <form @submit.prevent="handleCreate" class="space-y-4">
+    <form class="space-y-4" @submit.prevent="handleCreate">
       <template v-if="createStep === 1">
         <div>
           <label class="mb-1.5 block text-sm font-semibold text-text">Nama jadwal</label>
-          <input v-model="form.name" type="text" placeholder="Standup harian" required @input="formError = ''" class="min-h-12 w-full rounded-xl border bg-panel px-4 text-base placeholder-text-dim focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20" :class="{ 'border-danger': formError, 'border-border': !formError }" />
+          <input v-model="form.name" type="text" placeholder="Standup harian" required class="min-h-12 w-full rounded-xl border bg-panel px-4 text-base placeholder-text-dim focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20" :class="{ 'border-danger': formError, 'border-border': !formError }" @input="formError = ''" />
         </div>
         <div>
           <label class="mb-1.5 block text-sm font-semibold text-text">Waktu</label>
-          <input v-model="form.time" type="time" required @input="formError = ''" class="min-h-12 w-full rounded-xl border bg-panel px-4 text-base focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20" :class="{ 'border-danger': formError, 'border-border': !formError }" />
+          <input v-model="form.time" type="time" required class="min-h-12 w-full rounded-xl border bg-panel px-4 text-base focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20" :class="{ 'border-danger': formError, 'border-border': !formError }" @input="formError = ''" />
         </div>
       </template>
       <template v-else>
@@ -47,7 +47,7 @@
           <label class="mb-2 block text-sm font-semibold text-text">Hari aktif</label>
           <div class="flex flex-wrap gap-2">
             <label v-for="(d, index) in DAYS" :key="d" class="inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 text-sm font-bold" :class="form.weekdays.includes(index) ? 'border-accent bg-accent text-white' : 'border-border bg-panel-hover text-text-muted'">
-              <input type="checkbox" :checked="form.weekdays.includes(index)" @change="toggleWeekday(form.weekdays, index)" class="h-4 w-4 accent-accent" />{{ d }}
+              <input type="checkbox" :checked="form.weekdays.includes(index)" class="h-4 w-4 accent-accent" @change="toggleWeekday(form.weekdays, index)" />{{ d }}
             </label>
           </div>
         </div>
@@ -71,15 +71,15 @@
       <button type="button" class="min-h-10 rounded-xl px-3 text-sm font-semibold text-text-muted hover:bg-panel-hover" @click="editingId = null; editStep = 1">Batal</button>
     </div>
     <div class="mb-5 h-1.5 overflow-hidden rounded-full bg-panel-hover"><div class="h-full rounded-full bg-accent transition-all" :style="{ width: editStep === 1 ? '50%' : '100%' }"></div></div>
-    <form @submit.prevent="handleSave" class="space-y-4">
+    <form class="space-y-4" @submit.prevent="handleSave">
       <template v-if="editStep === 1">
         <div>
           <label class="mb-1.5 block text-sm font-semibold text-text">Nama jadwal</label>
-          <input v-model="edit.name" type="text" required @input="formError = ''" class="min-h-12 w-full rounded-xl border border-border bg-panel px-4 text-base focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20" />
+          <input v-model="edit.name" type="text" required class="min-h-12 w-full rounded-xl border border-border bg-panel px-4 text-base focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20" @input="formError = ''" />
         </div>
         <div>
           <label class="mb-1.5 block text-sm font-semibold text-text">Waktu</label>
-          <input v-model="edit.time" type="time" required @input="formError = ''" class="min-h-12 w-full rounded-xl border border-border bg-panel px-4 text-base focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20" />
+          <input v-model="edit.time" type="time" required class="min-h-12 w-full rounded-xl border border-border bg-panel px-4 text-base focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20" @input="formError = ''" />
         </div>
       </template>
       <template v-else>
@@ -92,12 +92,12 @@
           <label class="mb-2 block text-sm font-semibold text-text">Hari aktif</label>
           <div class="flex flex-wrap gap-2">
             <label v-for="(d, index) in DAYS" :key="d" class="inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 text-sm font-bold" :class="edit.weekdays.includes(index) ? 'border-accent bg-accent text-white' : 'border-border bg-panel-hover text-text-muted'">
-              <input type="checkbox" :checked="edit.weekdays.includes(index)" @change="toggleWeekday(edit.weekdays, index)" class="h-4 w-4 accent-accent" />{{ d }}
+              <input type="checkbox" :checked="edit.weekdays.includes(index)" class="h-4 w-4 accent-accent" @change="toggleWeekday(edit.weekdays, index)" />{{ d }}
             </label>
           </div>
         </div>
         <label class="flex min-h-12 items-center gap-3 rounded-xl border border-border px-4 text-sm font-semibold text-text">
-          <input type="checkbox" v-model="edit.isActive" id="editIsActive" class="h-5 w-5 accent-accent" />Jadwal aktif
+          <input id="editIsActive" v-model="edit.isActive" type="checkbox" class="h-5 w-5 accent-accent" />Jadwal aktif
         </label>
         <div class="rounded-xl bg-panel-hover p-4 text-sm text-text-muted">{{ edit.name }} · {{ edit.time }} · {{ weekdayLabels(edit.weekdays).join(', ') }}</div>
       </template>
@@ -136,15 +136,15 @@
           <td class="px-5 py-4 border-b border-border align-middle text-text flex gap-2">
             <button
               class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-[12px] font-extrabold tracking-tight border border-border text-text transition-colors duration-200 ease-in hover:bg-panel-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
-              @click="editSchedule(s)"
               :disabled="editingId !== null && editingId !== s.id"
+              @click="editSchedule(s)"
             >
               {{ editingId === s.id ? "Mengubah…" : "Ubah" }}
             </button>
             <button
               class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-[12px] font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
-              @click="handleTrigger(s)"
               :disabled="triggeringId === s.id"
+              @click="handleTrigger(s)"
             >
               {{ triggeringId === s.id ? "…" : "Jalankan" }}
             </button>

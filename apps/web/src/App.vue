@@ -3,14 +3,14 @@
     <div class="pointer-events-none fixed inset-x-3 top-3 z-[60] flex flex-col items-end gap-3 sm:right-6 sm:top-6" role="region" aria-label="Notifikasi">
       <div v-for="t in toasts" :key="t.id" class="pointer-events-auto flex min-w-[min(100%,280px)] items-start gap-3 rounded-2xl border border-border bg-panel px-4 py-3 text-text shadow-soft-lg toast-in" :class="{ 'border-l-4 border-l-danger': t.type === 'error', 'border-l-4 border-l-success': t.type === 'success', 'border-l-4 border-l-accent': t.type === 'info' }">
         <p class="text-sm leading-relaxed">{{ t.message }}</p>
-        <button class="ml-auto grid h-7 w-7 shrink-0 place-items-center rounded-lg text-lg text-text-dim hover:bg-panel-hover" @click="dismissToast(t.id)" aria-label="Tutup notifikasi">×</button>
+        <button class="ml-auto grid h-7 w-7 shrink-0 place-items-center rounded-lg text-lg text-text-dim hover:bg-panel-hover" aria-label="Tutup notifikasi" @click="dismissToast(t.id)">×</button>
       </div>
     </div>
 
     <div v-if="token" class="flex min-h-screen flex-col">
       <header class="sticky top-0 z-30 border-b border-border bg-panel/95 backdrop-blur">
         <div class="mx-auto flex h-16 max-w-[1080px] items-center justify-between gap-3 px-4 sm:px-6">
-          <button class="flex min-w-0 items-center gap-3 text-left" @click="navigateTo('home')" aria-label="Ke beranda">
+          <button class="flex min-w-0 items-center gap-3 text-left" aria-label="Ke beranda" @click="navigateTo('home')">
             <span class="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-accent font-display text-sm font-extrabold text-white">
               TA
               <span class="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-panel" :class="apiOk === true ? 'bg-success' : apiOk === false ? 'bg-danger' : 'bg-text-muted'" :title="apiStatusTitle"></span>
@@ -26,7 +26,7 @@
           </nav>
 
           <div class="flex shrink-0 items-center gap-1">
-            <button class="grid h-10 w-10 place-items-center rounded-xl text-base font-bold text-text-muted transition hover:bg-panel-hover" @click="navigateTo('guide')" aria-label="Panduan admin" title="Panduan admin">?</button>
+            <button class="grid h-10 w-10 place-items-center rounded-xl text-base font-bold text-text-muted transition hover:bg-panel-hover" aria-label="Panduan admin" title="Panduan admin" @click="navigateTo('guide')">?</button>
             <button class="min-h-10 rounded-xl px-3 text-sm font-semibold text-text-muted transition hover:bg-danger/5 hover:text-danger" @click="handleLogout">Keluar</button>
           </div>
         </div>
@@ -35,7 +35,7 @@
       <main class="mx-auto w-full max-w-[1080px] flex-1 px-4 pb-28 pt-5 sm:px-6 sm:pt-8 md:pb-10">
         <section :key="currentTab" class="reveal" aria-live="polite">
           <SettingsView v-if="currentTab === 'settings'" :section="settingsSection" @section="settingsSection = $event" />
-          <component v-else :is="currentComponent" @navigate="navigateTo" @tour="showTour = true" />
+          <component :is="currentComponent" v-else @navigate="navigateTo" @tour="showTour = true" />
         </section>
       </main>
 

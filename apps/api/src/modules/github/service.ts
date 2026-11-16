@@ -7,11 +7,12 @@ import {
   trackedRepositories,
   webhookDeliveries,
 } from "@repo/database";
-import { and, desc, eq, gte, inArray, isNull, lt, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, notInArray, sql } from "drizzle-orm";
 import pino from "pino";
 import { audit } from "../auth/index.js";
 import { HttpError } from "../../lib/http-error.js";
 import { findUser, getInstallation, listInstallationRepos, type GitHubRepo } from "./app.js";
+import { standupWindow, type StandupActivity } from "./digest.js";
 import { normalizeEvent } from "./events.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
@@ -403,4 +404,45 @@ export async function summarizeActivity(workspaceId: string, since: Date) {
     byEmployee.set(row.employeeId!, entry);
   }
   return [...byEmployee.values()];
+}
+
+/**
+ * Each mapped employee's activity in the window a standup on `date` reports
+ * as "kemarin" (see digest.ts). Employees without activity are absent.
+ */
+export async function standupActivity(workspaceId: string, date: string, employeeIds?: string[]) {
+  const window = standupWindow(date);
+  const byEmployee = new Map<string, StandupActivity>();
+  if (employeeIds && employeeIds.length === 0) return { ...window, byEmployee };
+
+  const conditions = [
+    eq(activityEvents.workspaceId, workspaceId),
+    eq(activityEvents.provider, PROVIDER),
+    gte(activityEvents.occurredAt, window.since),
+    lt(activityEvents.occurredAt, window.until),
+    isNotNull(activityEvents.employeeId),
+  ];
+  if (employeeIds) conditions.push(inArray(activityEvents.employeeId, employeeIds));
+
+  const rows = await db
+    .select({
+      employeeId: activityEvents.employeeId,
+      type: activityEvents.type,
+      title: activityEvents.title,
+      url: activityEvents.url,
+      repository: activityEvents.repository,
+      occurredAt: activityEvents.occurredAt,
+    })
+    .from(activityEvents)
+    .where(and(...conditions))
+    .orderBy(activityEvents.occurredAt)
+    .limit(2000);
+
+  for (const { employeeId, ...item } of rows) {
+    const entry = byEmployee.get(employeeId!) ?? { counts: {}, items: [] };
+    entry.counts[item.type] = (entry.counts[item.type] ?? 0) + 1;
+    entry.items.push(item);
+    byEmployee.set(employeeId!, entry);
+  }
+  return { ...window, byEmployee };
 }

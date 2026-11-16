@@ -339,6 +339,21 @@ export interface StandupSession {
   teamName: string | null;
   standupId: string | null;
   answers: Record<string, string>;
+  githubSince: string;
+  github: StandupGithubActivity | null;
+}
+
+export interface StandupGithubActivity {
+  summary: string;
+  shown: { type: string; title: string | null; url: string | null; repository: string | null; occurredAt: string }[];
+  more: number;
+}
+
+export interface DailyReportGithub {
+  id: string;
+  name: string;
+  counts: Record<string, number>;
+  summary: string;
 }
 
 export interface DailyReportSubmission {
@@ -360,6 +375,8 @@ export interface DailyReport {
   submitted: DailyReportSubmission[];
   notSubmitted: string[];
   blockers: DailyReportBlocker[];
+  githubSince: string;
+  github: DailyReportGithub[];
   text: string;
 }
 

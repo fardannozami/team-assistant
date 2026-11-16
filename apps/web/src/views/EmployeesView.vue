@@ -7,9 +7,9 @@
       </p>
     </div>
     <button
-      @click="showAddForm = true; addStep = 1"
       :disabled="loading"
       class="inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover hover:shadow-[0_0_0_12px_rgba(63,68,226,0.45)] active:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+      @click="showAddForm = true; addStep = 1"
     >
       Tambah anggota
     </button>
@@ -24,14 +24,14 @@
         v-model="searchQuery"
         type="search"
         placeholder="Cari anggota…"
-        @input="loadEmployees"
         class="w-full px-4 py-3.5 rounded-xl border text-sm placeholder-text-dim transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none bg-panel border-border"
+        @input="loadEmployees"
       />
     </div>
     <select
       v-model="activeFilter"
-      @change="loadEmployees"
       class="px-4 py-3.5 rounded-xl border border-border text-sm cursor-pointer bg-panel transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none"
+      @change="loadEmployees"
     >
       <option :value="null">Semua anggota</option>
       <option :value="true">Aktif saja</option>
@@ -120,8 +120,8 @@
             <div v-else class="flex items-center gap-2">
               <button
                 class="px-3 py-2 rounded-xl border border-border text-[12px] font-extrabold text-text transition-colors duration-200 ease-in hover:bg-panel-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
-                @click="toggleActive(e)"
                 :disabled="savingId === e.id"
+                @click="toggleActive(e)"
               >
                 {{ savingId === e.id ? "…" : e.isActive ? "Nonaktifkan" : "Aktifkan" }}
               </button>
@@ -147,21 +147,21 @@
       <button type="button" class="min-h-10 rounded-xl px-3 text-sm font-semibold text-text-muted hover:bg-panel-hover" @click="showAddForm = false">Batal</button>
     </div>
     <div class="mb-5 h-1.5 overflow-hidden rounded-full bg-panel-hover"><div class="h-full rounded-full bg-accent transition-all" :style="{ width: addStep === 1 ? '50%' : '100%' }"></div></div>
-    <form @submit.prevent="createEmployee" class="space-y-4">
+    <form class="space-y-4" @submit.prevent="createEmployee">
       <template v-if="addStep === 1">
         <div>
           <label class="mb-1.5 block text-sm font-semibold text-text">Nama lengkap</label>
-          <input v-model="empName" type="text" placeholder="Budi Santoso" required @input="createError = ''" class="min-h-12 w-full rounded-xl border bg-panel px-4 text-base placeholder-text-dim focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20" :class="{ 'border-danger': createError, 'border-border': !createError }" />
+          <input v-model="empName" type="text" placeholder="Budi Santoso" required class="min-h-12 w-full rounded-xl border bg-panel px-4 text-base placeholder-text-dim focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20" :class="{ 'border-danger': createError, 'border-border': !createError }" @input="createError = ''" />
         </div>
         <div>
           <label class="mb-1.5 block text-sm font-semibold text-text">Nomor WhatsApp</label>
-          <input v-model="empPhone" type="tel" placeholder="+62 812-3456-7890" required @input="createError = ''" class="min-h-12 w-full rounded-xl border bg-panel px-4 text-base placeholder-text-dim focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20" :class="{ 'border-danger': createError, 'border-border': !createError }" />
+          <input v-model="empPhone" type="tel" placeholder="+62 812-3456-7890" required class="min-h-12 w-full rounded-xl border bg-panel px-4 text-base placeholder-text-dim focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20" :class="{ 'border-danger': createError, 'border-border': !createError }" @input="createError = ''" />
         </div>
       </template>
       <template v-else>
         <div>
           <label class="mb-1.5 block text-sm font-semibold text-text">Peran</label>
-          <select v-model="empRoleId" @input="createError = ''" class="min-h-12 w-full rounded-xl border border-border bg-panel px-4 text-base focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20">
+          <select v-model="empRoleId" class="min-h-12 w-full rounded-xl border border-border bg-panel px-4 text-base focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20" @input="createError = ''">
             <option :value="null">Peran bawaan</option>
             <option v-for="r in roles" :key="r.id" :value="r.id">{{ r.name }}</option>
           </select>
@@ -179,7 +179,7 @@
 
   <div class="rounded-2xl border border-border bg-panel p-4 shadow-soft-lg sm:p-6 reveal">
     <div class="mb-4 text-lg font-extrabold text-text">Ubah nomor telepon</div>
-    <form @submit.prevent="updatePhone" class="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-4 items-end">
+    <form class="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-4 items-end" @submit.prevent="updatePhone">
       <div>
         <label class="mb-1.5 block text-sm font-semibold text-text">Anggota</label>
         <select
@@ -198,9 +198,9 @@
           type="tel"
           placeholder="+62 812…"
           required
-          @input="phoneError = ''"
           class="w-full px-4 py-3.5 rounded-xl border text-sm placeholder-text-dim transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none bg-panel border-border"
           :class="{ 'border-danger': phoneError, 'border-border': !phoneError }"
+          @input="phoneError = ''"
         />
       </div>
       <p v-if="phoneError" class="col-span-full text-danger text-[11px] font-extrabold mt-1.5 slide-in">{{ phoneError }}</p>

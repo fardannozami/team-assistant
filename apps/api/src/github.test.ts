@@ -9,6 +9,7 @@ import { createHmac } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { normalizeEvent } from "./modules/github/events.js";
 import { verifyWebhookSignature } from "./modules/github/app.js";
+import { activityHint, describeCounts, previousWorkday, standupWindow } from "./modules/github/digest.js";
 
 const SECRET = "test-webhook-secret";
 const sign = (body: string) => `sha256=${createHmac("sha256", SECRET).update(body).digest("hex")}`;
@@ -62,6 +63,36 @@ describe("github normalization", () => {
 
     const [issue] = normalizeEvent("issues", { repository, action: "opened", issue: { number: 3, title: "Bug", user: { login: "sari" }, created_at: "2026-11-10T01:00:00Z" } });
     expect(issue).toMatchObject({ type: "issue_opened", externalId: "issue:42:3:opened", actorLogin: "sari" });
+  });
+
+  test("standup window covers the previous workday, in Jakarta time", () => {
+    expect(previousWorkday("2026-11-11")).toBe("2026-11-10"); // Wed -> Tue
+    expect(previousWorkday("2026-11-16")).toBe("2026-11-13"); // Mon -> Fri
+    expect(standupWindow("2026-11-16")).toEqual({
+      from: "2026-11-13",
+      since: new Date("2026-11-12T17:00:00Z"),
+      until: new Date("2026-11-15T17:00:00Z"),
+    });
+  });
+
+  test("standup hint names notable work and counts the rest", () => {
+    const at = (h: number) => new Date(Date.UTC(2026, 10, 10, h));
+    const items = [
+      { type: "commit", title: "fix: login", url: null, repository: "acme/api", occurredAt: at(2) },
+      { type: "commit", title: "fix: login", url: null, repository: "acme/api", occurredAt: at(3) },
+      { type: "pr_commented", title: "PR #7: Add check-in", url: null, repository: "acme/api", occurredAt: at(4) },
+      { type: "pr_merged", title: "PR #7: Add check-in", url: null, repository: "acme/api", occurredAt: at(5) },
+    ];
+    const counts = { commit: 2, pr_commented: 1, pr_merged: 1 };
+    expect(describeCounts(counts)).toBe("2 commit, 1 komentar PR, 1 PR di-merge");
+    expect(activityHint({ counts, items }, "2026-11-10")).toBe(
+      [
+        "Aktivitas GitHub kamu sejak 2026-11-10: 2 commit, 1 komentar PR, 1 PR di-merge.",
+        "- fix: login (acme/api)",
+        "- PR #7: Add check-in (acme/api)",
+      ].join("\n"),
+    );
+    expect(activityHint(undefined, "2026-11-10")).toBeNull();
   });
 
   test("signature verification", () => {
@@ -216,6 +247,18 @@ describe.skipIf(!url)("github webhooks", () => {
 
     expect((await (await req("b", "/github/activity")).json()).activity).toEqual([]);
     expect((await (await req("b", "/github/status")).json()).repositories).toEqual([]);
+  });
+
+  test("standup activity: mapped employees, by standup window", async () => {
+    const { standupActivity } = await import("./modules/github/service.js");
+    const tue = await standupActivity(ws.a.id, "2026-11-11");
+    expect([...tue.byEmployee.keys()]).toEqual([employeeIds.Budi!]);
+    expect(tue.byEmployee.get(employeeIds.Budi!)!.counts).toEqual({ commit: 1 });
+
+    const wed = await standupActivity(ws.a.id, "2026-11-12", [employeeIds.Budi!, employeeIds.Sari!]);
+    expect(wed.byEmployee.get(employeeIds.Budi!)!.counts).toEqual({ pr_merged: 1 });
+    expect((await standupActivity(ws.b.id, "2026-11-11")).byEmployee.size).toBe(0);
+    expect((await standupActivity(ws.a.id, "2026-11-11", [])).byEmployee.size).toBe(0);
   });
 
   test("tracking toggle and uninstall", async () => {

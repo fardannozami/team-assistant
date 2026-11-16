@@ -5,6 +5,8 @@ import {
 } from "@repo/shared";
 import { and, eq } from "drizzle-orm";
 import { createDbClient, standupAnswers, standupSessions, standups } from "@repo/database";
+import { activityHint } from "../github/digest.js";
+import { standupActivity } from "../github/service.js";
 
 const db = createDbClient(
   process.env.DATABASE_URL ??
@@ -47,9 +49,21 @@ export const STANDUP_QUESTIONS: Record<StandupElement, string> = {
   blockers: "Ada kendala atau blocker? (balas 'tidak ada' jika aman)",
 };
 
-export function standupPromptText(date: string): string {
+/** GitHub activity to show beside the "kemarin" question, or null. */
+export async function githubHints(workspaceId: string, date: string, employeeIds: string[]) {
+  try {
+    const { from, byEmployee } = await standupActivity(workspaceId, date, employeeIds);
+    return new Map(employeeIds.map((id) => [id, activityHint(byEmployee.get(id), from)]));
+  } catch {
+    // Context only: a failed lookup must never hold back the prompt.
+    return new Map<string, string | null>();
+  }
+}
+
+export function standupPromptText(date: string, githubHint?: string | null): string {
   return [
     `Standup harian untuk ${date}:`,
+    ...(githubHint ? [githubHint, ""] : []),
     `1. ${STANDUP_QUESTIONS.yesterday}`,
     `2. ${STANDUP_QUESTIONS.today}`,
     `3. ${STANDUP_QUESTIONS.blockers}`,
@@ -315,7 +329,10 @@ async function startStandup(employee: StandupCollector, date: string, rest: stri
   const row = await getOrCreateStandupRow(employee.workspaceId, session.id, employee.id, date);
   const answered = new Set((await getAnswers(row.id)).map((a) => a.questionKey));
   const missing = CORE_STANDUP_ELEMENTS.filter((key) => !answered.has(key));
-  if (missing.length === CORE_STANDUP_ELEMENTS.length) return standupPromptText(date);
+  if (missing.length === CORE_STANDUP_ELEMENTS.length) {
+    const hints = await githubHints(employee.workspaceId, date, [employee.id]);
+    return standupPromptText(date, hints.get(employee.id));
+  }
   return `Lanjutkan standup ${date}: ${STANDUP_QUESTIONS[missing[0]!]}`;
 }
 
