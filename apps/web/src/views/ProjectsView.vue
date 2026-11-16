@@ -124,7 +124,7 @@
 
   <!-- Editor -->
   <div v-if="form" class="fixed inset-0 z-50 flex items-end justify-center bg-text/30 backdrop-blur-sm fade-in-fast sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="editor-title" @keydown.esc="closeEditor">
-    <form class="max-h-[92vh] w-full max-w-[720px] overflow-y-auto rounded-t-2xl border border-border bg-panel p-4 shadow-soft-lg sm:rounded-2xl sm:p-6" @submit.prevent="save">
+    <form ref="formEl" novalidate class="max-h-[92vh] w-full max-w-[720px] overflow-y-auto rounded-t-2xl border border-border bg-panel p-4 shadow-soft-lg sm:rounded-2xl sm:p-6" @submit.prevent="save">
       <div class="flex items-center justify-between gap-3">
         <h3 id="editor-title" class="text-lg font-extrabold text-text">{{ editingId ? "Ubah project" : "Tambah project" }}</h3>
         <button type="button" class="grid h-10 w-10 place-items-center rounded-xl text-lg text-text-dim hover:bg-panel-hover" aria-label="Tutup" @click="closeEditor">×</button>
@@ -283,6 +283,7 @@ const statusFilter = ref<ProjectStatus | "">("");
 const paymentFilter = ref<PaymentStatus | "">("");
 
 const form = ref<ProjectInput | null>(null);
+const formEl = ref<HTMLFormElement | null>(null);
 const editingId = ref<string | null>(null);
 const saving = ref(false);
 
@@ -506,8 +507,27 @@ function peopleFor(m: FormMember) {
   return people.value.filter((p) => (p.isActive || p.id === m.employeeId) && !taken.has(p.id));
 }
 
+// The browser's own "Please fill out this field" doesn't say which field (and
+// can point at one scrolled out of the dialog), so name it and scroll to it.
+function invalidField() {
+  const el = formEl.value?.querySelector<HTMLInputElement | HTMLSelectElement>(":invalid");
+  if (!el) return null;
+  el.scrollIntoView({ block: "center", behavior: "smooth" });
+  el.focus({ preventScroll: true });
+  const labelEl = el.labels?.[0];
+  const label = (labelEl?.querySelector("span") ?? labelEl)?.textContent?.trim() || "field";
+  if (el instanceof HTMLSelectElement && el.id.startsWith("member-")) return `Pilih anggota untuk "${label}", atau hapus barisnya.`;
+  if (el.validity.valueMissing) return `"${label}" wajib diisi.`;
+  return `"${label}" belum valid: ${el.validationMessage}`;
+}
+
 async function save() {
   if (!form.value) return;
+  const problem = invalidField();
+  if (problem) {
+    showToast(problem, "error");
+    return;
+  }
   if (totalFeeTooHigh.value) {
     showToast("Total fee dibagi tidak boleh lebih dari fee diterima.", "error");
     return;
