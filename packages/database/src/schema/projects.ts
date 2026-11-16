@@ -31,8 +31,8 @@ export const projects = pgTable(
   (t) => [index("projects_workspace_idx").on(t.workspaceId)],
 );
 
-// Who worked on a project and their share of totalFee. PM & Sales split one
-// 100% pool; designers and developers split another.
+// Who worked on a project and their share of totalFee; all shares together
+// stay within 100%.
 export const projectMembers = pgTable(
   "project_members",
   {

@@ -196,10 +196,7 @@
       </fieldset>
 
       <fieldset v-for="role in MEMBER_ROLES" :key="role.id" class="mt-6">
-        <legend class="flex w-full items-baseline justify-between gap-2 text-sm font-extrabold text-text">
-          <span>{{ role.label }}</span>
-          <span class="text-xs font-semibold" :class="poolOk(role.id) ? 'text-text-muted' : 'text-warning'">{{ poolLabel(role.id) }}</span>
-        </legend>
+        <legend class="text-sm font-extrabold text-text">{{ role.label }}</legend>
         <ul class="mt-2 space-y-2">
           <li v-for="(m, i) in formMembers(role.id)" :key="i" class="grid grid-cols-[1fr_88px_auto] items-center gap-2 sm:grid-cols-[1fr_96px_120px_auto]">
             <label class="sr-only" :for="`member-${role.id}-${i}`">{{ role.label }} {{ i + 1 }}</label>
@@ -218,9 +215,10 @@
         </ul>
         <div class="mt-2 flex flex-wrap gap-2">
           <button type="button" class="min-h-10 rounded-xl border border-border px-3 text-sm font-semibold text-text hover:bg-panel-hover" @click="addMember(role.id)">+ {{ role.label }}</button>
-          <button v-if="poolMembers(role.id).length > 1" type="button" class="min-h-10 rounded-xl px-3 text-sm font-semibold text-text-muted hover:bg-panel-hover" @click="splitEvenly(role.id)">Bagi rata</button>
+          <button v-if="formMembers(role.id).length > 1" type="button" class="min-h-10 rounded-xl px-3 text-sm font-semibold text-text-muted hover:bg-panel-hover" @click="splitEvenly(role.id)">Bagi rata</button>
         </div>
       </fieldset>
+      <p v-if="form.members.length" class="mt-4 rounded-xl border px-4 py-3 text-sm font-semibold" :class="shareTotal > 100 ? 'border-danger/30 bg-danger/5 text-danger' : shareTotal === 100 ? 'border-border text-text-muted' : 'border-warning/30 bg-warning/5 text-warning'">{{ shareLabel }}</p>
 
       <label class="mt-6 block">
         <span :class="labelClass">Catatan</span>
@@ -444,62 +442,50 @@ const preview = computed(() => {
 });
 const totalFeeTooHigh = computed(() => !!form.value && form.value.totalFee != null && form.value.totalFee > (Number(form.value.feeReceived) || 0));
 
-// Same rounding as the API: per pool in cents, leftover cents to the largest
-// remainders, so a pool at 100% adds up to the split base exactly.
+// Same rounding as the API: cents, leftover cents to the largest remainders,
+// so shares adding up to 100% pay out the split base exactly.
 const previewFees = computed(() => {
-  const fees = new Map<FormMember, number>();
+  const members = form.value?.members ?? [];
   const base = preview.value.base;
-  for (const pm of [true, false]) {
-    const pool = form.value?.members.filter((m) => isPmPool(m.role) === pm) ?? [];
-    const exact = pool.map((m) => Math.round(base * (Number(m.sharePercent) || 0) * 1e6) / 1e6);
-    const cents = exact.map(Math.floor);
-    let left = Math.round(exact.reduce((s, c) => s + c, 0)) - cents.reduce((s, c) => s + c, 0);
-    const order = exact.map((_, k) => k).sort((a, b) => exact[b]! - cents[b]! - (exact[a]! - cents[a]!));
-    for (const k of order) {
-      if (left <= 0) break;
-      cents[k]! += 1;
-      left -= 1;
-    }
-    pool.forEach((m, k) => fees.set(m, cents[k]! / 100));
+  const exact = members.map((m) => Math.round(base * (Number(m.sharePercent) || 0) * 1e6) / 1e6);
+  const cents = exact.map(Math.floor);
+  let left = Math.round(exact.reduce((s, c) => s + c, 0)) - cents.reduce((s, c) => s + c, 0);
+  const order = exact.map((_, k) => k).sort((a, b) => exact[b]! - cents[b]! - (exact[a]! - cents[a]!));
+  for (const k of order) {
+    if (left <= 0) break;
+    cents[k]! += 1;
+    left -= 1;
   }
-  return fees;
+  return new Map(members.map((m, k) => [m, cents[k]! / 100]));
 });
 
-// PM & Sales split one 100% pool; designers and developers share the other.
-const isPmPool = (role: ProjectMemberRole) => role === "pm_sales";
+// Every member's percent is a part of the one split fee: together at most 100%.
+const round2 = (n: number) => Math.round(n * 100) / 100;
+const sumShares = (members: FormMember[]) => round2(members.reduce((s, m) => s + (Number(m.sharePercent) || 0), 0));
+const shareTotal = computed(() => sumShares(form.value?.members ?? []));
+const shareLabel = computed(() => {
+  const total = shareTotal.value;
+  if (total === 100) return "Total pembagian: 100% dari fee dibagi.";
+  if (total > 100) return `Total pembagian ${total}%, lebih ${round2(total - 100)}% dari fee dibagi. Kurangi persennya.`;
+  return `Total pembagian ${total}%, sisa ${round2(100 - total)}% fee belum dibagi.`;
+});
 function formMembers(role: ProjectMemberRole) {
   return form.value?.members.filter((m) => m.role === role) ?? [];
 }
-function poolMembers(role: ProjectMemberRole) {
-  return form.value?.members.filter((m) => isPmPool(m.role) === isPmPool(role)) ?? [];
-}
-function poolTotal(role: ProjectMemberRole) {
-  return Math.round(poolMembers(role).reduce((s, m) => s + (Number(m.sharePercent) || 0), 0) * 100) / 100;
-}
-function poolOk(role: ProjectMemberRole) {
-  return !poolMembers(role).length || poolTotal(role) === 100;
-}
-// Designers and developers share a pool, so its total shows once (under Developer).
-function poolLabel(role: ProjectMemberRole) {
-  if (role === "designer" || !poolMembers(role).length) return "";
-  const scope = isPmPool(role) ? "PM & Sales" : "Designer + developer";
-  const total = poolTotal(role);
-  if (total === 100) return `${scope}: 100% terbagi`;
-  if (total > 100) return `${scope}: ${total}%, lebih ${Math.round((total - 100) * 100) / 100}% dari 100%`;
-  return `${scope}: ${total}% terbagi, sisa ${Math.round((100 - total) * 100) / 100}% belum dibagi`;
-}
-// PM & Sales start at 50% of the split fee (as in the sheet), others at what is left.
+// PM & Sales start at 50% of the split fee, others at what is left, never past 100%.
 function addMember(role: ProjectMemberRole) {
-  const left = Math.max(0, Math.round((100 - poolTotal(role)) * 100) / 100);
-  form.value?.members.push({ employeeId: "", role, sharePercent: isPmPool(role) ? Math.min(50, left) : left });
+  const left = Math.max(0, round2(100 - shareTotal.value));
+  form.value?.members.push({ employeeId: "", role, sharePercent: role === "pm_sales" ? Math.min(50, left) : left });
 }
 function removeMember(m: FormMember) {
   if (form.value) form.value.members = form.value.members.filter((x) => x !== m);
 }
+// Splits what the other roles leave over evenly within this role.
 function splitEvenly(role: ProjectMemberRole) {
-  const pool = poolMembers(role);
-  const each = Math.floor((100 / pool.length) * 100) / 100;
-  pool.forEach((m, i) => (m.sharePercent = i === pool.length - 1 ? Math.round((100 - each * (pool.length - 1)) * 100) / 100 : each));
+  const own = formMembers(role);
+  const available = Math.max(0, round2(100 - sumShares(form.value?.members.filter((m) => m.role !== role) ?? [])));
+  const each = Math.floor((available / own.length) * 100) / 100;
+  own.forEach((m, i) => (m.sharePercent = i === own.length - 1 ? round2(available - each * (own.length - 1)) : each));
 }
 // Active people, plus whoever is already picked (they may have been deactivated since).
 function peopleFor(m: FormMember) {
@@ -532,11 +518,9 @@ async function save() {
     showToast("Total fee dibagi tidak boleh lebih dari fee diterima.", "error");
     return;
   }
-  for (const role of ["pm_sales", "designer"] as const) {
-    if (poolTotal(role) > 100) {
-      showToast(`Total ${isPmPool(role) ? "PM & Sales" : "designer + developer"} lebih dari 100%.`, "error");
-      return;
-    }
+  if (shareTotal.value > 100) {
+    showToast("Total pembagian fee lebih dari 100%.", "error");
+    return;
   }
   saving.value = true;
   try {

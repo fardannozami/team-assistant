@@ -222,11 +222,10 @@ export const projectInputSchema = z
       if (seen.has(key)) ctx.addIssue({ code: "custom", path: ["members"], message: "Anggota yang sama tercatat dua kali di peran yang sama" });
       seen.add(key);
     }
-    // PM & Sales share one pool, designers and developers another.
-    const pool = (pm: boolean) =>
-      p.members.filter((m) => (m.role === "pm_sales") === pm).reduce((sum, m) => sum + m.sharePercent, 0);
-    if (pool(true) > 100.001) ctx.addIssue({ code: "custom", path: ["members"], message: "Total bagian PM & Sales lebih dari 100%" });
-    if (pool(false) > 100.001) ctx.addIssue({ code: "custom", path: ["members"], message: "Total kontribusi designer & developer lebih dari 100%" });
+    // Every share is a part of the one split fee, so together they never pass 100%.
+    if (p.members.reduce((sum, m) => sum + m.sharePercent, 0) > 100.001) {
+      ctx.addIssue({ code: "custom", path: ["members"], message: "Total pembagian fee lebih dari 100%" });
+    }
   });
 
 export type ProjectInput = z.infer<typeof projectInputSchema>;

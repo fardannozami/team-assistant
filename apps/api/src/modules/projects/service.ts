@@ -27,27 +27,21 @@ export function projectFees(p: { feeReceived: number; platformFeePercent: number
 }
 
 /**
- * Each member's fee, pool by pool (PM & Sales; designers + developers), in
- * cents with the leftover cents going to the largest remainders, so a pool
- * at 100% adds up to exactly the split base (3 x 33.33% of 100 = 100.00).
+ * Each member's fee in cents, the leftover cents going to the largest
+ * remainders, so shares adding up to 100% pay out exactly the split base
+ * (3 x 33.33% of 100 = 100.00).
  */
-export function splitFees(base: number, members: { role: string; sharePercent: number }[]) {
-  const fees = new Array<number>(members.length).fill(0);
-  for (const pm of [true, false]) {
-    const idx = members.map((m, i) => i).filter((i) => (members[i]!.role === "pm_sales") === pm);
-    const exact = idx.map((i) => Math.round(base * members[i]!.sharePercent * 1e6) / 1e6); // cents
-    const cents = exact.map(Math.floor);
-    const target = Math.round(exact.reduce((s, c) => s + c, 0));
-    let left = target - cents.reduce((s, c) => s + c, 0);
-    const order = exact.map((c, k) => k).sort((a, b) => exact[b]! - cents[b]! - (exact[a]! - cents[a]!));
-    for (const k of order) {
-      if (left <= 0) break;
-      cents[k]! += 1;
-      left -= 1;
-    }
-    idx.forEach((i, k) => (fees[i] = cents[k]! / 100));
+export function splitFees(base: number, members: { sharePercent: number }[]) {
+  const exact = members.map((m) => Math.round(base * m.sharePercent * 1e6) / 1e6); // cents
+  const cents = exact.map(Math.floor);
+  let left = Math.round(exact.reduce((s, c) => s + c, 0)) - cents.reduce((s, c) => s + c, 0);
+  const order = exact.map((_, k) => k).sort((a, b) => exact[b]! - cents[b]! - (exact[a]! - cents[a]!));
+  for (const k of order) {
+    if (left <= 0) break;
+    cents[k]! += 1;
+    left -= 1;
   }
-  return fees;
+  return cents.map((c) => c / 100);
 }
 
 /** Employees a project can list, inactive ones marked so old projects still show them. */

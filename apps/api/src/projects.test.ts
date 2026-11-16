@@ -25,21 +25,15 @@ describe("project fee math", () => {
     expect(projectFees({ feeReceived: 100, platformFeePercent: 20, totalFee: 80 }).memberFee(50)).toBe(40);
   });
 
-  test("a full pool adds up to the split base to the cent", () => {
-    const thirds = splitFees(100, [
-      { role: "designer", sharePercent: 33.33 },
-      { role: "developer", sharePercent: 33.33 },
-      { role: "developer", sharePercent: 33.34 },
-      { role: "pm_sales", sharePercent: 100 },
-    ]);
-    expect(thirds).toEqual([33.33, 33.33, 33.34, 100]);
-    const odd = splitFees(10, [1, 2, 3].map(() => ({ role: "designer", sharePercent: 33.33 })).concat({ role: "designer", sharePercent: 0.01 }));
+  test("shares at 100% add up to the split base to the cent", () => {
+    expect(splitFees(100, [33.33, 33.33, 33.34].map((sharePercent) => ({ sharePercent })))).toEqual([33.33, 33.33, 33.34]);
+    const odd = splitFees(10, [33.33, 33.33, 33.33, 0.01].map((sharePercent) => ({ sharePercent })));
     expect(Math.round(odd.reduce((s, f) => s + f, 0) * 100)).toBe(1000);
-    // Sheet rows still match.
-    expect(splitFees(67.5, [{ role: "designer", sharePercent: 20 }, { role: "designer", sharePercent: 80 }, { role: "pm_sales", sharePercent: 50 }])).toEqual([13.5, 54, 33.75]);
+    // PM 50%, designers splitting the other half.
+    expect(splitFees(67.5, [50, 10, 40].map((sharePercent) => ({ sharePercent })))).toEqual([33.75, 6.75, 27]);
   });
 
-  test("validation: pools, duplicates and dates", () => {
+  test("validation: total share, duplicates and dates", () => {
     const base = {
       platform: "Upwork",
       name: "X",
@@ -53,11 +47,11 @@ describe("project fee math", () => {
     const ok = projectInputSchema.safeParse({
       ...base,
       members: [
-        { employeeId: a, role: "pm_sales", sharePercent: 50 },
-        { employeeId: b, role: "pm_sales", sharePercent: 50 },
-        // Same person may be PM and designer: separate pools.
-        { employeeId: a, role: "designer", sharePercent: 60 },
-        { employeeId: b, role: "developer", sharePercent: 40 },
+        { employeeId: a, role: "pm_sales", sharePercent: 25 },
+        { employeeId: b, role: "pm_sales", sharePercent: 25 },
+        // Same person may be PM and designer.
+        { employeeId: a, role: "designer", sharePercent: 30 },
+        { employeeId: b, role: "developer", sharePercent: 20 },
       ],
     });
     expect(ok.success).toBe(true);
@@ -66,8 +60,8 @@ describe("project fee math", () => {
     const over = projectInputSchema.safeParse({
       ...base,
       members: [
-        { employeeId: a, role: "designer", sharePercent: 60 },
-        { employeeId: b, role: "developer", sharePercent: 41 },
+        { employeeId: a, role: "pm_sales", sharePercent: 50 },
+        { employeeId: b, role: "designer", sharePercent: 50.01 },
       ],
     });
     expect(over.success).toBe(false);
@@ -147,9 +141,9 @@ describe.skipIf(!url)("projects api", () => {
     feeReceived: 75,
     paymentStatus: "accepted",
     members: [
-      { employeeId: people.Nanda, role: "pm_sales", sharePercent: 100 },
-      { employeeId: people.Zainal, role: "designer", sharePercent: 20 },
-      { employeeId: people.Abdan, role: "designer", sharePercent: 80 },
+      { employeeId: people.Nanda, role: "pm_sales", sharePercent: 50 },
+      { employeeId: people.Zainal, role: "designer", sharePercent: 10 },
+      { employeeId: people.Abdan, role: "designer", sharePercent: 40 },
     ],
   });
 
@@ -158,7 +152,7 @@ describe.skipIf(!url)("projects api", () => {
     expect(res.status).toBe(201);
     const created = await res.json();
     expect(created).toMatchObject({ platformFee: 7.5, splitBase: 67.5, currency: "USD", totalFee: null });
-    expect(Object.fromEntries(created.members.map((m: any) => [m.employeeName, m.fee]))).toEqual({ Abdan: 54, Nanda: 67.5, Zainal: 13.5 });
+    expect(Object.fromEntries(created.members.map((m: any) => [m.employeeName, m.fee]))).toEqual({ Abdan: 27, Nanda: 33.75, Zainal: 6.75 });
 
     const { people: list } = await (await req(ws.a.pm, "/projects/people")).json();
     expect(list.map((p: any) => p.name)).toEqual(["Abdan", "Nanda", "Zainal"]);
