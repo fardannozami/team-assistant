@@ -1,5 +1,5 @@
 import { createDbClient, employees, projectMembers, projects } from "@repo/database";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { ProjectInput } from "@repo/shared";
 import { HttpError } from "../../lib/http-error.js";
 
@@ -26,6 +26,30 @@ export function projectFees(p: { feeReceived: number; platformFeePercent: number
   };
 }
 
+/**
+ * Each member's fee, pool by pool (PM & Sales; designers + developers), in
+ * cents with the leftover cents going to the largest remainders, so a pool
+ * at 100% adds up to exactly the split base (3 x 33.33% of 100 = 100.00).
+ */
+export function splitFees(base: number, members: { role: string; sharePercent: number }[]) {
+  const fees = new Array<number>(members.length).fill(0);
+  for (const pm of [true, false]) {
+    const idx = members.map((m, i) => i).filter((i) => (members[i]!.role === "pm_sales") === pm);
+    const exact = idx.map((i) => Math.round(base * members[i]!.sharePercent * 1e6) / 1e6); // cents
+    const cents = exact.map(Math.floor);
+    const target = Math.round(exact.reduce((s, c) => s + c, 0));
+    let left = target - cents.reduce((s, c) => s + c, 0);
+    const order = exact.map((c, k) => k).sort((a, b) => exact[b]! - cents[b]! - (exact[a]! - cents[a]!));
+    for (const k of order) {
+      if (left <= 0) break;
+      cents[k]! += 1;
+      left -= 1;
+    }
+    idx.forEach((i, k) => (fees[i] = cents[k]! / 100));
+  }
+  return fees;
+}
+
 /** Employees a project can list, inactive ones marked so old projects still show them. */
 export async function listProjectPeople(workspaceId: string) {
   return db
@@ -40,7 +64,7 @@ export async function listProjects(workspaceId: string) {
     .select()
     .from(projects)
     .where(eq(projects.workspaceId, workspaceId))
-    .orderBy(desc(projects.startDate), desc(projects.createdAt));
+    .orderBy(sql`${projects.startDate} desc nulls last`, desc(projects.createdAt));
   if (!rows.length) return [];
 
   const members = await db
@@ -63,6 +87,10 @@ export async function listProjects(workspaceId: string) {
       totalFee: num(p.totalFee),
     };
     const fees = projectFees(figures);
+    const own = members
+      .filter((m) => m.projectId === p.id)
+      .map(({ projectId: _, ...m }) => ({ ...m, sharePercent: Number(m.sharePercent) }));
+    const memberFees = splitFees(fees.splitBase, own);
     return {
       id: p.id,
       platform: p.platform,
@@ -78,12 +106,7 @@ export async function listProjects(workspaceId: string) {
       paymentStatus: p.paymentStatus,
       notes: p.notes,
       updatedAt: p.updatedAt,
-      members: members
-        .filter((m) => m.projectId === p.id)
-        .map(({ projectId: _, ...m }) => {
-          const share = Number(m.sharePercent);
-          return { ...m, sharePercent: share, fee: fees.memberFee(share) };
-        }),
+      members: own.map((m, i) => ({ ...m, fee: memberFees[i]! })),
     };
   });
 }

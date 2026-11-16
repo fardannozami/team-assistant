@@ -73,11 +73,13 @@ async function assertTeamExists(
 async function assertRoleExists(roleId: string | null | undefined) {
   if (!roleId) return;
   const [role] = await db
-    .select({ id: roles.id })
+    .select({ id: roles.id, name: roles.name })
     .from(roles)
     .where(eq(roles.id, roleId))
     .limit(1);
   if (!role) throw new HttpError(400, "Role not found");
+  // PM is a web-only login role, never a WhatsApp member's role.
+  if (role.name === "PM") throw new HttpError(400, "Role PM hanya untuk pengguna web");
 }
 
 export async function listEmployees(

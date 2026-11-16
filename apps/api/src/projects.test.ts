@@ -7,7 +7,7 @@
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { projectInputSchema } from "@repo/shared";
-import { projectFees } from "./modules/projects/service.js";
+import { projectFees, splitFees } from "./modules/projects/service.js";
 
 describe("project fee math", () => {
   test("matches the project sheet", () => {
@@ -23,6 +23,20 @@ describe("project fee math", () => {
 
     // An explicit total fee is what gets split.
     expect(projectFees({ feeReceived: 100, platformFeePercent: 20, totalFee: 80 }).memberFee(50)).toBe(40);
+  });
+
+  test("a full pool adds up to the split base to the cent", () => {
+    const thirds = splitFees(100, [
+      { role: "designer", sharePercent: 33.33 },
+      { role: "developer", sharePercent: 33.33 },
+      { role: "developer", sharePercent: 33.34 },
+      { role: "pm_sales", sharePercent: 100 },
+    ]);
+    expect(thirds).toEqual([33.33, 33.33, 33.34, 100]);
+    const odd = splitFees(10, [1, 2, 3].map(() => ({ role: "designer", sharePercent: 33.33 })).concat({ role: "designer", sharePercent: 0.01 }));
+    expect(Math.round(odd.reduce((s, f) => s + f, 0) * 100)).toBe(1000);
+    // Sheet rows still match.
+    expect(splitFees(67.5, [{ role: "designer", sharePercent: 20 }, { role: "designer", sharePercent: 80 }, { role: "pm_sales", sharePercent: 50 }])).toEqual([13.5, 54, 33.75]);
   });
 
   test("validation: pools, duplicates and dates", () => {
@@ -68,6 +82,8 @@ describe("project fee math", () => {
     expect(dup.success).toBe(false);
 
     expect(projectInputSchema.safeParse({ ...base, members: [], startDate: "2026-02-10", endDate: "2026-02-01" }).success).toBe(false);
+    expect(projectInputSchema.safeParse({ ...base, members: [], totalFee: 100.01 }).success).toBe(false);
+    expect(projectInputSchema.safeParse({ ...base, members: [], totalFee: 100 }).success).toBe(true);
   });
 });
 
@@ -152,6 +168,23 @@ describe.skipIf(!url)("projects api", () => {
       body: JSON.stringify({ ...body(), totalFee: 50, members: [{ employeeId: people.Zainal, role: "developer", sharePercent: 100 }] }),
     });
     expect(await edited.json()).toMatchObject({ splitBase: 50, members: [{ employeeName: "Zainal", role: "developer", fee: 50 }] });
+  });
+
+  test("projects without a start date come last", async () => {
+    const made = [];
+    for (const startDate of [null, "2025-01-01", "2025-06-01"]) {
+      const res = await req(ws.b.pm, "/projects", { method: "POST", body: JSON.stringify({ ...body(), name: `Order ${startDate}`, startDate, endDate: null, members: [] }) });
+      made.push((await res.json()).id);
+    }
+    const { projects: list } = await (await req(ws.b.pm, "/projects")).json();
+    expect(list.map((p: any) => p.startDate)).toEqual(["2025-06-01", "2025-01-01", null]);
+    for (const id of made) await req(ws.b.pm, `/projects/${id}`, { method: "DELETE" });
+  });
+
+  test("members cannot be given the web-only PM role", async () => {
+    const [pmRole] = (await (await req(ws.a.owner, "/roles")).json()).roles.filter((r: any) => r.name === "PM");
+    const res = await req(ws.a.owner, `/employees/${people.Nanda}`, { method: "PATCH", body: JSON.stringify({ roleId: pmRole.id }) });
+    expect(res.status).toBe(400);
   });
 
   test("PM is limited to projects; Manager cannot see fees", async () => {

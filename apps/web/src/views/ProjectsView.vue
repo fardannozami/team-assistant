@@ -192,6 +192,7 @@
           Fee + tax: <strong class="text-text">{{ money(preview.gross, form.currency) }}</strong> · Dibagi ke tim: <strong class="text-text">{{ money(preview.base, form.currency) }}</strong>.
           Kosongkan "Total fee dibagi" untuk memakai fee diterima.
         </p>
+        <p v-if="totalFeeTooHigh" class="mt-1 text-sm font-semibold text-danger">Total fee dibagi lebih besar dari fee diterima.</p>
       </fieldset>
 
       <fieldset v-for="role in MEMBER_ROLES" :key="role.id" class="mt-6">
@@ -211,7 +212,7 @@
               <input v-model.number="m.sharePercent" type="number" min="0" max="100" step="0.01" required :class="inputClass" class="w-full pr-7" />
               <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-text-dim">%</span>
             </label>
-            <span class="hidden text-right text-sm tabular-nums text-text-muted sm:block">{{ money(memberFee(m.sharePercent), form.currency) }}</span>
+            <span class="hidden text-right text-sm tabular-nums text-text-muted sm:block">{{ money(previewFees.get(m) ?? 0, form.currency) }}</span>
             <button type="button" class="grid h-11 w-11 place-items-center rounded-xl text-lg text-text-dim hover:bg-danger/5 hover:text-danger" :aria-label="`Hapus ${role.label} ${i + 1}`" @click="removeMember(m)">×</button>
           </li>
         </ul>
@@ -439,9 +440,28 @@ const preview = computed(() => {
   const cut = Math.min(Number(f.platformFeePercent) || 0, 99);
   return { gross: Math.round((received / (1 - cut / 100)) * 100) / 100, base: f.totalFee ?? received };
 });
-function memberFee(share: number) {
-  return Math.round(((preview.value.base * (Number(share) || 0)) / 100) * 100) / 100;
-}
+const totalFeeTooHigh = computed(() => !!form.value && form.value.totalFee != null && form.value.totalFee > (Number(form.value.feeReceived) || 0));
+
+// Same rounding as the API: per pool in cents, leftover cents to the largest
+// remainders, so a pool at 100% adds up to the split base exactly.
+const previewFees = computed(() => {
+  const fees = new Map<FormMember, number>();
+  const base = preview.value.base;
+  for (const pm of [true, false]) {
+    const pool = form.value?.members.filter((m) => isPmPool(m.role) === pm) ?? [];
+    const exact = pool.map((m) => Math.round(base * (Number(m.sharePercent) || 0) * 1e6) / 1e6);
+    const cents = exact.map(Math.floor);
+    let left = Math.round(exact.reduce((s, c) => s + c, 0)) - cents.reduce((s, c) => s + c, 0);
+    const order = exact.map((_, k) => k).sort((a, b) => exact[b]! - cents[b]! - (exact[a]! - cents[a]!));
+    for (const k of order) {
+      if (left <= 0) break;
+      cents[k]! += 1;
+      left -= 1;
+    }
+    pool.forEach((m, k) => fees.set(m, cents[k]! / 100));
+  }
+  return fees;
+});
 
 // PM & Sales split one 100% pool; designers and developers share the other.
 const isPmPool = (role: ProjectMemberRole) => role === "pm_sales";
@@ -481,6 +501,10 @@ function peopleFor(m: FormMember) {
 
 async function save() {
   if (!form.value) return;
+  if (totalFeeTooHigh.value) {
+    showToast("Total fee dibagi tidak boleh lebih dari fee diterima.", "error");
+    return;
+  }
   for (const role of ["pm_sales", "designer"] as const) {
     if (poolTotal(role) > 100) {
       showToast(`Total ${isPmPool(role) ? "PM & Sales" : "designer + developer"} lebih dari 100%.`, "error");

@@ -213,6 +213,9 @@ export const projectInputSchema = z
     if (p.startDate && p.endDate && p.endDate < p.startDate) {
       ctx.addIssue({ code: "custom", path: ["endDate"], message: "End date sebelum start date" });
     }
+    if (p.totalFee != null && p.totalFee > p.feeReceived) {
+      ctx.addIssue({ code: "custom", path: ["totalFee"], message: "Total fee dibagi tidak boleh lebih dari fee diterima" });
+    }
     const seen = new Set<string>();
     for (const m of p.members) {
       const key = `${m.role}:${m.employeeId}`;
