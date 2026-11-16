@@ -258,6 +258,8 @@ export async function handleAiMessage(
 
   const phone = args.phone ?? args.employee?.phone;
   if (!phone || !args.employee?.id || !args.workspaceId) return null;
+  // Deactivated employees no longer get the assistant.
+  if (!args.employee.isActive) return null;
 
   const config = await resolveAiConfig(args.workspaceId);
   if (!config) return null;

@@ -336,11 +336,15 @@ async function openSocket(workspaceId: string, pairingPhone?: string): Promise<S
           })
           .onConflictDoNothing({ target: [whatsappMessages.workspaceId, whatsappMessages.messageId] });
 
-        const employee = await getEmployeeByPhone(workspaceId, phone);
+        const found = await getEmployeeByPhone(workspaceId, phone);
+        // Deactivated employees are treated like unregistered numbers.
+        const employee = found?.isActive ? found : null;
         const roleName = employee ? await getRoleName(employee.roleId) : null;
 
-        if (!employee) {
+        if (!found) {
           logger.warn({ workspaceId, phone }, "Incoming message from unknown number");
+        } else if (!employee) {
+          logger.info({ workspaceId, phone }, "Incoming message from inactive employee");
         }
 
         const reply = await handleAdminMessage({

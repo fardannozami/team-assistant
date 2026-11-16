@@ -36,6 +36,9 @@ aiApi.post("/chat", canChat, async (c) => {
   if (!employee) {
     throw new HttpError(404, "No employee profile is linked to this account");
   }
+  if (!employee.isActive) {
+    throw new HttpError(403, "Employee profile is inactive");
+  }
 
   const roleName = await getRoleName(employee.roleId);
   const reply = await handleAiMessage({
