@@ -11,6 +11,7 @@ import { getActorId, getWorkspaceId } from "../../lib/tenant.js";
 import { parseWith } from "../../lib/validate.js";
 import {
   createEmployee,
+  deleteEmployee,
   getEmployee,
   getEmployeeStandupHistory,
   listEmployees,
@@ -100,4 +101,9 @@ employeesApi.patch("/:id", canManage, async (c) => {
   );
   welcomeNewAdmin(getWorkspaceId(c), before, employee);
   return c.json(employee);
+});
+
+employeesApi.delete("/:id", canManage, async (c) => {
+  await deleteEmployee(getWorkspaceId(c), c.req.param("id"), getActorId(c));
+  return c.json({ deleted: true });
 });

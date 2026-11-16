@@ -1,8 +1,11 @@
 import {
+  checkinSessions,
   createDbClient,
   employees,
+  projectMembers,
   roles,
   standupAnswers,
+  standupSessions,
   standups,
   teams,
 } from "@repo/database";
@@ -14,7 +17,7 @@ import type {
 import { normalizePhoneNumber } from "@repo/shared";
 import { audit } from "../auth/index.js";
 import { HttpError } from "../../lib/http-error.js";
-import { isUniqueViolation } from "../../lib/db.js";
+import { isForeignKeyViolation, isUniqueViolation } from "../../lib/db.js";
 
 const db = createDbClient(
   process.env.DATABASE_URL ??
@@ -263,6 +266,43 @@ export async function updateEmployeePhone(
   );
 
   return getEmployee(workspaceId, id);
+}
+
+const HAS_HISTORY_MESSAGE =
+  "Anggota ini sudah punya riwayat (standup, check-in, proyek, atau percakapan). Nonaktifkan saja.";
+
+// Hard delete is only for mistaken entries: anything with history must be
+// deactivated instead, otherwise cascades would erase standups/check-ins.
+export async function deleteEmployee(
+  workspaceId: string,
+  id: string,
+  actorId?: string | null,
+) {
+  const existing = await getEmployee(workspaceId, id);
+  if (!existing) throw new HttpError(404, "Employee not found");
+
+  const [history] = await Promise.all([
+    db.select({ id: standups.id }).from(standups).where(eq(standups.employeeId, id)).limit(1),
+    db.select({ id: standupSessions.id }).from(standupSessions).where(eq(standupSessions.employeeId, id)).limit(1),
+    db.select({ id: checkinSessions.id }).from(checkinSessions).where(eq(checkinSessions.employeeId, id)).limit(1),
+    db.select({ id: projectMembers.id }).from(projectMembers).where(eq(projectMembers.employeeId, id)).limit(1),
+  ]).then((results) => results.flat());
+  if (history) throw new HttpError(409, HAS_HISTORY_MESSAGE);
+
+  try {
+    await db
+      .delete(employees)
+      .where(and(eq(employees.id, id), eq(employees.workspaceId, workspaceId)));
+  } catch (error) {
+    // Remaining non-cascading references (AI logs, conversations, reports…).
+    if (isForeignKeyViolation(error)) throw new HttpError(409, HAS_HISTORY_MESSAGE);
+    throw error;
+  }
+
+  await audit(workspaceId, actorId ?? null, "employee.delete", "employee", id, {
+    name: existing.name,
+    phone: existing.phone,
+  });
 }
 
 export async function getEmployeeStandupHistory(

@@ -524,6 +524,9 @@ export const employeesApi = {
       method: "PATCH",
       body: JSON.stringify(input),
     }),
+
+  remove: (id: string) =>
+    request<{ deleted: boolean }>(`/employees/${id}`, { method: "DELETE" }),
 };
 
 export const teamsApi = {

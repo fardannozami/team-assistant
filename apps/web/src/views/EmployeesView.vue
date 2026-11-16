@@ -71,6 +71,7 @@
         <div class="flex gap-2">
           <button class="min-h-11 rounded-xl border border-border px-3 text-xs font-bold text-text" :disabled="savingId === e.id" @click="toggleActive(e)">{{ savingId === e.id ? '…' : e.isActive ? 'Nonaktifkan' : 'Aktifkan' }}</button>
           <button class="min-h-11 rounded-xl border border-border px-3 text-xs font-bold text-text" @click="startEdit(e)">Ubah</button>
+          <button class="min-h-11 rounded-xl border border-danger/30 px-3 text-xs font-bold text-danger disabled:opacity-60" :disabled="deletingId === e.id" @click="removeEmployee(e)">{{ deletingId === e.id ? '…' : 'Hapus' }}</button>
         </div>
       </div>
     </article>
@@ -145,6 +146,13 @@
                 @click="startEdit(e)"
               >
                 Ubah
+              </button>
+              <button
+                class="px-3 py-2 rounded-xl border border-danger/30 text-[12px] font-extrabold text-danger transition-colors duration-200 ease-in hover:bg-danger/5 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+                :disabled="deletingId === e.id"
+                @click="removeEmployee(e)"
+              >
+                {{ deletingId === e.id ? "…" : "Hapus" }}
               </button>
             </div>
           </td>
@@ -268,6 +276,7 @@ const updatingPhone = ref(false);
 const phoneError = ref("");
 
 const savingId = ref<string | null>(null);
+const deletingId = ref<string | null>(null);
 
 // Sentinel select value: create a team from draft.newTeamName on save.
 const NEW_TEAM = "__new__";
@@ -375,6 +384,25 @@ async function updatePhone() {
     error.value = err instanceof ApiError ? err.message : "Gagal memperbarui nomor telepon.";
   } finally {
     updatingPhone.value = false;
+  }
+}
+
+async function removeEmployee(e: Employee) {
+  const confirmed = window.confirm(
+    `Hapus "${e.name}" secara permanen? Hanya anggota tanpa riwayat yang bisa dihapus.`
+  );
+  if (!confirmed) return;
+
+  error.value = "";
+  deletingId.value = e.id;
+  try {
+    await employeesApi.remove(e.id);
+    showToast(`${e.name} dihapus.`, "success");
+    await loadEmployees();
+  } catch (err) {
+    error.value = err instanceof ApiError ? err.message : "Gagal menghapus anggota.";
+  } finally {
+    deletingId.value = null;
   }
 }
 
