@@ -56,15 +56,21 @@
         <div class="min-w-0"><h3 class="font-bold text-text">{{ e.name }}</h3><p class="mt-0.5 break-all font-mono text-xs text-text-dim">{{ e.phone }}</p><p class="mt-1 text-xs text-text-muted">{{ e.teamName || 'Tanpa tim' }}</p></div>
         <span class="badge shrink-0" :class="e.isActive ? 'bg-success/8 text-success border-success/20' : 'bg-text-muted/10 text-text-dim border border-border'">{{ e.isActive ? 'Aktif' : 'Nonaktif' }}</span>
       </div>
-      <div class="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3">
-        <div v-if="editingRoleId === e.id" class="flex min-w-0 flex-1 gap-2">
-          <select v-model="roleDrafts[e.id]" class="min-h-11 min-w-0 flex-1 rounded-xl border border-border bg-panel px-3 text-sm" @change="saveRole(e.id)"><option :value="null">Tanpa peran</option><option v-for="r in roles" :key="r.id" :value="r.id">{{ r.name }}</option></select>
-          <button class="min-h-11 rounded-xl border border-border px-3 text-sm font-bold" @click="editingRoleId = null">Batal</button>
+      <form v-if="editingId === e.id" class="mt-3 space-y-2 border-t border-border pt-3" @submit.prevent="saveEdit(e.id)">
+        <input v-model="draft.name" type="text" required placeholder="Nama" class="min-h-11 w-full rounded-xl border border-border bg-panel px-3 text-sm" />
+        <select v-model="draft.teamId" class="min-h-11 w-full rounded-xl border border-border bg-panel px-3 text-sm"><option :value="null">Tanpa tim</option><option v-for="t in teams" :key="t.id" :value="t.id">{{ t.name }}</option><option :value="NEW_TEAM">+ Tim baru…</option></select>
+        <input v-if="draft.teamId === NEW_TEAM" v-model="draft.newTeamName" type="text" required placeholder="Nama tim baru" class="min-h-11 w-full rounded-xl border border-border bg-panel px-3 text-sm" />
+        <select v-model="draft.roleId" class="min-h-11 w-full rounded-xl border border-border bg-panel px-3 text-sm"><option :value="null">Tanpa peran</option><option v-for="r in roles" :key="r.id" :value="r.id">{{ r.name }}</option></select>
+        <div class="flex gap-2">
+          <button type="button" class="min-h-11 flex-1 rounded-xl border border-border px-3 text-sm font-bold" @click="editingId = null">Batal</button>
+          <button type="submit" :disabled="savingEditId === e.id" class="min-h-11 flex-1 rounded-xl bg-accent px-3 text-sm font-bold text-white disabled:opacity-60">{{ savingEditId === e.id ? '…' : 'Simpan' }}</button>
         </div>
-        <span v-else class="badge" :class="roleBadgeUtils(e.roleName)">{{ e.roleName || 'Tanpa peran' }}</span>
+      </form>
+      <div v-else class="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3">
+        <span class="badge" :class="roleBadgeUtils(e.roleName)">{{ e.roleName || 'Tanpa peran' }}</span>
         <div class="flex gap-2">
           <button class="min-h-11 rounded-xl border border-border px-3 text-xs font-bold text-text" :disabled="savingId === e.id" @click="toggleActive(e)">{{ savingId === e.id ? '…' : e.isActive ? 'Nonaktifkan' : 'Aktifkan' }}</button>
-          <button v-if="editingRoleId !== e.id" class="min-h-11 rounded-xl border border-border px-3 text-xs font-bold text-text" @click="editingIdForRole(e)">Peran</button>
+          <button class="min-h-11 rounded-xl border border-border px-3 text-xs font-bold text-text" @click="startEdit(e)">Ubah</button>
         </div>
       </div>
     </article>
@@ -84,37 +90,46 @@
       </thead>
       <tbody>
         <tr v-for="e in employees" :key="e.id" class="hover:bg-panel-hover transition-colors duration-200 ease-in">
-          <td class="px-5 py-4 border-b border-border align-middle text-text">{{ e.name }}</td>
+          <td class="px-5 py-4 border-b border-border align-middle text-text">
+            <input v-if="editingId === e.id" v-model="draft.name" type="text" required class="px-3 py-2 rounded-xl border border-border text-[13px] bg-panel transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none w-full min-w-[140px]" />
+            <template v-else>{{ e.name }}</template>
+          </td>
           <td class="px-5 py-4 border-b border-border align-middle text-text font-mono text-[13px] text-text-dim">{{ e.phone }}</td>
-          <td class="px-5 py-4 border-b border-border align-middle text-text">{{ e.teamName || "—" }}</td>
+          <td class="px-5 py-4 border-b border-border align-middle text-text">
+            <div v-if="editingId === e.id" class="flex flex-col gap-2">
+              <select v-model="draft.teamId" class="px-3 py-2 rounded-xl border border-border text-[13px] bg-panel transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none pr-7 cursor-pointer w-full min-w-[140px]">
+                <option :value="null">Tanpa tim</option>
+                <option v-for="t in teams" :key="t.id" :value="t.id">{{ t.name }}</option>
+                <option :value="NEW_TEAM">+ Tim baru…</option>
+              </select>
+              <input v-if="draft.teamId === NEW_TEAM" v-model="draft.newTeamName" type="text" placeholder="Nama tim baru" class="px-3 py-2 rounded-xl border border-border text-[13px] bg-panel transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none w-full" />
+            </div>
+            <template v-else>{{ e.teamName || "—" }}</template>
+          </td>
           <td class="px-5 py-4 border-b border-border align-middle">
-            <span class="badge" :class="roleBadgeUtils(e.roleName)">{{ e.roleName || "—" }}</span>
+            <select v-if="editingId === e.id" v-model="draft.roleId" class="px-3 py-2 rounded-xl border border-border text-[13px] bg-panel transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none pr-7 cursor-pointer w-full min-w-[120px]">
+              <option :value="null">Tanpa peran</option>
+              <option v-for="r in roles" :key="r.id" :value="r.id">{{ r.name }}</option>
+            </select>
+            <span v-else class="badge" :class="roleBadgeUtils(e.roleName)">{{ e.roleName || "—" }}</span>
           </td>
           <td class="px-5 py-4 border-b border-border align-middle">
             <span class="badge" :class="e.isActive ? 'bg-success/8 text-success border-success/20' : 'bg-text-muted/10 text-text-dim border border-border'">{{ e.isActive ? "Aktif" : "Nonaktif" }}</span>
           </td>
           <td class="px-5 py-4 border-b border-border align-middle text-text flex gap-2 items-end">
-            <div v-if="editingRoleId === e.id" class="flex items-center gap-2">
-              <select
-                v-model="roleDrafts[e.id]"
-                class="px-3 py-2 pr-7 rounded-xl border border-border text-[13px] cursor-pointer bg-panel transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none w-[180px]"
-                @change="saveRole(e.id)"
-              >
-                <option :value="null">Tanpa peran</option>
-                <option v-for="r in roles" :key="r.id" :value="r.id">{{ r.name }}</option>
-              </select>
+            <div v-if="editingId === e.id" class="flex items-center gap-2">
               <button
                 class="px-3 py-2 rounded-xl border border-border text-[12px] font-extrabold text-text transition-colors duration-200 ease-in hover:bg-panel-hover"
-                @click="editingRoleId = null"
+                @click="editingId = null"
               >
                 Batal
               </button>
               <button
-                :disabled="savingRoleId === e.id"
+                :disabled="savingEditId === e.id"
                 class="px-3.5 py-2 rounded-xl text-[12px] font-extrabold bg-accent text-white hover:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap transition-colors duration-200 ease-in"
-                @click="saveRole(e.id)"
+                @click="saveEdit(e.id)"
               >
-                {{ savingRoleId === e.id ? "…" : "Simpan" }}
+                {{ savingEditId === e.id ? "…" : "Simpan" }}
               </button>
             </div>
             <div v-else class="flex items-center gap-2">
@@ -127,9 +142,9 @@
               </button>
               <button
                 class="px-3 py-2 rounded-xl border border-border text-[12px] font-extrabold text-text transition-colors duration-200 ease-in hover:bg-panel-hover"
-                @click="editingIdForRole(e)"
+                @click="startEdit(e)"
               >
-                Ubah peran
+                Ubah
               </button>
             </div>
           </td>
@@ -222,14 +237,17 @@ import { ref, onMounted } from "vue";
 import {
   employeesApi,
   rolesApi,
+  teamsApi,
   ApiError,
   showToast,
   type Employee,
   type Role,
+  type Team,
 } from "../api";
 
 const employees = ref<Employee[]>([]);
 const roles = ref<Role[]>([]);
+const teams = ref<Team[]>([]);
 const loading = ref(false);
 const error = ref("");
 
@@ -251,9 +269,11 @@ const phoneError = ref("");
 
 const savingId = ref<string | null>(null);
 
-const editingRoleId = ref<string | null>(null);
-const roleDrafts = ref<Record<string, string | null>>({});
-const savingRoleId = ref<string | null>(null);
+// Sentinel select value: create a team from draft.newTeamName on save.
+const NEW_TEAM = "__new__";
+const editingId = ref<string | null>(null);
+const draft = ref({ name: "", teamId: null as string | null, roleId: null as string | null, newTeamName: "" });
+const savingEditId = ref<string | null>(null);
 
 async function loadEmployees() {
   loading.value = true;
@@ -279,9 +299,17 @@ async function loadRoles() {
   }
 }
 
+async function loadTeams() {
+  try {
+    teams.value = await teamsApi.list();
+  } catch {
+    teams.value = [];
+  }
+}
+
 onMounted(async () => {
   await loadEmployees();
-  await loadRoles();
+  await Promise.all([loadRoles(), loadTeams()]);
 });
 
 async function toggleActive(e: Employee) {
@@ -292,7 +320,7 @@ async function toggleActive(e: Employee) {
 
   savingId.value = e.id;
   try {
-    await employeesApi.deactivate(e.id);
+    await employeesApi.setActive(e.id, !e.isActive);
     showToast(`${e.name} ${e.isActive ? "dinonaktifkan" : "diaktifkan"}.`, "success");
     await loadEmployees();
   } catch (err) {
@@ -350,23 +378,43 @@ async function updatePhone() {
   }
 }
 
-function editingIdForRole(employee: Employee) {
-  roleDrafts.value[employee.id] = employee.roleId;
-  editingRoleId.value = employee.id;
+function startEdit(employee: Employee) {
+  draft.value = {
+    name: employee.name,
+    teamId: employee.teamId,
+    roleId: employee.roleId,
+    newTeamName: "",
+  };
+  editingId.value = employee.id;
 }
 
-async function saveRole(id: string) {
-  const roleId = roleDrafts.value[id] ?? null;
-  savingRoleId.value = id;
+async function saveEdit(id: string) {
+  const name = draft.value.name.trim();
+  if (!name) {
+    error.value = "Nama wajib diisi.";
+    return;
+  }
+  error.value = "";
+  savingEditId.value = id;
   try {
-    await employeesApi.updateRole(id, roleId);
-    showToast("Peran berhasil diperbarui.", "success");
-    editingRoleId.value = null;
+    let teamId = draft.value.teamId;
+    if (teamId === NEW_TEAM) {
+      const teamName = draft.value.newTeamName.trim();
+      if (!teamName) {
+        error.value = "Nama tim baru wajib diisi.";
+        return;
+      }
+      teamId = (await teamsApi.create(teamName)).id;
+      await loadTeams();
+    }
+    await employeesApi.update(id, { name, teamId, roleId: draft.value.roleId });
+    showToast("Anggota berhasil diperbarui.", "success");
+    editingId.value = null;
     await loadEmployees();
   } catch (err) {
-    error.value = err instanceof ApiError ? err.message : "Gagal memperbarui peran.";
+    error.value = err instanceof ApiError ? err.message : "Gagal memperbarui anggota.";
   } finally {
-    savingRoleId.value = null;
+    savingEditId.value = null;
   }
 }
 

@@ -149,6 +149,18 @@ export interface Employee {
   updatedAt: string;
 }
 
+export interface EmployeeUpdate {
+  name?: string;
+  teamId?: string | null;
+  roleId?: string | null;
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
 export interface Role {
   id: string;
   name: string;
@@ -495,10 +507,10 @@ export const employeesApi = {
       body: JSON.stringify(input),
     }),
 
-  deactivate: (id: string) =>
+  setActive: (id: string, isActive: boolean) =>
     request<Employee>(`/employees/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ isActive: false }),
+      body: JSON.stringify({ isActive }),
     }),
 
   updatePhone: (id: string, phone: string) =>
@@ -507,10 +519,20 @@ export const employeesApi = {
       body: JSON.stringify({ phone }),
     }),
 
-  updateRole: (id: string, roleId: string | null) =>
+  update: (id: string, input: EmployeeUpdate) =>
     request<Employee>(`/employees/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ roleId }),
+      body: JSON.stringify(input),
+    }),
+};
+
+export const teamsApi = {
+  list: () => request<{ teams: Team[] }>("/teams").then((r) => r.teams),
+
+  create: (name: string) =>
+    request<Team>("/teams", {
+      method: "POST",
+      body: JSON.stringify({ name }),
     }),
 };
 
