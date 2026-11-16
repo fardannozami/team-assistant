@@ -94,8 +94,8 @@
         </div>
 
         <dl class="mt-3 grid grid-cols-2 gap-3 border-t border-border pt-3 text-sm sm:grid-cols-3">
-          <div><dt class="text-xs font-bold text-text-dim">Fee + tax</dt><dd class="tabular-nums text-text">{{ money(p.feeGross, p.currency) }}</dd></div>
           <div><dt class="text-xs font-bold text-text-dim">Fee diterima</dt><dd class="tabular-nums text-text">{{ money(p.feeReceived, p.currency) }}</dd></div>
+          <div><dt class="text-xs font-bold text-text-dim">Potongan platform {{ p.platformFeePercent }}%</dt><dd class="tabular-nums text-text">{{ money(p.platformFee, p.currency) }}</dd></div>
           <div><dt class="text-xs font-bold text-text-dim">Total fee dibagi</dt><dd class="font-bold tabular-nums text-text">{{ money(p.splitBase, p.currency) }}</dd></div>
         </dl>
 
@@ -185,12 +185,12 @@
           </label>
           <label class="block">
             <span :class="labelClass">Total fee dibagi</span>
-            <input v-model.number="totalFeeInput" type="number" min="0" step="0.01" :placeholder="String(form.feeReceived || 0)" :class="inputClass" class="w-full" />
+            <input v-model.number="totalFeeInput" type="number" min="0" step="0.01" :placeholder="`Otomatis: ${preview.auto}`" :class="inputClass" class="w-full" />
           </label>
         </div>
         <p class="mt-2 text-sm text-text-muted">
-          Fee + tax: <strong class="text-text">{{ money(preview.gross, form.currency) }}</strong> · Dibagi ke tim: <strong class="text-text">{{ money(preview.base, form.currency) }}</strong>.
-          Kosongkan "Total fee dibagi" untuk memakai fee diterima.
+          Potongan platform: <strong class="text-text">{{ money(preview.cut, form.currency) }}</strong> · Dibagi ke tim: <strong class="text-text">{{ money(preview.base, form.currency) }}</strong>.
+          "Total fee dibagi" otomatis fee diterima dikurangi potongan platform; isi hanya kalau jumlahnya berbeda.
         </p>
         <p v-if="totalFeeTooHigh" class="mt-1 text-sm font-semibold text-danger">Total fee dibagi lebih besar dari fee diterima.</p>
       </fieldset>
@@ -435,10 +435,11 @@ const totalFeeInput = computed({
 
 const preview = computed(() => {
   const f = form.value;
-  if (!f) return { gross: 0, base: 0 };
+  if (!f) return { cut: 0, auto: 0, base: 0 };
   const received = Number(f.feeReceived) || 0;
-  const cut = Math.min(Number(f.platformFeePercent) || 0, 99);
-  return { gross: Math.round((received / (1 - cut / 100)) * 100) / 100, base: f.totalFee ?? received };
+  const cut = Math.round(received * Math.min(Number(f.platformFeePercent) || 0, 99)) / 100;
+  const auto = Math.round((received - cut) * 100) / 100;
+  return { cut, auto, base: f.totalFee ?? auto };
 });
 const totalFeeTooHigh = computed(() => !!form.value && form.value.totalFee != null && form.value.totalFee > (Number(form.value.feeReceived) || 0));
 
@@ -477,13 +478,19 @@ function poolTotal(role: ProjectMemberRole) {
 function poolOk(role: ProjectMemberRole) {
   return !poolMembers(role).length || poolTotal(role) === 100;
 }
+// Designers and developers share a pool, so its total shows once (under Developer).
 function poolLabel(role: ProjectMemberRole) {
-  if (!poolMembers(role).length) return "";
-  const scope = isPmPool(role) ? "PM & Sales" : "designer + developer";
-  return `Total ${scope}: ${poolTotal(role)}%${poolTotal(role) === 100 ? "" : " (seharusnya 100%)"}`;
+  if (role === "designer" || !poolMembers(role).length) return "";
+  const scope = isPmPool(role) ? "PM & Sales" : "Designer + developer";
+  const total = poolTotal(role);
+  if (total === 100) return `${scope}: 100% terbagi`;
+  if (total > 100) return `${scope}: ${total}%, lebih ${Math.round((total - 100) * 100) / 100}% dari 100%`;
+  return `${scope}: ${total}% terbagi, sisa ${Math.round((100 - total) * 100) / 100}% belum dibagi`;
 }
+// PM & Sales start at 50% of the split fee (as in the sheet), others at what is left.
 function addMember(role: ProjectMemberRole) {
-  form.value?.members.push({ employeeId: "", role, sharePercent: Math.max(0, Math.round((100 - poolTotal(role)) * 100) / 100) });
+  const left = Math.max(0, Math.round((100 - poolTotal(role)) * 100) / 100);
+  form.value?.members.push({ employeeId: "", role, sharePercent: isPmPool(role) ? Math.min(50, left) : left });
 }
 function removeMember(m: FormMember) {
   if (form.value) form.value.members = form.value.members.filter((x) => x !== m);

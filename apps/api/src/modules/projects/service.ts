@@ -13,14 +13,14 @@ const num = (v: string | null) => (v === null ? null : Number(v));
 const dec = (n: number) => n.toFixed(2);
 
 /**
- * The fee figures of the project sheet: the client-side price is what arrived
- * grossed up by the platform's cut, and each member gets their share of
- * totalFee (all of feeReceived unless set).
+ * The platform takes its cut from the fee received; what is left is split
+ * between members (unless totalFee overrides it).
  */
 export function projectFees(p: { feeReceived: number; platformFeePercent: number; totalFee: number | null }) {
-  const base = p.totalFee ?? p.feeReceived;
+  const platformFee = round2((p.feeReceived * p.platformFeePercent) / 100);
+  const base = p.totalFee ?? round2(p.feeReceived - platformFee);
   return {
-    feeGross: round2(p.feeReceived / (1 - p.platformFeePercent / 100)),
+    platformFee,
     splitBase: base,
     memberFee: (sharePercent: number) => round2((base * sharePercent) / 100),
   };
@@ -101,7 +101,7 @@ export async function listProjects(workspaceId: string) {
       paymentType: p.paymentType,
       currency: p.currency,
       ...figures,
-      feeGross: fees.feeGross,
+      platformFee: fees.platformFee,
       splitBase: fees.splitBase,
       paymentStatus: p.paymentStatus,
       notes: p.notes,

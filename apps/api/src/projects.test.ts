@@ -10,15 +10,15 @@ import { projectInputSchema } from "@repo/shared";
 import { projectFees, splitFees } from "./modules/projects/service.js";
 
 describe("project fee math", () => {
-  test("matches the project sheet", () => {
-    // Row 2: hourly, 67.5 received, Zainal 20% / Abdan 80%, two PMs at 50%.
-    const hourly = projectFees({ feeReceived: 67.5, platformFeePercent: 10, totalFee: null });
-    expect(hourly.feeGross).toBe(75);
+  test("split fee is the fee received minus the platform cut", () => {
+    // The platform's 10% comes off the fee received; the rest is split.
+    const hourly = projectFees({ feeReceived: 75, platformFeePercent: 10, totalFee: null });
+    expect(hourly).toMatchObject({ platformFee: 7.5, splitBase: 67.5 });
     expect([20, 80, 50].map(hourly.memberFee)).toEqual([13.5, 54, 33.75]);
 
-    // Row 3: fixed, 225 received, four designers at 25%.
-    const fixed = projectFees({ feeReceived: 225, platformFeePercent: 10, totalFee: 225 });
-    expect(fixed.feeGross).toBe(250);
+    // An explicit total fee overrides the automatic one.
+    const fixed = projectFees({ feeReceived: 250, platformFeePercent: 10, totalFee: 225 });
+    expect(fixed).toMatchObject({ platformFee: 25, splitBase: 225 });
     expect([25, 50].map(fixed.memberFee)).toEqual([56.25, 112.5]);
 
     // An explicit total fee is what gets split.
@@ -144,7 +144,7 @@ describe.skipIf(!url)("projects api", () => {
     endDate: "2025-12-29",
     status: "completed",
     paymentType: "hourly",
-    feeReceived: 67.5,
+    feeReceived: 75,
     paymentStatus: "accepted",
     members: [
       { employeeId: people.Nanda, role: "pm_sales", sharePercent: 100 },
@@ -157,7 +157,7 @@ describe.skipIf(!url)("projects api", () => {
     const res = await req(ws.a.pm, "/projects", { method: "POST", body: JSON.stringify(body()) });
     expect(res.status).toBe(201);
     const created = await res.json();
-    expect(created).toMatchObject({ feeGross: 75, splitBase: 67.5, currency: "USD", totalFee: null });
+    expect(created).toMatchObject({ platformFee: 7.5, splitBase: 67.5, currency: "USD", totalFee: null });
     expect(Object.fromEntries(created.members.map((m: any) => [m.employeeName, m.fee]))).toEqual({ Abdan: 54, Nanda: 67.5, Zainal: 13.5 });
 
     const { people: list } = await (await req(ws.a.pm, "/projects/people")).json();

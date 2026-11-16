@@ -16,11 +16,11 @@ export const projects = pgTable(
     status: text("status").notNull().default("ongoing"), // ongoing | completed | cancelled
     paymentType: text("payment_type").notNull().default("fixed"), // fixed | hourly
     currency: text("currency").notNull().default("USD"),
-    // What actually arrived, after the platform's cut.
+    // What the client paid, before the platform's cut.
     feeReceived: numeric("fee_received", { precision: 14, scale: 2 }).notNull().default("0"),
-    // The platform's cut, so the client-side price is feeReceived / (1 - cut).
+    // The platform's cut, taken off feeReceived before the split.
     platformFeePercent: numeric("platform_fee_percent", { precision: 5, scale: 2 }).notNull().default("10"),
-    // Amount split between members; null means the whole feeReceived.
+    // Amount split between members; null means feeReceived minus the cut.
     totalFee: numeric("total_fee", { precision: 14, scale: 2 }),
     paymentStatus: text("payment_status").notNull().default("pending"), // pending | accepted | paid
     notes: text("notes"),

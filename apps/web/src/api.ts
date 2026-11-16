@@ -786,7 +786,7 @@ export interface Project {
   feeReceived: number;
   platformFeePercent: number;
   totalFee: number | null;
-  feeGross: number;
+  platformFee: number;
   splitBase: number;
   paymentStatus: PaymentStatus;
   notes: string | null;
