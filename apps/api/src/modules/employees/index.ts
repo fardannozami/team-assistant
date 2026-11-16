@@ -19,6 +19,7 @@ import {
   updateEmployeePhone,
   type EmployeeRecord,
 } from "./service.js";
+import { applyGithubLogin, resolveGithubLogin } from "../github/service.js";
 import { buildAdminWelcomeText } from "../whatsapp/admin.js";
 import { sendText } from "../whatsapp/service.js";
 
@@ -56,12 +57,15 @@ employeesApi.get("/", canView, async (c) => {
 });
 
 employeesApi.post("/", canManage, async (c) => {
-  const input = parseWith(createEmployeeSchema, await c.req.json());
+  const { githubLogin, ...input } = parseWith(createEmployeeSchema, await c.req.json());
+  // Checked before creating, so a bad username doesn't leave a half-made member.
+  const github = githubLogin?.trim() ? await resolveGithubLogin(getWorkspaceId(c), githubLogin, null) : null;
   const employee = await createEmployee(
     getWorkspaceId(c),
     input,
     getActorId(c),
   );
+  if (github && employee) await applyGithubLogin(getWorkspaceId(c), employee.id, github, getActorId(c));
   welcomeNewAdmin(getWorkspaceId(c), null, employee);
   return c.json(employee, 201);
 });

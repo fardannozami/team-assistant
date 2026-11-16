@@ -180,6 +180,11 @@
           <label class="mb-1.5 block text-sm font-semibold text-text">Nomor WhatsApp</label>
           <input v-model="empPhone" type="tel" placeholder="+62 812-3456-7890" required class="min-h-12 w-full rounded-xl border bg-panel px-4 text-base placeholder-text-dim focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20" :class="{ 'border-danger': createError, 'border-border': !createError }" @input="createError = ''" />
         </div>
+        <div>
+          <label for="emp-github" class="mb-1.5 block text-sm font-semibold text-text">Username GitHub <span class="font-normal text-text-dim">(opsional)</span></label>
+          <input id="emp-github" v-model="empGithub" type="text" placeholder="budi-santoso" maxlength="40" autocomplete="off" autocapitalize="off" spellcheck="false" class="min-h-12 w-full rounded-xl border border-border bg-panel px-4 text-base placeholder-text-dim focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20" @input="createError = ''" />
+          <p class="mt-1 text-xs text-text-dim">Agar commit &amp; PR-nya ikut masuk standup. Kosongkan untuk yang tidak pakai GitHub, misalnya tim design.</p>
+        </div>
       </template>
       <template v-else>
         <div>
@@ -189,7 +194,7 @@
             <option v-for="r in roles" :key="r.id" :value="r.id">{{ r.name }}</option>
           </select>
         </div>
-        <div class="rounded-xl bg-panel-hover p-4 text-sm text-text-muted">{{ empName }} · {{ empPhone }}<span v-if="empRoleId"> · {{ roles.find((role) => role.id === empRoleId)?.name }}</span></div>
+        <div class="rounded-xl bg-panel-hover p-4 text-sm text-text-muted">{{ empName }} · {{ empPhone }}<span v-if="empGithub.trim()"> · GitHub @{{ empGithub.trim().replace(/^@/, '') }}</span><span v-if="empRoleId"> · {{ roles.find((role) => role.id === empRoleId)?.name }}</span></div>
       </template>
       <p v-if="createError" class="text-sm font-semibold text-danger" role="alert">{{ createError }}</p>
       <div class="flex gap-2 pt-1">
@@ -267,6 +272,7 @@ const addStep = ref(1);
 const empName = ref("");
 const empPhone = ref("");
 const empRoleId = ref<string | null>(null);
+const empGithub = ref("");
 const creating = ref(false);
 const createError = ref("");
 
@@ -352,15 +358,19 @@ async function createEmployee() {
       name: empName.value.trim(),
       phone: empPhone.value.trim(),
       roleId: empRoleId.value,
+      githubLogin: empGithub.value.trim() || null,
     });
     showToast("Anggota berhasil ditambahkan.", "success");
     empName.value = "";
     empPhone.value = "";
+    empGithub.value = "";
     addStep.value = 1;
     showAddForm.value = false;
     await loadEmployees();
   } catch (err) {
-    error.value = err instanceof ApiError ? err.message : "Gagal menambahkan anggota.";
+    // Shown inside the form; a GitHub problem sends them back to that field.
+    createError.value = err instanceof ApiError ? err.message : "Gagal menambahkan anggota.";
+    if (/github/i.test(createError.value)) addStep.value = 1;
   } finally {
     creating.value = false;
   }

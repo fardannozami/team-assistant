@@ -153,6 +153,7 @@ export interface EmployeeUpdate {
   name?: string;
   teamId?: string | null;
   roleId?: string | null;
+  githubLogin?: string | null;
 }
 
 export interface Team {

@@ -39,6 +39,8 @@ export const createEmployeeSchema = z.object({
   phone: phoneNumberSchema,
   teamId: z.string().uuid().nullish(),
   roleId: z.string().uuid().nullish(),
+  // Optional: designers on Figma have no GitHub account.
+  githubLogin: z.string().trim().max(40).nullish(),
 });
 
 export const updateEmployeeSchema = z.object({

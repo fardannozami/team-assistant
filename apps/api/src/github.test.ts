@@ -203,6 +203,25 @@ describe.skipIf(!url)("github webhooks", () => {
     expect((await req("b", `/github/members/${employeeIds.Sari}`, { method: "PUT", body: JSON.stringify({ login: "sari" }) })).status).toBe(404);
   });
 
+  test("a new member can be given their GitHub login when added (optional)", async () => {
+    const add = (name: string, phone: string, githubLogin?: string | null) =>
+      req("a", "/employees", { method: "POST", body: JSON.stringify({ name, phone, githubLogin }) });
+    // A taken or malformed login fails before the member is created.
+    expect((await add("Dobel", "6281299990001", "budi-dev")).status).toBe(409);
+    expect((await add("Salah", "6281299990002", "bad login!")).status).toBe(400);
+    const { employees: none } = await (await req("a", "/employees?search=Dobel")).json();
+    expect(none).toEqual([]);
+
+    const dev = await add("Dewi", "6281299990003", "@Dewi-Dev");
+    expect(dev.status).toBe(201);
+    const designer = await add("Fajar", "6281299990004", null);
+    expect(designer.status).toBe(201);
+    const { members } = await (await req("a", "/github/members")).json();
+    const login = (name: string) => members.find((m: any) => m.name === name)?.login;
+    expect(login("Dewi")).toBe("Dewi-Dev");
+    expect(login("Fajar")).toBeNull();
+  });
+
   test("push: attribution, delivery dedup, event dedup, untracked repos", async () => {
     const commits = [
       { id: "c1", message: "feat: x", timestamp: "2026-11-10T03:00:00Z", author: { username: "budi-dev" } },

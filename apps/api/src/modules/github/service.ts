@@ -183,7 +183,17 @@ export async function setGithubLogin(workspaceId: string, employeeId: string, in
     .where(and(eq(employees.id, employeeId), eq(employees.workspaceId, workspaceId)))
     .limit(1);
   if (!employee) throw new HttpError(404, "Employee not found");
+  return applyGithubLogin(workspaceId, employeeId, await resolveGithubLogin(workspaceId, input, employeeId), actorId);
+}
 
+export type ResolvedGithubLogin = { login: string | null; githubId: number | null };
+
+/**
+ * Validates a login (format, not mapped to someone else, exists on GitHub
+ * when an installation is connected) without writing anything, so a new
+ * employee can be checked before they are created.
+ */
+export async function resolveGithubLogin(workspaceId: string, input: string | null | undefined, employeeId: string | null): Promise<ResolvedGithubLogin> {
   let login = input?.trim().replace(/^@/, "") || null;
   let githubId: number | null = null;
   if (login) {
@@ -205,7 +215,10 @@ export async function setGithubLogin(workspaceId: string, employeeId: string, in
       }
     }
   }
+  return { login, githubId };
+}
 
+export async function applyGithubLogin(workspaceId: string, employeeId: string, { login, githubId }: ResolvedGithubLogin, actorId: string | null) {
   await db.transaction(async (tx) => {
     await tx
       .delete(employeeIntegrations)
