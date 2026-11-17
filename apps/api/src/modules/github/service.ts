@@ -228,6 +228,23 @@ export async function applyGithubLogin(workspaceId: string, employeeId: string, 
       .set({ employeeId: null })
       .where(and(eq(activityEvents.workspaceId, workspaceId), eq(activityEvents.provider, PROVIDER), eq(activityEvents.employeeId, employeeId)));
     if (!login) return;
+    // resolveGithubLogin checked the login was free, but outside this
+    // transaction: two saves at once could both pass. Serialize mappings per
+    // workspace and check again before writing.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`github-login:${workspaceId}`}))`);
+    const [taken] = await tx
+      .select({ employeeId: employeeIntegrations.employeeId })
+      .from(employeeIntegrations)
+      .innerJoin(employees, eq(employeeIntegrations.employeeId, employees.id))
+      .where(
+        and(
+          eq(employees.workspaceId, workspaceId),
+          eq(employeeIntegrations.provider, PROVIDER),
+          eq(employeeIntegrations.externalId, login.toLowerCase()),
+        ),
+      )
+      .limit(1);
+    if (taken && taken.employeeId !== employeeId) throw new HttpError(409, `@${login} sudah dipetakan ke anggota lain`);
     await tx.insert(employeeIntegrations).values({
       employeeId,
       provider: PROVIDER,

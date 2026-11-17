@@ -13,7 +13,7 @@ import makeWASocket, {
 import pino from "pino";
 import { createDbClient } from "@repo/database";
 import { whatsappSessions, whatsappMessages, workspaces } from "@repo/database";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { getEmployeeByPhone, getRoleName } from "../auth/index.js";
 import { handleAdminMessage } from "./admin.js";
 import { handleStandupMessage } from "../standups/engine.js";
@@ -262,35 +262,42 @@ async function openSocket(workspaceId: string, pairingPhone?: string): Promise<S
 
       const botPhone = botPhoneFromJid(socket.user?.id);
       try {
-        if (botPhone) {
-          // One WhatsApp number cannot serve two workspaces.
-          const [clash] = await db
-            .select({ workspaceId: whatsappSessions.workspaceId })
-            .from(whatsappSessions)
-            .where(
-              and(
-                eq(whatsappSessions.botPhone, botPhone),
-                eq(whatsappSessions.isActive, true),
-                ne(whatsappSessions.workspaceId, workspaceId),
-              ),
-            )
-            .limit(1);
-          if (clash) {
-            logger.error(
-              { workspaceId, botPhone, otherWorkspaceId: clash.workspaceId },
-              "WhatsApp number is already the bot of another workspace; disconnecting",
-            );
-            state.sock = null;
-            bots.delete(workspaceId);
-            await socket.end(undefined);
-            await setSessionActive(workspaceId, false);
-            return;
+        // One WhatsApp number cannot serve two workspaces. Check and claim it
+        // in one transaction, locked per number, so two workspaces linking
+        // the same phone at the same moment cannot both keep it.
+        const clash = await db.transaction(async (tx) => {
+          if (botPhone) {
+            await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`wa-bot:${botPhone}`}))`);
+            const [other] = await tx
+              .select({ workspaceId: whatsappSessions.workspaceId })
+              .from(whatsappSessions)
+              .where(
+                and(
+                  eq(whatsappSessions.botPhone, botPhone),
+                  eq(whatsappSessions.isActive, true),
+                  ne(whatsappSessions.workspaceId, workspaceId),
+                ),
+              )
+              .limit(1);
+            if (other) return other;
           }
+          await tx
+            .update(whatsappSessions)
+            .set({ botPhone, lastConnectedAt: new Date(), updatedAt: new Date() })
+            .where(eq(whatsappSessions.workspaceId, workspaceId));
+          return null;
+        });
+        if (clash) {
+          logger.error(
+            { workspaceId, botPhone, otherWorkspaceId: clash.workspaceId },
+            "WhatsApp number is already the bot of another workspace; disconnecting",
+          );
+          state.sock = null;
+          bots.delete(workspaceId);
+          await socket.end(undefined);
+          await setSessionActive(workspaceId, false);
+          return;
         }
-        await db
-          .update(whatsappSessions)
-          .set({ botPhone, lastConnectedAt: new Date(), updatedAt: new Date() })
-          .where(eq(whatsappSessions.workspaceId, workspaceId));
       } catch (error) {
         logger.error({ workspaceId, error }, "Failed to update WhatsApp session registry");
       }
