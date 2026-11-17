@@ -122,8 +122,9 @@
     </ul>
   </template>
 
-  <!-- Editor -->
-  <div v-if="form" class="fixed inset-0 z-50 flex items-end justify-center bg-text/30 backdrop-blur-sm fade-in-fast sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="editor-title" @keydown.esc="closeEditor">
+  <!-- Editor: teleported because the page's reveal transform would pin `fixed` to the page, under the header -->
+  <Teleport to="body">
+  <div v-if="form"class="fixed inset-0 z-50 flex items-end justify-center bg-text/30 backdrop-blur-sm fade-in-fast sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="editor-title" @keydown.esc="closeEditor">
     <form ref="formEl" novalidate class="max-h-[92vh] w-full max-w-[720px] overflow-y-auto rounded-t-2xl border border-border bg-panel p-4 shadow-soft-lg sm:rounded-2xl sm:p-6" @submit.prevent="save">
       <div class="flex items-center justify-between gap-3">
         <h3 id="editor-title" class="text-lg font-extrabold text-text">{{ editingId ? "Ubah project" : "Tambah project" }}</h3>
@@ -231,6 +232,7 @@
       </div>
     </form>
   </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
