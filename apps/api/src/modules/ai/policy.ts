@@ -66,8 +66,12 @@ export async function updateAiPolicy(
   actorId: string | null,
 ): Promise<AiPolicy> {
   const current = await getAiPolicy(workspaceId);
+  // A real boolean only: Boolean("false") would switch employee access on.
+  if (patch.allowEmployees !== undefined && typeof patch.allowEmployees !== "boolean") {
+    throw new HttpError(400, "allowEmployees harus true atau false.");
+  }
   const next: AiPolicy = {
-    allowEmployees: patch.allowEmployees === undefined ? current.allowEmployees : Boolean(patch.allowEmployees),
+    allowEmployees: patch.allowEmployees ?? current.allowEmployees,
     employeeDailyLimit:
       patch.employeeDailyLimit === undefined
         ? current.employeeDailyLimit

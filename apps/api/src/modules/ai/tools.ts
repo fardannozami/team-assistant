@@ -166,7 +166,8 @@ export const AI_TOOLS: ToolSpec[] = [
         type: "object",
         properties: {
           id: { type: "string", description: "Schedule id (takes priority over name)." },
-          name: { type: "string", description: "Current schedule name to find (also the new name when renaming)." },
+          name: { type: "string", description: "Current schedule name to find." },
+          newName: { type: "string", description: "New name, only when renaming." },
           timeOfDay: { type: "string", description: "HH:mm 24-hour time." },
           weekdays: { type: "array", items: { type: "integer" }, description: "0=Sunday..6=Saturday." },
           timezone: { type: "string", description: "IANA timezone, e.g. Asia/Jakarta." },
@@ -788,7 +789,8 @@ export async function executeTool(
         if (!target.ok) return target;
         if (!target.employee) return { ok: false, error: "Employee not found." };
 
-        const limit = Math.min(Math.max(Number(args?.limit ?? 5), 1), 20);
+        const requested = Number.parseInt(String(args?.limit ?? ""), 10);
+        const limit = Number.isFinite(requested) ? Math.min(Math.max(requested, 1), 20) : 5;
         const { standups: history } = await getEmployeeStandupHistory(
           ctx.workspaceId,
           target.employee.id,
@@ -904,23 +906,22 @@ export async function executeTool(
           };
         }
 
-        const id = typeof args?.id === "string" ? args.id : "";
-        const name = typeof args?.name === "string" ? args.name.trim() : "";
+        // `name` finds the schedule and `newName` renames it; the model never
+        // sees ids, so a non-UUID "id" is treated as a name.
+        const rawId = typeof args?.id === "string" ? args.id.trim() : "";
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId);
+        const name = (typeof args?.name === "string" ? args.name.trim() : "") || (isUuid ? "" : rawId);
         let target = null;
-        if (id) {
+        if (isUuid) {
           const [row] = await db
             .select()
             .from(schedules)
-            .where(and(eq(schedules.id, id), eq(schedules.workspaceId, ctx.workspaceId)))
+            .where(and(eq(schedules.id, rawId), eq(schedules.workspaceId, ctx.workspaceId)))
             .limit(1);
           target = row ?? null;
         } else if (name) {
-          const [row] = await db
-            .select()
-            .from(schedules)
-            .where(and(eq(schedules.name, name), eq(schedules.workspaceId, ctx.workspaceId)))
-            .limit(1);
-          target = row ?? null;
+          // Same case-insensitive match as delete_schedule.
+          target = (await listSchedules(ctx.workspaceId)).find((r) => r.name.toLowerCase() === name.toLowerCase()) ?? null;
         } else {
           return {
             ok: false,
@@ -931,7 +932,8 @@ export async function executeTool(
           return { ok: false, error: "Schedule not found." };
         }
 
-        const parsed = updateScheduleSchema.safeParse(args);
+        const { id: _id, name: _name, newName, ...changes } = args ?? {};
+        const parsed = updateScheduleSchema.safeParse({ ...changes, ...(newName ? { name: newName } : {}) });
         if (!parsed.success) {
           return {
             ok: false,

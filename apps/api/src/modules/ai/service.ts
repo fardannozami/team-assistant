@@ -72,7 +72,7 @@ function pendingSummary(tool: string, args: Record<string, unknown>): string {
 
   if (tool === "update_schedule") {
     const parts: string[] = [];
-    if (args.name) parts.push(`rename to "${args.name}"`);
+    if (args.newName) parts.push(`rename to "${args.newName}"`);
     if (args.timeOfDay) parts.push(`time ${args.timeOfDay}`);
     if (Array.isArray(args.weekdays)) {
       parts.push(`days (${(args.weekdays as unknown[]).map(String).join(", ")})`);
@@ -283,6 +283,7 @@ export async function handleAiMessage(
   const channel = args.channel ?? "whatsapp";
   const tools = staff ? AI_TOOLS : AI_TOOLS.filter((t) => EMPLOYEE_TOOL_NAMES.has(t.function.name));
   let modelCalled = false;
+  let usageLogged = false;
   let usedModel = config.model;
 
   try {
@@ -407,17 +408,24 @@ export async function handleAiMessage(
     }
 
     await logUsage(args.workspaceId, args.employee.id, usedModel, usage);
-    await persistExchange(
-      args.workspaceId,
-      args.employee.id,
-      channel,
-      body,
-      finalText,
-    );
+    usageLogged = true;
+    // The model has answered (and may have queued an action): failing to
+    // save the history must not turn that into "something went wrong".
+    try {
+      await persistExchange(
+        args.workspaceId,
+        args.employee.id,
+        channel,
+        body,
+        finalText,
+      );
+    } catch (error) {
+      logger.warn({ err: error }, "Failed to store AI conversation");
+    }
     return finalText;
   } catch (error) {
-    // Failed calls still count toward the daily limits.
-    if (modelCalled) await logUsage(args.workspaceId, args.employee.id, usedModel, null);
+    // Failed calls still count toward the daily limits, once.
+    if (modelCalled && !usageLogged) await logUsage(args.workspaceId, args.employee.id, usedModel, null);
     if (error instanceof HttpError) {
       if (error.status === 400) return null;
       logger.warn({ err: error }, "AI request rejected");
