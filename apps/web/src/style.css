@@ -87,6 +87,12 @@ select {
   background-position: right 12px center;
   background-size: 16px;
 }
+/* After a failed save, mark every field still missing or invalid. */
+.show-invalid :is(input, select, textarea):invalid {
+  border-color: #c74a5c;
+  background-color: rgb(199 74 92 / 0.05);
+  box-shadow: 0 0 0 2px rgb(199 74 92 / 0.2);
+}
 
 /* ---------- accessibility ---------- */
 :focus-visible {

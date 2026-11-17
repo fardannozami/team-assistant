@@ -125,7 +125,7 @@
   <!-- Editor: teleported because the page's reveal transform would pin `fixed` to the page, under the header -->
   <Teleport to="body">
   <div v-if="form"class="fixed inset-0 z-50 flex items-end justify-center bg-text/30 backdrop-blur-sm fade-in-fast sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="editor-title" @keydown.esc="closeEditor">
-    <form ref="formEl" novalidate class="max-h-[92vh] w-full max-w-[720px] overflow-y-auto rounded-t-2xl border border-border bg-panel p-4 shadow-soft-lg sm:rounded-2xl sm:p-6" @submit.prevent="save">
+    <form ref="formEl" novalidate :class="{ 'show-invalid': triedSave }" class="max-h-[92vh] w-full max-w-[720px] overflow-y-auto rounded-t-2xl border border-border bg-panel p-4 shadow-soft-lg sm:rounded-2xl sm:p-6" @submit.prevent="save">
       <div class="flex items-center justify-between gap-3">
         <h3 id="editor-title" class="text-lg font-extrabold text-text">{{ editingId ? "Ubah project" : "Tambah project" }}</h3>
         <button type="button" class="grid h-10 w-10 place-items-center rounded-xl text-lg text-text-dim hover:bg-panel-hover" aria-label="Tutup" @click="closeEditor">×</button>
@@ -286,6 +286,8 @@ const form = ref<ProjectInput | null>(null);
 const formEl = ref<HTMLFormElement | null>(null);
 const editingId = ref<string | null>(null);
 const saving = ref(false);
+// Highlights invalid fields only once the user has tried to save.
+const triedSave = ref(false);
 
 function message(err: unknown, fallback: string) {
   if (err instanceof ApiError && err.status === 403) return "Hanya PM, Admin, atau Owner yang bisa mengelola project.";
@@ -389,6 +391,7 @@ async function remove(p: Project) {
 
 function openEditor(p: Project | null) {
   editingId.value = p?.id ?? null;
+  triedSave.value = false;
   form.value = p
     ? {
         platform: p.platform,
@@ -497,20 +500,30 @@ function peopleFor(m: FormMember) {
 
 // The browser's own "Please fill out this field" doesn't say which field (and
 // can point at one scrolled out of the dialog), so name it and scroll to it.
+// Fields only: a <fieldset> holding an invalid field matches :invalid too.
 function invalidField() {
-  const el = formEl.value?.querySelector<HTMLInputElement | HTMLSelectElement>(":invalid");
+  const el = formEl.value?.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+    "input:invalid, select:invalid, textarea:invalid",
+  );
   if (!el) return null;
   el.scrollIntoView({ block: "center", behavior: "smooth" });
   el.focus({ preventScroll: true });
   const labelEl = el.labels?.[0];
   const label = (labelEl?.querySelector("span") ?? labelEl)?.textContent?.trim() || "field";
-  if (el instanceof HTMLSelectElement && el.id.startsWith("member-")) return `Pilih anggota untuk "${label}", atau hapus barisnya.`;
+  const role = el.closest("fieldset")?.querySelector("legend")?.textContent?.trim();
+  if (el instanceof HTMLSelectElement && el.id.startsWith("member-")) {
+    return `${role ?? "Anggota"} belum dipilih orangnya. Pilih orangnya, atau hapus barisnya.`;
+  }
+  if (el.closest("li") && role) {
+    return el.validity.valueMissing ? `Persen ${role} wajib diisi.` : `Persen ${role} belum valid: ${el.validationMessage}`;
+  }
   if (el.validity.valueMissing) return `"${label}" wajib diisi.`;
   return `"${label}" belum valid: ${el.validationMessage}`;
 }
 
 async function save() {
   if (!form.value) return;
+  triedSave.value = true;
   const problem = invalidField();
   if (problem) {
     showToast(problem, "error");
