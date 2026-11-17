@@ -1,5 +1,5 @@
 import { createDbClient, schedules } from "@repo/database";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, ne } from "drizzle-orm";
 import { STANDUP_SCHEDULE_NAME } from "@repo/shared";
 import { schedulerQueue } from "../../lib/queue.js";
 import { HttpError } from "../../lib/http-error.js";
@@ -27,6 +27,31 @@ function assertDayOrder(s: { timeOfDay: string | null; closeTime?: string | null
   }
   if (s.summaryTime && s.summaryTime <= s.timeOfDay) {
     throw new HttpError(400, `Jam ringkasan (${s.summaryTime}) harus setelah jam standup (${s.timeOfDay}).`);
+  }
+}
+
+/**
+ * One active standup schedule per workspace. Every schedule's prompt,
+ * reminder, close and summary act on all standup targets, so a second one
+ * would close the first one's day early and message everyone twice.
+ */
+async function assertNoOtherActive(workspaceId: string, exceptId?: string) {
+  const [other] = await db
+    .select({ id: schedules.id, name: schedules.name })
+    .from(schedules)
+    .where(
+      and(
+        eq(schedules.workspaceId, workspaceId),
+        eq(schedules.isActive, true),
+        exceptId ? ne(schedules.id, exceptId) : undefined,
+      ),
+    )
+    .limit(1);
+  if (other) {
+    throw new HttpError(
+      409,
+      `Jadwal "${other.name}" masih aktif. Satu workspace hanya bisa punya satu jadwal standup aktif; ubah atau nonaktifkan jadwal itu dulu.`,
+    );
   }
 }
 
@@ -59,6 +84,7 @@ export async function createSchedule(
 ) {
   assertValidTimezone(input.timezone ?? "Asia/Jakarta");
   assertDayOrder(input);
+  await assertNoOtherActive(workspaceId);
 
   const [created] = await db
     .insert(schedules)
@@ -111,6 +137,7 @@ export async function updateSchedule(
     closeTime: input.closeTime === undefined ? existing.closeTime : input.closeTime,
     summaryTime: input.summaryTime === undefined ? existing.summaryTime : input.summaryTime,
   });
+  if (input.isActive === true && !existing.isActive) await assertNoOtherActive(workspaceId, id);
 
   const changes: Partial<typeof schedules.$inferInsert> = {
     updatedAt: new Date(),
@@ -216,16 +243,19 @@ export async function upsertStandupSchedule(
   },
   actorId?: string | null,
 ) {
+  // The default "standup" row, else the workspace's active schedule (made on
+  // the web under another name): only one can be active, so update that one.
   const [existing] = await db
     .select()
     .from(schedules)
-    .where(
-      and(
-        eq(schedules.workspaceId, workspaceId),
-        eq(schedules.name, STANDUP_SCHEDULE_NAME),
-      ),
+    .where(eq(schedules.workspaceId, workspaceId))
+    .orderBy(
+      desc(eq(schedules.name, STANDUP_SCHEDULE_NAME)),
+      desc(schedules.isActive),
+      asc(schedules.createdAt),
     )
-    .limit(1);
+    .limit(1)
+    .then((rows) => rows.filter((s) => s.name === STANDUP_SCHEDULE_NAME || s.isActive));
 
   if (!existing) {
     return createSchedule(
