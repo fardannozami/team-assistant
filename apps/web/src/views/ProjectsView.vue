@@ -24,6 +24,21 @@
     </select>
   </div>
 
+  <div class="-mt-2 mb-5 grid gap-3 sm:grid-cols-[auto_1fr_1fr]">
+    <label class="sr-only" for="filter-period">Periode</label>
+    <select id="filter-period" v-model="period" :class="inputClass">
+      <option v-for="(label, key) in PERIOD_LABEL" :key="key" :value="key">{{ label }}</option>
+    </select>
+    <label class="flex items-center gap-2">
+      <span class="w-14 shrink-0 text-[11px] font-extrabold uppercase tracking-wider text-text-dim">Dari</span>
+      <input v-model="dateFrom" type="date" :max="dateTo || undefined" :class="inputClass" class="w-full min-w-0" @input="period = 'custom'" />
+    </label>
+    <label class="flex items-center gap-2">
+      <span class="w-14 shrink-0 text-[11px] font-extrabold uppercase tracking-wider text-text-dim">Sampai</span>
+      <input v-model="dateTo" type="date" :min="dateFrom || undefined" :class="inputClass" class="w-full min-w-0" @input="period = 'custom'" />
+    </label>
+  </div>
+
   <div v-if="loading && !projects.length" class="flex flex-col items-center gap-2.5 py-24 text-center text-text-muted fade-in-fast">
     <span class="h-10 w-10 rounded-full border-2 border-accent/20 border-t-accent spin-slow" aria-hidden="true"></span>
     <span class="text-sm font-extrabold tracking-tight">Memuat project…</span>
@@ -236,7 +251,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import {
   ApiError,
   projectsApi,
@@ -282,6 +297,37 @@ const search = ref("");
 const statusFilter = ref<ProjectStatus | "">("");
 const paymentFilter = ref<PaymentStatus | "">("");
 
+// Date filter: a preset fills the range; editing a date by hand makes it "custom".
+type Period = "this_month" | "last_month" | "this_year" | "all" | "custom";
+const PERIOD_LABEL: Record<Period, string> = {
+  this_month: "Bulan ini",
+  last_month: "Bulan lalu",
+  this_year: "Tahun ini",
+  all: "Semua tanggal",
+  custom: "Custom",
+};
+// YYYY-MM-DD in local time (toISOString would shift to UTC).
+const isoDay = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function periodRange(p: Period): [string, string] | null {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  if (p === "this_month") return [isoDay(new Date(y, m, 1)), isoDay(new Date(y, m + 1, 0))];
+  if (p === "last_month") return [isoDay(new Date(y, m - 1, 1)), isoDay(new Date(y, m, 0))];
+  if (p === "this_year") return [`${y}-01-01`, `${y}-12-31`];
+  if (p === "all") return ["", ""];
+  return null;
+}
+const period = ref<Period>("this_month");
+const [defaultFrom, defaultTo] = periodRange("this_month")!;
+const dateFrom = ref(defaultFrom);
+const dateTo = ref(defaultTo);
+watch(period, (p) => {
+  const range = periodRange(p);
+  if (range) [dateFrom.value, dateTo.value] = range;
+});
+
 const form = ref<ProjectInput | null>(null);
 const formEl = ref<HTMLFormElement | null>(null);
 const editingId = ref<string | null>(null);
@@ -309,12 +355,21 @@ onMounted(load);
 
 // ---- List ----
 
+// A project matches when its run overlaps the range: no end date means still
+// running, and one without any dates counts on the day it was last updated.
+function inDateRange(p: Project) {
+  const start = p.startDate ?? p.endDate ?? isoDay(new Date(p.updatedAt));
+  const end = p.endDate ?? (p.startDate ? "9999-12-31" : start);
+  return (!dateTo.value || start <= dateTo.value) && (!dateFrom.value || end >= dateFrom.value);
+}
+
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase();
   return projects.value.filter(
     (p) =>
       (!statusFilter.value || p.status === statusFilter.value) &&
       (!paymentFilter.value || p.paymentStatus === paymentFilter.value) &&
+      inDateRange(p) &&
       (!q || [p.name, p.platform, ...p.members.map((m) => m.employeeName)].some((s) => s.toLowerCase().includes(q))),
   );
 });
