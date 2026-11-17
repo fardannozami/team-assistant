@@ -112,6 +112,7 @@ describe.skipIf(!url)("github webhooks", () => {
   let schema: typeof import("@repo/database");
   const ws: Record<"a" | "b", { id: string; token: string }> = {} as any;
   const employeeIds: Record<string, string> = {};
+  const userIds: Record<string, string> = {};
   const repoIds = { tracked: String(9_000_000 + Math.floor(Math.random() * 1_000_000)), untracked: "" };
   const installationId = String(70_000_000 + Math.floor(Math.random() * 1_000_000));
   let delivery = 0;
@@ -160,6 +161,7 @@ describe.skipIf(!url)("github webhooks", () => {
         .insert(schema.users)
         .values({ workspaceId: workspace.id, email: `github-${who}-${workspace.id}@test.local`, name: who, roleId: owner.id })
         .returning();
+      userIds[who] = user.id;
       ws[who] = { id: workspace.id, token: await signJwt({ sub: user.id, role: "Owner", workspaceId: workspace.id }, process.env.JWT_SECRET ?? "dev-secret-change-me") };
     }
     for (const [name, phone] of [["Budi", "6281288880001"], ["Sari", "6281288880002"]] as const) {
@@ -290,6 +292,23 @@ describe.skipIf(!url)("github webhooks", () => {
     await hook("installation", { action: "deleted" });
     expect((await (await req("a", "/github/status")).json()).installations).toEqual([]);
     expect((await (await push(repoIds.tracked, [{ id: "c10", message: "after" }])).json()).reason).toBe("installation not linked");
+  });
+
+  test("an install link can only be redeemed by the admin who started it", async () => {
+    const { sign: signJwt } = await import("hono/jwt");
+    const secret = `${process.env.JWT_SECRET ?? "dev-secret-change-me"}:github-install`;
+    const exp = Math.floor(Date.now() / 1000) + 600;
+    const linkFor = (who: "a" | "b", purpose = "github-link") =>
+      signJwt({ purpose, workspaceId: ws[who].id, sub: userIds[who], installationId: "123", exp }, secret);
+    const redeem = (who: "a" | "b", token: string) =>
+      req(who, "/github/link", { method: "POST", body: JSON.stringify({ token }) });
+
+    // Workspace A's admin sends their install link to B's org owner: B's
+    // browser gets the link token, but only A's own session could redeem it.
+    expect((await redeem("b", await linkFor("a"))).status).toBe(403);
+    expect((await redeem("a", "forged")).status).toBe(400);
+    // The install state itself is not a link token.
+    expect((await redeem("a", await linkFor("a", "github-install"))).status).toBe(400);
   });
 
   test("setup callback rejects a forged state", async () => {

@@ -590,6 +590,8 @@ export const checkinsApi = {
 export const githubApi = {
   status: () => request<GithubStatus>("/github/status"),
   install: () => request<{ url: string }>("/github/install", { method: "POST" }),
+  link: (token: string) =>
+    request<{ connected: boolean }>("/github/link", { method: "POST", body: JSON.stringify({ token }) }),
   sync: (id: string) => request<{ repositories: number }>(`/github/installations/${id}/sync`, { method: "POST" }),
   unlink: (id: string) => request<{ deleted: boolean }>(`/github/installations/${id}`, { method: "DELETE" }),
   track: (id: string, isActive: boolean) =>

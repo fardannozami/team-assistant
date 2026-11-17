@@ -188,22 +188,38 @@ async function load() {
   }
 }
 
-/** Result of the GitHub install redirect (?github=… / ?github_error=…). */
-function consumeRedirect() {
+/**
+ * Result of the GitHub install redirect (?github=… / ?github_error=…). A
+ * successful install comes back as ?github_link=<token>, which this logged-in
+ * admin redeems to actually link the installation to the workspace.
+ */
+async function consumeRedirect() {
   const params = new URLSearchParams(window.location.search);
   const ok = params.get("github");
   const failed = params.get("github_error");
-  if (!ok && !failed) return;
-  if (ok && ok !== "updated") showToast(REDIRECT_MESSAGES[ok] ?? "GitHub diperbarui.", "success");
-  if (failed) showToast(REDIRECT_MESSAGES[failed] ?? "Gagal menghubungkan GitHub.", "error");
+  const link = params.get("github_link");
+  if (!ok && !failed && !link) return;
   params.delete("github");
   params.delete("github_error");
+  params.delete("github_link");
   const query = params.toString();
   history.replaceState(null, "", window.location.pathname + (query ? `?${query}` : "") + window.location.hash);
+
+  if (ok && ok !== "updated") showToast(REDIRECT_MESSAGES[ok] ?? "GitHub diperbarui.", "success");
+  if (failed) showToast(REDIRECT_MESSAGES[failed] ?? "Gagal menghubungkan GitHub.", "error");
+  if (link) {
+    try {
+      await githubApi.link(link);
+      showToast(REDIRECT_MESSAGES.connected!, "success");
+    } catch (err) {
+      const conflict = err instanceof ApiError && err.status === 409;
+      showToast(conflict ? REDIRECT_MESSAGES.already_linked! : message(err, "Gagal menghubungkan GitHub."), "error");
+    }
+  }
 }
 
-onMounted(() => {
-  consumeRedirect();
+onMounted(async () => {
+  await consumeRedirect();
   load();
 });
 

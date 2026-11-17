@@ -6,6 +6,7 @@ import { requireRole } from "../auth/index.js";
 import { HttpError } from "../../lib/http-error.js";
 import { parseWith } from "../../lib/validate.js";
 import { getActorId, getWorkspaceId } from "../../lib/tenant.js";
+import { secretEnv } from "../../lib/env.js";
 import { githubConfigured, githubEnv, userInstallationIds, verifyWebhookSignature } from "./app.js";
 import {
   getGithubStatus,
@@ -30,8 +31,9 @@ const canView = requireRole("Owner", "Admin", "Manager");
 const WEB_URL = (process.env.WEB_URL ?? "http://localhost:3000").replace(/\/$/, "");
 // Its own key: an install `state` passes through GitHub's URLs and must never
 // be accepted as a login token.
-const STATE_SECRET = `${process.env.JWT_SECRET ?? "dev-secret-change-me"}:github-install`;
+const STATE_SECRET = `${secretEnv("JWT_SECRET", "dev-secret-change-me")}:github-install`;
 const STATE_TTL_SECONDS = 15 * 60;
+const LINK_TTL_SECONDS = 10 * 60;
 
 function assertConfigured() {
   if (!githubConfigured()) throw new HttpError(503, "GitHub integration is not configured on this server");
@@ -63,7 +65,13 @@ githubApi.post("/webhook", async (c) => {
 /**
  * Where GitHub sends the admin after installing (the App's Callback URL, with
  * "Request user authorization during installation" on). The OAuth code proves
- * the admin can access the installation before it is linked.
+ * the person installing can access the installation.
+ *
+ * It does not prove that person belongs to the workspace in `state`: an admin
+ * could hand their install link to another org's owner and get that org's
+ * repos linked to their own workspace. So nothing is linked here. The browser
+ * gets a short-lived link token, and the web app (logged in as the admin who
+ * started the install) redeems it at POST /link.
  */
 githubApi.get("/setup", async (c) => {
   const done = (query: string) => c.redirect(`${WEB_URL}/?page=github&${query}`);
@@ -86,13 +94,39 @@ githubApi.get("/setup", async (c) => {
 
   try {
     if (!(await userInstallationIds(code)).has(installationId)) return done("github_error=not_yours");
-    await linkInstallation(workspaceId, installationId, actorId);
-    return done("github=connected");
   } catch (error) {
-    if (error instanceof HttpError && error.status === 409) return done("github_error=already_linked");
     logger.error({ err: error, installationId }, "GitHub setup failed");
     return done("github_error=github_error");
   }
+  const link = await sign(
+    {
+      purpose: "github-link",
+      workspaceId,
+      sub: actorId,
+      installationId,
+      exp: Math.floor(Date.now() / 1000) + LINK_TTL_SECONDS,
+    },
+    STATE_SECRET,
+  );
+  return done(`github_link=${encodeURIComponent(link)}`);
+});
+
+/** Second half of /setup: only the admin who started the install can finish it. */
+githubApi.post("/link", canManage, async (c) => {
+  const { token } = await c.req.json<{ token?: unknown }>().catch(() => ({ token: undefined }));
+  let payload: Record<string, unknown>;
+  try {
+    if (typeof token !== "string") throw new Error("missing token");
+    payload = await verify(token, STATE_SECRET);
+    if (payload.purpose !== "github-link" || typeof payload.installationId !== "string") throw new Error("bad token");
+  } catch {
+    throw new HttpError(400, "Tautan pemasangan GitHub tidak valid atau kedaluwarsa. Coba hubungkan lagi.");
+  }
+  if (payload.workspaceId !== getWorkspaceId(c) || (payload.sub ?? null) !== getActorId(c)) {
+    throw new HttpError(403, "Pemasangan GitHub ini dimulai dari akun atau workspace lain.");
+  }
+  await linkInstallation(getWorkspaceId(c), payload.installationId, getActorId(c));
+  return c.json({ connected: true });
 });
 
 // ---- Dashboard ----
