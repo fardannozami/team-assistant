@@ -21,26 +21,33 @@ const db = createDbClient(
     "postgres://teamassistant:teamassistant@localhost:5432/teamassistant",
 );
 
+// Everyday words ("akan", "sekarang", "issue", ...) only label a part when
+// they open a line or carry a colon; mid-sentence they are just words:
+// "Fix issue #12" is not a blocker.
+const label = (word: string) => new RegExp(`(?:^|\\n)[ \\t]*(?:${word})\\b|\\b(?:${word})[ \\t]*:`, "i");
+
 const ELEMENT_KEYWORDS: Record<StandupElement, RegExp[]> = {
   yesterday: [/\byesterday\b/i, /\bkemarin\b/i, /\bkemaren\b/i],
   today: [
     /\btoday\b/i,
     /\bhari ini\b/i,
-    /\bplanning\b/i,
-    /\bplan\b/i,
+    label("planning"),
+    label("plan"),
     /\brencana\b/i,
-    /\bakan\b/i,
-    /\bsekarang\b/i,
+    label("akan"),
+    label("sekarang"),
   ],
   blockers: [
     /\bblockers?\b/i,
     /\bblocked\b/i,
     /\bkendala\b/i,
     /\bhambatan\b/i,
-    /\bmasalah\b/i,
+    label("masalah"),
     /\bterhambat\b/i,
-    /\bissues?\b/i,
-    /\bproblems?\b/i,
+    label("issues?"),
+    label("problems?"),
+    // "... dan tidak ada masalah" still answers the blocker question.
+    /(?<=\b(?:tidak|tdk|ga|gak|nggak|ngga|enggak|belum)\s+ada\s+)(?:masalah|issues?|problems?)\b/i,
   ],
 };
 
@@ -93,8 +100,14 @@ export function standupReminderText(
   ].join("\n");
 }
 
+/**
+ * Splits a reply into its labelled parts. `lead` is the part the bot just
+ * asked for: unlabelled text before the first label belongs to it, so
+ * "Selesai modul invoice, hari ini testing" keeps its first half.
+ */
 export function parseStandupText(
   text: string,
+  lead?: StandupElement,
 ): Partial<Record<StandupElement, string>> {
   const marks: {
     index: number;
@@ -140,6 +153,11 @@ export function parseStandupText(
     if (lines[2]) parsed.blockers = lines[2];
     return parsed;
   }
+  const leading = marks.length && lead
+    ? text.slice(0, marks[0]!.index).replace(/[\s,;:\-]+$/, "").trim()
+    : "";
+  if (leading && lead) parsed[lead] = leading;
+
   for (let i = 0; i < marks.length; i++) {
     const start = marks[i]!.end;
     const stop = i + 1 < marks.length ? marks[i + 1]!.index : text.length;
@@ -405,7 +423,7 @@ async function recordAnswers(
   const missing = CORE_STANDUP_ELEMENTS.filter((key) => !answered.has(key));
   if (missing.length === 0) return null;
 
-  let parsed = parseStandupText(text);
+  let parsed = parseStandupText(text, missing[0]);
   if (Object.keys(parsed).length === 0) {
     // Free-form reply to the question we asked last: file it there.
     parsed = { [missing[0]!]: text };
