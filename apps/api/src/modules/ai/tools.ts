@@ -12,6 +12,7 @@ import {
   createScheduleSchema,
   createTeamSchema,
   dateInTimezone,
+  isNoBlocker,
   DEFAULT_TIMEZONE,
   phoneNumberSchema,
   standupDateSchema,
@@ -1015,8 +1016,7 @@ export async function executeTool(
 
         const blockers = new Map<string, number>();
         for (const row of blockerRows) {
-          const value = row.block?.trim().toLowerCase();
-          if (!value || value === "none") continue;
+          if (isNoBlocker(row.block)) continue;
           blockers.set(row.block.trim(), (blockers.get(row.block.trim()) ?? 0) + 1);
         }
 

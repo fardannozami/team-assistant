@@ -283,6 +283,26 @@ export function parseMoodScore(answer: string): number | null {
 
 export type StandupElement = (typeof CORE_STANDUP_ELEMENTS)[number];
 
+const NO_BLOCKER_PHRASE =
+  "(?:(?:tidak|tdk|ga|gak|nggak|ngga|enggak|belum)\\s+ada(?:\\s+(?:kendala|blocker|blockers|masalah|hambatan|issue|apa[\\s-]*apa))?" +
+  "|none|no|no\\s+blockers?|nothing|nihil|kosong|n\\/?a|aman(?:\\s+(?:kok|semua|terkendali))?|lancar(?:\\s+jaya)?|-)";
+const NO_BLOCKER_RE = new RegExp(`^${NO_BLOCKER_PHRASE}(?:[\\s,]+${NO_BLOCKER_PHRASE})*$`, "i");
+
+/**
+ * True when a blocker answer means "no blocker": "tidak ada", "- tidak ada",
+ * "Tidak ada kendala.", "aman 👍", "none", "-". List markers, punctuation and
+ * emoji around the words are ignored, so a bulleted reply still counts.
+ */
+export function isNoBlocker(answer: string | null | undefined): boolean {
+  if (!answer) return true;
+  const text = answer
+    .trim()
+    .replace(/^[\s\-–—*•·>]+(?=\p{L})/u, "")
+    .replace(/[^\p{L}\p{N}\-]+$/u, "")
+    .replace(/\s+/g, " ");
+  return text === "" || NO_BLOCKER_RE.test(text);
+}
+
 export function dateInTimezone(
   timezone: string = DEFAULT_TIMEZONE,
   at: Date = new Date(),

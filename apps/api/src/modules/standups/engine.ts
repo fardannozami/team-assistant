@@ -2,6 +2,7 @@ import {
   CORE_STANDUP_ELEMENTS,
   dateInTimezone,
   DEFAULT_TIMEZONE,
+  isNoBlocker,
   type StandupElement,
 } from "@repo/shared";
 import { and, asc, eq } from "drizzle-orm";
@@ -50,9 +51,6 @@ const ELEMENT_KEYWORDS: Record<StandupElement, RegExp[]> = {
     /(?<=\b(?:tidak|tdk|ga|gak|nggak|ngga|enggak|belum)\s+ada\s+)(?:masalah|issues?|problems?)\b/i,
   ],
 };
-
-const NO_BLOCKER =
-  /^(tidak\s+ada(\s+(kendala|blocker|masalah))?|ga[k]?\s+ada(\s+(kendala|blocker))?|nggak\s+ada(\s+(kendala|blocker))?|none|no\s+blockers?|nothing|belum\s+ada|aman|lancar)\.?$/i;
 
 // Negation right before a blocker keyword ("... dan tidak ada kendala").
 const NEGATED_BLOCKER_PREFIX =
@@ -170,7 +168,7 @@ export function parseStandupText(
     let value = rawValue;
     if (
       element === "blockers" &&
-      (marks[i]!.negated || (!value && NO_BLOCKER.test(text)))
+      (marks[i]!.negated || (!value && isNoBlocker(text)))
     ) {
       value = "none";
     }
@@ -403,7 +401,7 @@ async function editStandup(employee: StandupCollector, date: string, rest: strin
 
   const row = await getOrCreateStandupRow(employee.workspaceId, session.id, employee.id, date);
   for (const [key, value] of Object.entries(parsed) as [StandupElement, string][]) {
-    const normalized = key === "blockers" && NO_BLOCKER.test(value) ? "none" : value;
+    const normalized = key === "blockers" && isNoBlocker(value) ? "none" : value;
     await upsertAnswer(row.id, key, normalized);
   }
   return `${summarize(date, "Standup diperbarui untuk", await getAnswers(row.id))} 😊`;
@@ -434,7 +432,7 @@ async function recordAnswers(
     string,
   ][]) {
     const normalized =
-      key === "blockers" && NO_BLOCKER.test(value) ? "none" : value;
+      key === "blockers" && isNoBlocker(value) ? "none" : value;
     await upsertAnswer(standupRow.id, key, normalized);
     answered.add(key);
   }

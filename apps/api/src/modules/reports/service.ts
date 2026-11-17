@@ -3,6 +3,7 @@ import { and, eq, gte, isNull, lte, notInArray, or } from "drizzle-orm";
 import { describeCounts } from "../github/digest.js";
 import { standupActivity } from "../github/service.js";
 import { standupToday } from "../standups/engine.js";
+import { isNoBlocker } from "@repo/shared";
 
 const db = createDbClient(
   process.env.DATABASE_URL ??
@@ -86,7 +87,7 @@ export async function generateDailyReport(workspaceId: string, date?: string) {
 
   const blockers = submitted
     .map((s) => ({ name: s.name, blocker: s.answers.blockers }))
-    .filter((b) => b.blocker && b.blocker.toLowerCase() !== "none");
+    .filter((b) => !isNoBlocker(b.blocker));
 
   const lines = [
     `Daily Report - ${d}`,
@@ -164,7 +165,7 @@ export async function generateWeeklyReport(workspaceId: string) {
     entry.total.add(r.employeeId);
     if (r.status === "completed") entry.submitted.add(r.employeeId);
     byDate.set(r.date, entry);
-    if (r.questionKey === "blockers" && r.answer && r.answer.toLowerCase() !== "none") {
+    if (r.questionKey === "blockers" && r.answer && !isNoBlocker(r.answer)) {
       blockersCount.set(r.answer, (blockersCount.get(r.answer) ?? 0) + 1);
     }
   }
