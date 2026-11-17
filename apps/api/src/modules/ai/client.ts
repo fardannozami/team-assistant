@@ -1,3 +1,4 @@
+import { assertPublicHost } from "../../lib/net.js";
 /** Provider endpoint and credentials; each workspace brings its own key. */
 export type AiConfig = {
   baseUrl: string;
@@ -83,8 +84,12 @@ export async function chatWithTools(
 
   let response: Response;
   try {
+    // Re-checked per request (DNS can change after the URL was saved), and
+    // no redirects: a public host could otherwise bounce us to an internal one.
+    await assertPublicHost(new URL(config.baseUrl).hostname);
     response = await fetch(`${config.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
       method: "POST",
+      redirect: "error",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${config.apiKey}`,

@@ -4,6 +4,7 @@ import { createDbClient, workspaceAiSettings } from "@repo/database";
 import { audit } from "../auth/index.js";
 import { HttpError } from "../../lib/http-error.js";
 import { decryptSecret, encryptSecret } from "../../lib/secrets.js";
+import { assertPublicHost } from "../../lib/net.js";
 import { AiProviderError, chatWithTools, type AiConfig } from "./client.js";
 
 const db = createDbClient(
@@ -100,8 +101,12 @@ export type SaveAiSettingsInput = {
   apiKey?: string;
 };
 
-/** Custom endpoints must be public https URLs: the server fetches them. */
-function validateBaseUrl(raw: string): string {
+/**
+ * Custom endpoints must be public https URLs: the server fetches them. The
+ * name has to resolve to public addresses too ("127.0.0.1.nip.io" is not a
+ * literal IP but still points at the server itself).
+ */
+async function validateBaseUrl(raw: string): Promise<string> {
   let url: URL;
   try {
     url = new URL(raw.trim());
@@ -110,6 +115,11 @@ function validateBaseUrl(raw: string): string {
   }
   const host = url.hostname.replace(/^\[|\]$/g, "");
   if (url.protocol !== "https:" || host === "localhost" || host.endsWith(".local") || isIP(host)) {
+    throw new HttpError(400, "Base URL harus berupa alamat https publik.");
+  }
+  try {
+    await assertPublicHost(host);
+  } catch {
     throw new HttpError(400, "Base URL harus berupa alamat https publik.");
   }
   return url.toString().replace(/\/+$/, "");
@@ -150,7 +160,7 @@ export async function saveAiSettings(workspaceId: string, input: SaveAiSettingsI
     .where(eq(workspaceAiSettings.workspaceId, workspaceId))
     .limit(1);
 
-  const baseUrl = validateBaseUrl(provider === "custom" ? (input.baseUrl ?? "") : preset.baseUrl);
+  const baseUrl = await validateBaseUrl(provider === "custom" ? (input.baseUrl ?? "") : preset.baseUrl);
   const model = (input.model ?? "").trim() || preset.model;
   if (!model) throw new HttpError(400, "Isi nama model.");
 
