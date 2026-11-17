@@ -253,12 +253,8 @@ export async function isExcludedDate(
   const s = await getCalendarSettings(workspaceId);
   const dayOfWeek = new Date(`${date}T00:00:00Z`).getUTCDay();
 
-  // Weekend check
-  if (s.skipWeekends && (dayOfWeek === 0 || dayOfWeek === 6)) {
-    return { excluded: true, reason: "weekend" };
-  }
-
-  // Manual exceptions
+  // Manual exceptions win over everything else, so a make-up workday on a
+  // Saturday (common around cuti bersama) still gets its standup.
   const [exception] = await db
     .select()
     .from(calendarExceptions)
@@ -272,6 +268,11 @@ export async function isExcludedDate(
   if (exception) {
     if (exception.skip) return { excluded: true, reason: exception.reason ?? "manual exception" };
     return { excluded: false, reason: exception.reason ?? "manual override (not skipped)" };
+  }
+
+  // Weekend check
+  if (s.skipWeekends && (dayOfWeek === 0 || dayOfWeek === 6)) {
+    return { excluded: true, reason: "weekend" };
   }
 
   // Holidays (global)
