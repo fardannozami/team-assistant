@@ -5,6 +5,8 @@ import makeWASocket, {
   DisconnectReason,
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
+  isLidUser,
+  isPnUser,
   type ConnectionState,
   type WAVersion,
 } from "@whiskeysockets/baileys";
@@ -301,6 +303,10 @@ async function openSocket(workspaceId: string, pairingPhone?: string): Promise<S
     if (type !== "notify") return;
     for (const msg of messages) {
       if (!msg.message || msg.key.fromMe) continue;
+      // Only 1:1 chats. In groups the sender's phone still resolves (via
+      // participantAlt) but replies would go to the whole group; status
+      // updates, broadcasts and newsletters aren't meant for the bot either.
+      if (!isPnUser(msg.key.remoteJid ?? "") && !isLidUser(msg.key.remoteJid ?? "")) continue;
       const id = msg.key.id;
       if (!id || !markProcessed(state, id)) continue;
 
