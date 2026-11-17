@@ -264,6 +264,7 @@ import {
   type ProjectPerson,
   type ProjectStatus,
 } from "../api";
+import { localIsoDate } from "../dates";
 
 type FormMember = ProjectInput["members"][number];
 
@@ -306,15 +307,12 @@ const PERIOD_LABEL: Record<Period, string> = {
   all: "Semua tanggal",
   custom: "Custom",
 };
-// YYYY-MM-DD in local time (toISOString would shift to UTC).
-const isoDay = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 function periodRange(p: Period): [string, string] | null {
   const now = new Date();
   const y = now.getFullYear();
   const m = now.getMonth();
-  if (p === "this_month") return [isoDay(new Date(y, m, 1)), isoDay(new Date(y, m + 1, 0))];
-  if (p === "last_month") return [isoDay(new Date(y, m - 1, 1)), isoDay(new Date(y, m, 0))];
+  if (p === "this_month") return [localIsoDate(new Date(y, m, 1)), localIsoDate(new Date(y, m + 1, 0))];
+  if (p === "last_month") return [localIsoDate(new Date(y, m - 1, 1)), localIsoDate(new Date(y, m, 0))];
   if (p === "this_year") return [`${y}-01-01`, `${y}-12-31`];
   if (p === "all") return ["", ""];
   return null;
@@ -358,7 +356,7 @@ onMounted(load);
 // A project matches when its run overlaps the range: no end date means still
 // running, and one without any dates counts on the day it was last updated.
 function inDateRange(p: Project) {
-  const start = p.startDate ?? p.endDate ?? isoDay(new Date(p.updatedAt));
+  const start = p.startDate ?? p.endDate ?? localIsoDate(new Date(p.updatedAt));
   const end = p.endDate ?? (p.startDate ? "9999-12-31" : start);
   return (!dateTo.value || start <= dateTo.value) && (!dateFrom.value || end >= dateFrom.value);
 }

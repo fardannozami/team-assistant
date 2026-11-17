@@ -94,7 +94,7 @@ async function loadSummary() {
   loading.value = true;
   error.value = "";
   try {
-    report.value = await reportsApi.daily(new Date().toISOString().slice(0, 10));
+    report.value = await reportsApi.daily();
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : "Ringkasan gagal dimuat.";
   } finally {

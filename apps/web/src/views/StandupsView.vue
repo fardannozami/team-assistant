@@ -97,8 +97,9 @@ import {
   type StandupSession,
 } from "../api";
 import GithubActivity from "./GithubActivity.vue";
+import { localIsoDate } from "../dates";
 
-const date = ref(new Date().toISOString().slice(0, 10));
+const date = ref(localIsoDate());
 const standups = ref<StandupSession[]>([]);
 const loading = ref(false);
 const error = ref("");

@@ -153,6 +153,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import CheckinResults from "./CheckinResults.vue";
+import { localIsoDate } from "../dates";
 import {
   reportsApi,
   ApiError,
@@ -171,7 +172,7 @@ const reportTab = ref("daily");
 const error = ref("");
 
 // ---- Daily ----
-const dailyDate = ref(new Date().toISOString().slice(0, 10));
+const dailyDate = ref(localIsoDate());
 const dailyReport = ref<DailyReport | null>(null);
 const loadingDaily = ref(false);
 

@@ -234,6 +234,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from "vue";
+import { localIsoDate } from "../dates";
 import {
   holidaysApi,
   ApiError,
@@ -392,7 +393,7 @@ async function handleDeleteException(id: string) {
 
 // ---- Check date ----
 const checking = ref(false);
-const checkDate = ref(new Date().toISOString().slice(0, 10));
+const checkDate = ref(localIsoDate());
 const checkResult = ref<{ excluded: boolean; reason?: string } | null>(null);
 
 async function checkExcluded() {
