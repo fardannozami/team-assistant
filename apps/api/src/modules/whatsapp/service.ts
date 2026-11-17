@@ -366,6 +366,19 @@ async function openSocket(workspaceId: string, pairingPhone?: string): Promise<S
         }
 
         if (employee) {
+          // Imported lazily to avoid circular dependencies.
+          const { handleAiMessage, isPendingConfirmationReply } = await import("../ai/service.js");
+
+          // A YES/NO to an AI action goes to the AI first, before an open
+          // check-in or standup can take it as an answer.
+          if (isPendingConfirmationReply(workspaceId, phone, body)) {
+            const aiReply = await handleAiMessage({ workspaceId, phone, body, employee, roleName });
+            if (aiReply) {
+              await replyText(workspaceId, from, aiReply);
+              continue;
+            }
+          }
+
           const checkinReply = await handleCheckinMessage({ employee, body });
           if (checkinReply) {
             await replyText(workspaceId, from, checkinReply);
@@ -379,8 +392,6 @@ async function openSocket(workspaceId: string, pairingPhone?: string): Promise<S
           }
 
           // M7: AI agent is the last fallback for registered employees.
-          // Imported lazily to avoid circular dependencies.
-          const { handleAiMessage } = await import("../ai/service.js");
           const aiReply = await handleAiMessage({ workspaceId, phone, body, employee, roleName });
           if (aiReply) {
             await replyText(workspaceId, from, aiReply);

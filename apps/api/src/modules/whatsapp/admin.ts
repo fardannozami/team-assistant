@@ -46,6 +46,11 @@ type PendingFlow =
       employeeId: string;
       employeeName: string;
       phone: string;
+    }
+  | {
+      kind: "schedule";
+      step: "confirm";
+      schedule: { timeOfDay: string; weekdays: number[]; timezone?: string };
     };
 
 type CommandName =
@@ -231,19 +236,45 @@ function parseNaturalTime(text: string): string | null {
   return null;
 }
 
+const NATURAL_SCHEDULE_VERB =
+  /\b(set|atur|aturkan|jadwalkan|ubah|ganti|pindah(?:kan)?|schedule|change|move)\b/i;
+const NATURAL_QUESTION =
+  /\?|^\s*(kenapa|mengapa|apa|apakah|kapan|bagaimana|gimana|why|what|when|how|is|does|did)\b/i;
+const NOT_SUNDAY = /\b(?:(?:se|per|tiap|setiap)\s*minggu|minggu\s+(?:ini|depan|lalu|kemarin))\b/gi;
+
+/**
+ * Keeps only times that read as times: "09:00", "jam 9.30", "9.30 am".
+ * A bare "10.12" is more likely a date than 10:12, so it is dropped.
+ */
+function naturalTimeText(text: string): string {
+  return text.replace(/(\b(?:jam|pukul|at)\s*)?\b(\d{1,2})\.(\d{2})\b(\s*(?:am|pm))?/gi, (match, lead, _h, _m, suffix) =>
+    lead || suffix ? match.replace(".", ":") : " ",
+  );
+}
+
+function scheduleConfirmation(schedule: { timeOfDay: string; weekdays: number[]; timezone?: string }) {
+  const tz = schedule.timezone ? ` (${schedule.timezone})` : "";
+  return `Saya akan mengubah jadwal standup menjadi ${formatWeekdays(schedule.weekdays)} pukul ${schedule.timeOfDay}${tz}. Sudah benar? Balas YA atau TIDAK.`;
+}
+
 /**
  * Narrow natural-language schedule parsing (PRD §5.4 example):
  * "Schedule standup from Monday to Friday at 9:00 AM WIB".
  * The M7 agent replaces this with full LLM understanding.
  */
-function parseNaturalSchedule(text: string): {
+function parseNaturalSchedule(input: string): {
   timeOfDay: string;
   weekdays: number[];
   timezone?: string;
 } | null {
-  if (!/\b(standup|jadwal)\b/i.test(text)) return null;
+  if (!/\b(standup|jadwal)\b/i.test(input)) return null;
+  // Only instructions ("atur standup senin-jumat jam 09:00"), not questions
+  // or remarks that happen to mention a day and a time.
+  if (!NATURAL_SCHEDULE_VERB.test(input) || NATURAL_QUESTION.test(input)) return null;
+  // "minggu ini/depan", "per minggu" mean "week", not Sunday.
+  const text = input.replace(NOT_SUNDAY, " ");
 
-  const timeOfDay = parseNaturalTime(text);
+  const timeOfDay = parseNaturalTime(naturalTimeText(text));
   if (!timeOfDay) return null;
 
   let weekdays: number[] = [];
@@ -803,16 +834,26 @@ export async function handleAdminMessage(args: {
     }
   }
 
-  if (pending) {
+  if (pending?.kind === "schedule") {
+    clearFlow(flowKey);
+    if (isYes(text)) {
+      const schedule = await upsertStandupSchedule(ws, pending.schedule, args.employee.userId);
+      return savedScheduleReply(schedule);
+    }
+    if (isNo(text)) return "Dibatalkan, jadwal tidak diubah.";
+    // Anything else is a new message: the schedule stays as it was.
+  } else if (pending) {
     return pending.kind === "add"
       ? continueAddFlow(ws, flowKey, pending, text, args.employee)
       : continuePhoneFlow(ws, flowKey, pending, text, args.employee);
   }
 
+  // Never saved straight away: a sentence that merely mentions a day and a
+  // time would otherwise replace the whole schedule.
   const natural = parseNaturalSchedule(text);
   if (natural) {
-    const schedule = await upsertStandupSchedule(ws, natural, args.employee.userId);
-    return savedScheduleReply(schedule);
+    setFlow(flowKey, { kind: "schedule", step: "confirm", schedule: natural });
+    return scheduleConfirmation(natural);
   }
 
   return null;

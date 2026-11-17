@@ -197,6 +197,17 @@ async function storeConfirmedActionMemory(
   }
 }
 
+/**
+ * True when this message answers an AI action waiting for YES/NO. The
+ * WhatsApp router checks this before the standup and check-in engines, which
+ * would otherwise file the "YA" as an answer.
+ */
+export function isPendingConfirmationReply(workspaceId: string, phone: string, body: string): boolean {
+  const entry = pendingActions.get(pendingKey(workspaceId, phone));
+  if (!entry || entry.expiresAt < Date.now()) return false;
+  return isYes(body) || isNo(body);
+}
+
 async function runPendingConfirmation(
   phone: string,
   body: string,
