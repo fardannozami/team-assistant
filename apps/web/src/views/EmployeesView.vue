@@ -9,7 +9,7 @@
     <button
       :disabled="loading"
       class="inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover hover:shadow-[0_0_0_12px_rgba(63,68,226,0.45)] active:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
-      @click="showAddForm = true; addStep = 1"
+      @click="openAddForm"
     >
       Tambah anggota
     </button>
@@ -345,6 +345,22 @@ async function toggleActive(e: Employee) {
   }
 }
 
+// Every new member starts from a blank form: a role left over from the last
+// one (say Admin) would otherwise be given to the next person unnoticed.
+function resetAddForm() {
+  empName.value = "";
+  empPhone.value = "";
+  empRoleId.value = null;
+  empGithub.value = "";
+  createError.value = "";
+  addStep.value = 1;
+}
+
+function openAddForm() {
+  resetAddForm();
+  showAddForm.value = true;
+}
+
 async function createEmployee() {
   createError.value = "";
   if (!empName.value.trim() || !empPhone.value.trim()) {
@@ -361,10 +377,7 @@ async function createEmployee() {
       githubLogin: empGithub.value.trim() || null,
     });
     showToast("Anggota berhasil ditambahkan.", "success");
-    empName.value = "";
-    empPhone.value = "";
-    empGithub.value = "";
-    addStep.value = 1;
+    resetAddForm();
     showAddForm.value = false;
     await loadEmployees();
   } catch (err) {
