@@ -3,7 +3,12 @@
  * The key comes from ENCRYPTION_KEY; changing it makes stored secrets
  * unreadable, so set it once per deployment.
  */
-const SECRET = process.env.ENCRYPTION_KEY ?? process.env.JWT_SECRET ?? "dev-secret-change-me";
+// Older deployments encrypted with JWT_SECRET; keep reading those, but warn:
+// rotating JWT_SECRET would then make every stored key unreadable.
+const SECRET = process.env.ENCRYPTION_KEY || process.env.JWT_SECRET || "dev-secret-change-me";
+if (process.env.NODE_ENV === "production" && !process.env.ENCRYPTION_KEY) {
+  console.warn("ENCRYPTION_KEY is not set: stored secrets are encrypted with JWT_SECRET, so rotating it loses them.");
+}
 const VERSION = "v1";
 
 let keyPromise: Promise<CryptoKey> | null = null;

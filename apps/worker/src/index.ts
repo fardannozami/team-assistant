@@ -27,8 +27,11 @@ const db = createDbClient(
 );
 
 const API_URL = process.env.INTERNAL_API_URL ?? "http://localhost:4000";
-const INTERNAL_API_TOKEN =
-  process.env.INTERNAL_API_TOKEN ?? "dev-internal-token";
+const INTERNAL_API_TOKEN = process.env.INTERNAL_API_TOKEN || "dev-internal-token";
+// The API refuses the dev token in production; fail here too rather than on every job.
+if (process.env.NODE_ENV === "production" && INTERNAL_API_TOKEN === "dev-internal-token") {
+  throw new Error("INTERNAL_API_TOKEN must be set to a private value in production");
+}
 
 // Daily report time, applied per workspace (timezone falls back to the env
 // value when the workspace has no calendar settings).

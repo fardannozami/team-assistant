@@ -5,9 +5,10 @@ import { createDbClient, createWorkspace } from "@repo/database";
 import { users, roles, employees, auditLogs, workspaces } from "@repo/database";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { acceptPendingInvite } from "../users/service.js";
+import { secretEnv } from "../../lib/env.js";
 
 const db = createDbClient(process.env.DATABASE_URL ?? "postgres://teamassistant:teamassistant@localhost:5432/teamassistant");
-const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-change-me";
+const JWT_SECRET = secretEnv("JWT_SECRET", "dev-secret-change-me");
 const TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 export const auth = new Hono();
@@ -181,7 +182,7 @@ export function requireRole(...allowed: string[]) {
   };
 }
 
-const INTERNAL_API_TOKEN = process.env.INTERNAL_API_TOKEN ?? "dev-internal-token";
+const INTERNAL_API_TOKEN = secretEnv("INTERNAL_API_TOKEN", "dev-internal-token");
 
 /**
  * Internal service callers (the scheduler worker) authenticate with
