@@ -1,6 +1,5 @@
 import { createDbClient, employees, roles, standupAnswers, standupSessions, standups } from "@repo/database";
 import { and, eq, gte, isNull, lte, notInArray, or } from "drizzle-orm";
-import { dateInTimezone, DEFAULT_TIMEZONE } from "@repo/shared";
 import { describeCounts } from "../github/digest.js";
 import { standupActivity } from "../github/service.js";
 import { standupToday } from "../standups/engine.js";
@@ -125,11 +124,11 @@ export async function generateDailyReport(workspaceId: string, date?: string) {
 }
 
 export async function generateWeeklyReport(workspaceId: string) {
-  const end = new Date();
-  const start = new Date();
-  start.setDate(start.getDate() - 6);
-  const startStr = dateInTimezone(DEFAULT_TIMEZONE, start);
-  const endStr = dateInTimezone(DEFAULT_TIMEZONE, end);
+  // The last 7 days in the workspace's standup timezone, today included.
+  const endStr = await standupToday(workspaceId);
+  const start = new Date(`${endStr}T00:00:00Z`);
+  start.setUTCDate(start.getUTCDate() - 6);
+  const startStr = start.toISOString().slice(0, 10);
 
   const rows = await db
     .select({
@@ -142,6 +141,7 @@ export async function generateWeeklyReport(workspaceId: string) {
     })
     .from(standupSessions)
     .innerJoin(employees, eq(standupSessions.employeeId, employees.id))
+    .leftJoin(roles, eq(employees.roleId, roles.id))
     .leftJoin(standups, eq(standups.sessionId, standupSessions.id))
     .leftJoin(standupAnswers, eq(standupAnswers.standupId, standups.id))
     .where(
@@ -151,15 +151,18 @@ export async function generateWeeklyReport(workspaceId: string) {
         gte(standupSessions.date, startStr),
         lte(standupSessions.date, endStr),
         eq(employees.isActive, true),
+        // Same people as the daily report.
+        or(isNull(roles.name), notInArray(roles.name, ["Owner", "Admin"])),
       ),
     );
 
-  const byDate = new Map<string, { submitted: number; total: Set<string> }>();
+  // One row per answer: count people, not rows.
+  const byDate = new Map<string, { submitted: Set<string>; total: Set<string> }>();
   const blockersCount = new Map<string, number>();
   for (const r of rows) {
-    const entry = byDate.get(r.date) ?? { submitted: 0, total: new Set() };
+    const entry = byDate.get(r.date) ?? { submitted: new Set(), total: new Set() };
     entry.total.add(r.employeeId);
-    if (r.status === "completed") entry.submitted++;
+    if (r.status === "completed") entry.submitted.add(r.employeeId);
     byDate.set(r.date, entry);
     if (r.questionKey === "blockers" && r.answer && r.answer.toLowerCase() !== "none") {
       blockersCount.set(r.answer, (blockersCount.get(r.answer) ?? 0) + 1);
@@ -172,7 +175,7 @@ export async function generateWeeklyReport(workspaceId: string) {
     "Daily completion:",
     ...[...byDate.entries()]
       .sort()
-      .map(([d, v]) => `- ${d}: ${v.submitted}/${v.total.size}`),
+      .map(([d, v]) => `- ${d}: ${v.submitted.size}/${v.total.size}`),
     "",
     "Repeated blockers:",
     ...(blockersCount.size
@@ -185,7 +188,7 @@ export async function generateWeeklyReport(workspaceId: string) {
     end: endStr,
     days: [...byDate.entries()].map(([date, v]) => ({
       date,
-      submitted: v.submitted,
+      submitted: v.submitted.size,
       total: v.total.size,
     })),
     repeatedBlockers: [...blockersCount.entries()].map(([blocker, count]) => ({
