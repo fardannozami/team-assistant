@@ -10,9 +10,19 @@ CREATE TABLE IF NOT EXISTS "webhook_deliveries" (
 ALTER TABLE "tracked_repositories" DROP CONSTRAINT "tracked_repositories_full_name_unique";--> statement-breakpoint
 ALTER TABLE "activity_events" DROP CONSTRAINT "activity_events_employee_id_employees_id_fk";
 --> statement-breakpoint
+-- Repositories tracked before this rework have no workspace or GitHub repo
+-- id and cannot be backfilled; syncing an installation lists them again.
+DELETE FROM "tracked_repositories";--> statement-breakpoint
 ALTER TABLE "tracked_repositories" ALTER COLUMN "installation_id" SET NOT NULL;--> statement-breakpoint
-ALTER TABLE "activity_events" ADD COLUMN "workspace_id" uuid NOT NULL;--> statement-breakpoint
-ALTER TABLE "activity_events" ADD COLUMN "external_id" text NOT NULL;--> statement-breakpoint
+-- Existing events take their employee's workspace; events nobody can be
+-- placed in a workspace for are dropped.
+ALTER TABLE "activity_events" ADD COLUMN "workspace_id" uuid;--> statement-breakpoint
+ALTER TABLE "activity_events" ADD COLUMN "external_id" text;--> statement-breakpoint
+UPDATE "activity_events" a SET "workspace_id" = e."workspace_id" FROM "employees" e WHERE a."employee_id" = e."id";--> statement-breakpoint
+DELETE FROM "activity_events" WHERE "workspace_id" IS NULL;--> statement-breakpoint
+UPDATE "activity_events" SET "external_id" = "id"::text;--> statement-breakpoint
+ALTER TABLE "activity_events" ALTER COLUMN "workspace_id" SET NOT NULL;--> statement-breakpoint
+ALTER TABLE "activity_events" ALTER COLUMN "external_id" SET NOT NULL;--> statement-breakpoint
 ALTER TABLE "activity_events" ADD COLUMN "actor_login" text;--> statement-breakpoint
 ALTER TABLE "activity_events" ADD COLUMN "repository" text;--> statement-breakpoint
 ALTER TABLE "github_installations" ADD COLUMN "repository_selection" text;--> statement-breakpoint
