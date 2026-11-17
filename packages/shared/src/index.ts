@@ -68,9 +68,16 @@ export const teamMemberSchema = z.object({
   employeeId: z.string().uuid(),
 });
 
+/** YYYY-MM-DD that is a real calendar day (not 2024-02-31 or 2024-13-45). */
+export function isRealIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const d = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
+
 export const standupDateSchema = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format");
+  .refine(isRealIsoDate, "Date must be a real date in YYYY-MM-DD format");
 
 export const triggerStandupSchema = z.object({
   employeeId: z.string().uuid().optional(),
@@ -206,7 +213,7 @@ export const PAYMENT_TYPES = ["fixed", "hourly"] as const;
 export const PAYMENT_STATUSES = ["pending", "accepted", "paid"] as const;
 export const PROJECT_MEMBER_ROLES = ["pm_sales", "designer", "developer"] as const;
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal harus YYYY-MM-DD");
+const isoDate = z.string().refine(isRealIsoDate, "Tanggal harus YYYY-MM-DD yang valid");
 const money = z.number().finite().min(0).max(1_000_000_000);
 const percent = z.number().finite().min(0).max(100);
 

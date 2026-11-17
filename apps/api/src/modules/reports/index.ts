@@ -4,7 +4,8 @@ import { getWorkspaceId } from "../../lib/tenant.js";
 import { generateDailyReport, generateWeeklyReport } from "./service.js";
 import { listEmployees } from "../employees/service.js";
 import { sendText } from "../whatsapp/service.js";
-import { isAdminRole, normalizePhoneNumber, remindStandupSchema } from "@repo/shared";
+import { isAdminRole, isRealIsoDate, normalizePhoneNumber, remindStandupSchema } from "@repo/shared";
+import { HttpError } from "../../lib/http-error.js";
 import { parseWith } from "../../lib/validate.js";
 
 export const reportsApi = new Hono();
@@ -13,6 +14,7 @@ const canView = requireRole("Owner", "Admin", "Manager");
 
 reportsApi.get("/daily", canView, async (c) => {
   const date = c.req.query("date");
+  if (date !== undefined && !isRealIsoDate(date)) throw new HttpError(400, "date must be in YYYY-MM-DD format");
   return c.json(await generateDailyReport(getWorkspaceId(c), date));
 });
 

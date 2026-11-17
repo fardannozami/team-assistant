@@ -386,7 +386,7 @@ export async function listActivity(
     .leftJoin(employees, eq(activityEvents.employeeId, employees.id))
     .where(and(...conditions))
     .orderBy(desc(activityEvents.occurredAt))
-    .limit(Math.min(filters.limit ?? 50, 200));
+    .limit(Math.min(Math.max(Math.trunc(filters.limit ?? 50), 1), 200));
 }
 
 /** Per-employee counts since `since`: observed activity, not a ranking. */

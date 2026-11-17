@@ -77,6 +77,15 @@ describe.skipIf(!url)("tenant isolation", () => {
     expect(schedules.map((s: { id: string }) => s.id)).toEqual([ws.a.scheduleId]);
   });
 
+  test("malformed ids, dates and limits are a 400, not a 500", async () => {
+    expect((await req("a", "/employees/not-a-uuid")).status).toBe(400);
+    expect((await req("a", "/schedules/123", { method: "PATCH", body: JSON.stringify({ timeOfDay: "03:00" }) })).status).toBe(400);
+    expect((await req("a", "/reports/daily?date=foo")).status).toBe(400);
+    expect((await req("a", "/reports/daily?date=2024-02-31")).status).toBe(400);
+    expect((await req("a", "/holidays/check?date=2024-13-45")).status).toBe(400);
+    expect((await req("a", "/github/activity?limit=-5")).status).toBe(200);
+  });
+
   test("daily report counts only own members", async () => {
     const report = await (await req("a", "/reports/daily")).json();
     expect(report.total).toBe(1);

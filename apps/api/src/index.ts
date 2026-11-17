@@ -17,6 +17,7 @@ import { usersApi } from "./modules/users/index.js";
 import { projectsApi } from "./modules/projects/index.js";
 import { startAllWhatsApp, stopAllWhatsApp } from "./modules/whatsapp/service.js";
 import { HttpError } from "./lib/http-error.js";
+import { isBadInputError } from "./lib/db.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 
@@ -35,6 +36,9 @@ app.use(
 app.onError((err, c) => {
   if (err instanceof HttpError) {
     return c.json({ error: err.message }, err.status);
+  }
+  if (isBadInputError(err)) {
+    return c.json({ error: "Invalid input" }, 400);
   }
   logger.error(err, "Unhandled request error");
   return c.json({ error: "Internal server error" }, 500);

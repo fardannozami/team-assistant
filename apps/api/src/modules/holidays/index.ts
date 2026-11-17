@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { updateCalendarSettingsSchema } from "@repo/shared";
+import { isRealIsoDate, updateCalendarSettingsSchema } from "@repo/shared";
 import { requireRole } from "../auth/index.js";
 import { getActorId, getWorkspaceId } from "../../lib/tenant.js";
 import { HttpError } from "../../lib/http-error.js";
@@ -56,7 +56,7 @@ holidaysApi.post("/sync", canManage, async (c) => {
 
 holidaysApi.get("/check", canView, async (c) => {
   const date = c.req.query("date");
-  if (!date) throw new (await import("../../lib/http-error.js")).HttpError(400, "date query required");
+  if (!date || !isRealIsoDate(date)) throw new HttpError(400, "date must be in YYYY-MM-DD format");
   return c.json(await isExcludedDate(getWorkspaceId(c), date));
 });
 
@@ -66,8 +66,8 @@ holidaysApi.get("/exceptions", canView, async (c) => {
 
 holidaysApi.post("/exceptions", canManage, async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as any;
-  if (!body?.date || !/^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
-    throw new (await import("../../lib/http-error.js")).HttpError(400, "date must be YYYY-MM-DD");
+  if (typeof body?.date !== "string" || !isRealIsoDate(body.date)) {
+    throw new HttpError(400, "date must be YYYY-MM-DD");
   }
   const input = {
     date: body.date,
