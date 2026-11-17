@@ -4,7 +4,7 @@ import {
   calendarSettings,
   calendarExceptions,
 } from "@repo/database";
-import { and, asc, desc, eq, gte, lte } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, lte } from "drizzle-orm";
 import { audit } from "../auth/index.js";
 import { HttpError } from "../../lib/http-error.js";
 import {
@@ -119,47 +119,64 @@ export async function listUpcomingHolidays(limit = 10, from?: string) {
  * Holidays are global (public data); `workspaceId` only attributes the audit
  * entry to the workspace that triggered the sync.
  */
+function isRealDate(date: string) {
+  const d = new Date(`${date}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === date;
+}
+
 export async function syncHolidays(
   year: number = new Date().getFullYear(),
   actorId?: string | null,
   workspaceId: string | null = null,
 ) {
   const url = `${HOLIDAY_API_URL}?year=${year}`;
-  let data: any[] = [];
+  let data: unknown[] = [];
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Holiday API failed: ${res.status}`);
     const body = (await res.json()) as any;
-    data = Array.isArray(body) ? body : (body.data ?? []);
+    data = Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : [];
   } catch (err) {
     // Retain last successful dataset: do not wipe.
     throw new HttpError(400, `Failed to sync holidays: ${(err as Error).message}`);
   }
 
-  // Replace both national and joint rows for that year with fresh data. The
-  // table is shared by every workspace, so swap atomically: readers never see
-  // an empty year.
+  // Only well-formed entries of the requested year; anything else is dropped
+  // rather than stored (a date outside the year would never be replaced).
+  const fresh = data.flatMap((entry: any) => {
+    const date = typeof entry?.date === "string" ? entry.date : "";
+    if (!date.startsWith(`${year}-`) || !isRealDate(date)) return [];
+    const name = String(entry.localName ?? entry.name ?? "Holiday").trim() || "Holiday";
+    const isJoint =
+      entry.type === "leave" ||
+      /cuti bersama/i.test(name) ||
+      (Array.isArray(entry.types) && entry.types.includes("Joint"));
+    return [{ date, name, type: isJoint ? "joint" : "national", source: url }];
+  });
+
+  // The table is shared by every workspace: a broken or empty upstream
+  // response must not wipe a year that is already in place.
+  const [{ existing } = { existing: 0 }] = await db
+    .select({ existing: count() })
+    .from(holidays)
+    .where(and(gte(holidays.date, `${year}-01-01`), lte(holidays.date, `${year}-12-31`)));
+  if (fresh.length === 0) {
+    throw new HttpError(400, `Failed to sync holidays: the source returned no holidays for ${year}; existing data kept`);
+  }
+  if (fresh.length < existing / 2) {
+    throw new HttpError(
+      400,
+      `Failed to sync holidays: the source returned ${fresh.length} holidays for ${year}, far fewer than the ${existing} stored; existing data kept`,
+    );
+  }
+
+  // Replace both national and joint rows for that year with fresh data,
+  // atomically: readers never see an empty year.
   const inserted = await db.transaction(async (tx) => {
     await tx
       .delete(holidays)
       .where(and(gte(holidays.date, `${year}-01-01`), lte(holidays.date, `${year}-12-31`)));
-
-    const rows = [];
-    for (const entry of data) {
-      const date = entry.date;
-      const name = entry.localName ?? entry.name ?? "Holiday";
-      const isJoint =
-        entry.type === "leave" ||
-        /cuti bersama/i.test(name) ||
-        (Array.isArray(entry.types) && entry.types.includes("Joint"));
-      const type = isJoint ? "joint" : "national";
-      const [row] = await tx
-        .insert(holidays)
-        .values({ date, name, type, source: url })
-        .returning();
-      if (row) rows.push(row);
-    }
-    return rows;
+    return tx.insert(holidays).values(fresh).returning();
   });
 
   await audit(workspaceId, actorId ?? null, "holiday.sync", "holidays", undefined, {

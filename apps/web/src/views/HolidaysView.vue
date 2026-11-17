@@ -125,8 +125,8 @@
           <input
             v-model.number="syncYear"
             type="number"
-            min="2000"
-            max="2100"
+            :min="syncYearMin"
+            :max="syncYearMax"
             class="w-full px-4 py-3.5 rounded-xl border text-sm placeholder-text-dim transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none bg-panel border-border"
           />
         </div>
@@ -312,6 +312,9 @@ async function loadHolidays() {
 // ---- Sync ----
 const syncing = ref(false);
 const syncYear = ref(new Date().getFullYear());
+// The API only syncs the years around now (holidays are shared by every workspace).
+const syncYearMin = syncYear.value - 1;
+const syncYearMax = syncYear.value + 1;
 const syncResult = ref<{ year: number; synced: number } | null>(null);
 
 async function syncHolidays() {

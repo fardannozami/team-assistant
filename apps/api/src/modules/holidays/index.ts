@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { updateCalendarSettingsSchema } from "@repo/shared";
 import { requireRole } from "../auth/index.js";
 import { getActorId, getWorkspaceId } from "../../lib/tenant.js";
+import { HttpError } from "../../lib/http-error.js";
 import { parseWith } from "../../lib/validate.js";
 import {
   createException,
@@ -44,7 +45,12 @@ holidaysApi.get("/upcoming", canView, async (c) => {
 
 holidaysApi.post("/sync", canManage, async (c) => {
   const body = await c.req.json().catch(() => ({}));
-  const year = body?.year ? Number(body.year) : new Date().getFullYear();
+  // Holidays are shared by every workspace: only the years around now.
+  const thisYear = new Date().getFullYear();
+  const year = body?.year ? Number(body.year) : thisYear;
+  if (!Number.isInteger(year) || year < thisYear - 1 || year > thisYear + 1) {
+    throw new HttpError(400, `year must be between ${thisYear - 1} and ${thisYear + 1}`);
+  }
   return c.json(await syncHolidays(year, getActorId(c), getWorkspaceId(c)));
 });
 
