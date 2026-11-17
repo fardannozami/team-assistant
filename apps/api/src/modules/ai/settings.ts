@@ -68,7 +68,12 @@ export async function resolveAiConfig(workspaceId: string): Promise<AiConfig | n
     .limit(1);
   if (!row) return sharedConfig();
   try {
-    return { baseUrl: row.baseUrl, model: row.model, apiKey: await decryptSecret(row.apiKey) };
+    return {
+      baseUrl: row.baseUrl,
+      model: row.model,
+      apiKey: await decryptSecret(row.apiKey),
+      publicOnly: row.provider === "custom",
+    };
   } catch {
     // ENCRYPTION_KEY changed since the key was saved; admins must re-enter it.
     return null;
@@ -106,7 +111,7 @@ export type SaveAiSettingsInput = {
  * name has to resolve to public addresses too ("127.0.0.1.nip.io" is not a
  * literal IP but still points at the server itself).
  */
-async function validateBaseUrl(raw: string): Promise<string> {
+async function validateBaseUrl(raw: string, custom: boolean): Promise<string> {
   let url: URL;
   try {
     url = new URL(raw.trim());
@@ -117,10 +122,13 @@ async function validateBaseUrl(raw: string): Promise<string> {
   if (url.protocol !== "https:" || host === "localhost" || host.endsWith(".local") || isIP(host)) {
     throw new HttpError(400, "Base URL harus berupa alamat https publik.");
   }
-  try {
-    await assertPublicHost(host);
-  } catch {
-    throw new HttpError(400, "Base URL harus berupa alamat https publik.");
+  // Preset URLs are ours; only an admin-typed one needs resolving.
+  if (custom) {
+    try {
+      await assertPublicHost(host);
+    } catch {
+      throw new HttpError(400, "Base URL harus berupa alamat https publik.");
+    }
   }
   return url.toString().replace(/\/+$/, "");
 }
@@ -160,7 +168,8 @@ export async function saveAiSettings(workspaceId: string, input: SaveAiSettingsI
     .where(eq(workspaceAiSettings.workspaceId, workspaceId))
     .limit(1);
 
-  const baseUrl = await validateBaseUrl(provider === "custom" ? (input.baseUrl ?? "") : preset.baseUrl);
+  const custom = provider === "custom";
+  const baseUrl = await validateBaseUrl(custom ? (input.baseUrl ?? "") : preset.baseUrl, custom);
   const model = (input.model ?? "").trim() || preset.model;
   if (!model) throw new HttpError(400, "Isi nama model.");
 
@@ -171,7 +180,7 @@ export async function saveAiSettings(workspaceId: string, input: SaveAiSettingsI
 
   let warning: string | null = null;
   try {
-    await chatWithTools({ baseUrl, apiKey, model }, [{ role: "user", content: "Reply with OK." }], []);
+    await chatWithTools({ baseUrl, apiKey, model, publicOnly: custom }, [{ role: "user", content: "Reply with OK." }], []);
   } catch (error) {
     if (!(error instanceof AiProviderError)) throw new HttpError(400, "Penyedia AI tidak dapat dihubungi.");
     if (error.status !== 429) throw new HttpError(400, providerMessage(error));

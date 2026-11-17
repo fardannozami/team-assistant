@@ -4,6 +4,8 @@ export type AiConfig = {
   baseUrl: string;
   apiKey: string;
   model: string;
+  /** A workspace's own endpoint: must stay on public addresses. */
+  publicOnly?: boolean;
 };
 
 /** A non-2xx response from the provider; `status` lets callers explain it. */
@@ -86,7 +88,8 @@ export async function chatWithTools(
   try {
     // Re-checked per request (DNS can change after the URL was saved), and
     // no redirects: a public host could otherwise bounce us to an internal one.
-    await assertPublicHost(new URL(config.baseUrl).hostname);
+    // The operator's shared endpoint (AI_BASE_URL) may well be local.
+    if (config.publicOnly) await assertPublicHost(new URL(config.baseUrl).hostname);
     response = await fetch(`${config.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
       method: "POST",
       redirect: "error",
