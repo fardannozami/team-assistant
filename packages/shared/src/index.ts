@@ -93,7 +93,30 @@ export const weekdaysSchema = z
   .array(z.number().int().min(0).max(6))
   .min(1, "Pick at least one weekday (0=Sunday .. 6=Saturday)");
 
-export const timezoneNameSchema = z.string().trim().min(1).max(64);
+export function isValidTimezone(timezone: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: timezone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export const timezoneNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .refine(isValidTimezone, (tz) => ({ message: `Unknown time zone: ${tz}` }));
+
+export const updateCalendarSettingsSchema = z.object({
+  country: z.string().trim().min(1).max(64).optional(),
+  timezone: timezoneNameSchema.optional(),
+  skipWeekends: z.boolean().optional(),
+  skipNationalHolidays: z.boolean().optional(),
+  skipJointHolidays: z.boolean().optional(),
+  config: z.unknown().optional(),
+});
 
 export const createScheduleSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),

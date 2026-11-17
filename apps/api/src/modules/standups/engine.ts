@@ -1,10 +1,18 @@
 import {
   CORE_STANDUP_ELEMENTS,
   dateInTimezone,
+  DEFAULT_TIMEZONE,
   type StandupElement,
 } from "@repo/shared";
-import { and, eq } from "drizzle-orm";
-import { createDbClient, standupAnswers, standupSessions, standups } from "@repo/database";
+import { and, asc, eq } from "drizzle-orm";
+import {
+  calendarSettings,
+  createDbClient,
+  schedules,
+  standupAnswers,
+  standupSessions,
+  standups,
+} from "@repo/database";
 import { activityHint } from "../github/digest.js";
 import { standupActivity } from "../github/service.js";
 
@@ -159,6 +167,33 @@ export function parseStandupText(
   return parsed;
 }
 
+/**
+ * The timezone standup days are counted in: the workspace's active standup
+ * schedule (the oldest, if there are several), else its calendar timezone.
+ * The worker fires the schedule's cron in the same zone, so "today" here
+ * matches the day the prompt went out.
+ */
+export async function standupTimezone(workspaceId: string): Promise<string> {
+  const [schedule] = await db
+    .select({ timezone: schedules.timezone })
+    .from(schedules)
+    .where(and(eq(schedules.workspaceId, workspaceId), eq(schedules.isActive, true)))
+    .orderBy(asc(schedules.createdAt))
+    .limit(1);
+  if (schedule) return schedule.timezone;
+  const [settings] = await db
+    .select({ timezone: calendarSettings.timezone })
+    .from(calendarSettings)
+    .where(eq(calendarSettings.workspaceId, workspaceId))
+    .limit(1);
+  return settings?.timezone ?? DEFAULT_TIMEZONE;
+}
+
+/** Today's date for the workspace's standups. */
+export async function standupToday(workspaceId: string): Promise<string> {
+  return dateInTimezone(await standupTimezone(workspaceId));
+}
+
 export async function getStandupSession(employeeId: string, date: string) {
   const [session] = await db
     .select()
@@ -289,7 +324,7 @@ export async function handleStandupMessage(args: {
   const text = args.body.trim();
   if (!text || !args.employee.isActive) return null;
 
-  const date = args.date ?? dateInTimezone();
+  const date = args.date ?? (await standupToday(args.employee.workspaceId));
   if (HELP_COMMAND.test(text)) return EMPLOYEE_MENU;
 
   const edit = text.match(EDIT_COMMAND);

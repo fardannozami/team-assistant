@@ -4,7 +4,8 @@ import { getWorkspaceId } from "../../lib/tenant.js";
 import { generateDailyReport, generateWeeklyReport } from "./service.js";
 import { listEmployees } from "../employees/service.js";
 import { sendText } from "../whatsapp/service.js";
-import { isAdminRole, normalizePhoneNumber } from "@repo/shared";
+import { isAdminRole, normalizePhoneNumber, remindStandupSchema } from "@repo/shared";
+import { parseWith } from "../../lib/validate.js";
 
 export const reportsApi = new Hono();
 
@@ -24,7 +25,9 @@ reportsApi.post(
   requireInternalOrRole("Owner", "Admin"),
   async (c) => {
     const ws = getWorkspaceId(c);
-    const report = await generateDailyReport(ws);
+    // The worker sends the date in the timezone the report's cron ran in.
+    const { date } = parseWith(remindStandupSchema, await c.req.json().catch(() => ({})));
+    const report = await generateDailyReport(ws, date);
     const employees = await listEmployees(ws, { active: true });
     const admins = employees.filter((e) => isAdminRole(e.roleName));
 

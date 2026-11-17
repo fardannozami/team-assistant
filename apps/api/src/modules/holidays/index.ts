@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { updateCalendarSettingsSchema } from "@repo/shared";
 import { requireRole } from "../auth/index.js";
 import { getActorId, getWorkspaceId } from "../../lib/tenant.js";
 import { parseWith } from "../../lib/validate.js";
@@ -25,8 +26,7 @@ holidaysApi.get("/settings", canView, async (c) => {
 });
 
 holidaysApi.patch("/settings", canManage, async (c) => {
-  const body = await c.req.json().catch(() => ({}));
-  const patch = body as any;
+  const patch = parseWith(updateCalendarSettingsSchema, await c.req.json().catch(() => ({})));
   return c.json(await updateCalendarSettings(getWorkspaceId(c), patch, getActorId(c)));
 });
 

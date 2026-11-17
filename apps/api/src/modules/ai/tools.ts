@@ -38,7 +38,7 @@ import {
 import { sendStandupPrompts, sendStandupReminders } from "../standups/service.js";
 import { standupTriggerReply } from "../whatsapp/admin.js";
 import { generateDailyReport, generateWeeklyReport } from "../reports/service.js";
-import { handleStandupMessage, getStandupSession } from "../standups/engine.js";
+import { handleStandupMessage, getStandupSession, standupToday } from "../standups/engine.js";
 import { canViewOthers, type AgentEmployee } from "./context.js";
 import type { ToolSpec } from "./client.js";
 
@@ -847,7 +847,7 @@ export async function executeTool(
 
         const session = await getStandupSession(
           ctx.employee.id,
-          dateInTimezone(),
+          await standupToday(ctx.workspaceId),
         );
         if (!session) {
           return {

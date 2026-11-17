@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import {
-  dateInTimezone,
   remindStandupSchema,
   standupDateSchema,
   triggerStandupSchema,
@@ -16,6 +15,7 @@ import {
   sendStandupSummary,
   closeStandups,
 } from "./service.js";
+import { standupToday } from "./engine.js";
 
 export const standupsApi = new Hono();
 
@@ -52,7 +52,7 @@ standupsApi.post("/close", canManage, async (c) => {
 
 standupsApi.get("/", canView, async (c) => {
   const ws = getWorkspaceId(c);
-  const date = c.req.query("date") ?? dateInTimezone();
+  const date = c.req.query("date") ?? (await standupToday(ws));
   if (!standupDateSchema.safeParse(date).success) {
     throw new HttpError(400, "date must be in YYYY-MM-DD format");
   }

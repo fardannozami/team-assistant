@@ -3,6 +3,7 @@ import { and, eq, gte, isNull, lte, notInArray, or } from "drizzle-orm";
 import { dateInTimezone, DEFAULT_TIMEZONE } from "@repo/shared";
 import { describeCounts } from "../github/digest.js";
 import { standupActivity } from "../github/service.js";
+import { standupToday } from "../standups/engine.js";
 
 const db = createDbClient(
   process.env.DATABASE_URL ??
@@ -10,7 +11,7 @@ const db = createDbClient(
 );
 
 export async function generateDailyReport(workspaceId: string, date?: string) {
-  const d = date ?? dateInTimezone();
+  const d = date ?? (await standupToday(workspaceId));
   const rows = await db
     .select({
       sessionId: standupSessions.id,

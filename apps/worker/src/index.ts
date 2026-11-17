@@ -11,7 +11,7 @@ import {
   workspaces,
 } from "@repo/database";
 import { and, eq } from "drizzle-orm";
-import { dateInTimezone } from "@repo/shared";
+import { dateInTimezone, DEFAULT_TIMEZONE } from "@repo/shared";
 import { reminderTimes } from "./reminder-times.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
@@ -251,17 +251,23 @@ export async function reconcileSchedules(): Promise<void> {
 
   for (const wanted of desired) {
     if (registered.has(wanted.name)) continue;
-    await queue.add(
-      wanted.name,
-      { scheduleId: wanted.scheduleId, workspaceId: wanted.workspaceId },
-      {
-        repeat: { pattern: wanted.pattern, tz: wanted.tz },
-        attempts: JOB_ATTEMPTS,
-        backoff: { type: "exponential", delay: JOB_BACKOFF_MS },
-        removeOnComplete: 100,
-        removeOnFail: 200,
-      },
-    );
+    // One bad pattern or timezone must not keep every later job (other
+    // workspaces' included) from being registered.
+    try {
+      await queue.add(
+        wanted.name,
+        { scheduleId: wanted.scheduleId, workspaceId: wanted.workspaceId },
+        {
+          repeat: { pattern: wanted.pattern, tz: wanted.tz },
+          attempts: JOB_ATTEMPTS,
+          backoff: { type: "exponential", delay: JOB_BACKOFF_MS },
+          removeOnComplete: 100,
+          removeOnFail: 200,
+        },
+      );
+    } catch (err) {
+      logger.error({ err, name: wanted.name, pattern: wanted.pattern, tz: wanted.tz }, "Failed to register repeatable job");
+    }
   }
 
   logger.info(
@@ -304,38 +310,43 @@ async function resolveJobOwner(
   baseName: string,
   suffix: string | null,
   data: { scheduleId?: unknown } | undefined,
-): Promise<{ workspaceId: string; scheduleId: string | null; configId?: string } | null> {
+): Promise<{ workspaceId: string; scheduleId: string | null; configId?: string; timezone: string } | null> {
   if (baseName === "daily-report") {
     if (!suffix) return null;
     const [ws] = await db
-      .select({ id: workspaces.id })
+      .select({ id: workspaces.id, timezone: calendarSettings.timezone })
       .from(workspaces)
+      .leftJoin(calendarSettings, eq(calendarSettings.workspaceId, workspaces.id))
       .where(and(eq(workspaces.id, suffix), eq(workspaces.isActive, true)))
       .limit(1);
-    return ws ? { workspaceId: ws.id, scheduleId: null } : null;
+    return ws
+      ? { workspaceId: ws.id, scheduleId: null, timezone: ws.timezone || ENV_DAILY_REPORT_TZ }
+      : null;
   }
 
   if (CHECKIN_PREFIXES.has(baseName)) {
     if (!suffix) return null;
     const [row] = await db
-      .select({ workspaceId: checkinConfigs.workspaceId })
+      .select({ workspaceId: checkinConfigs.workspaceId, timezone: checkinConfigs.timezone })
       .from(checkinConfigs)
       .innerJoin(workspaces, eq(checkinConfigs.workspaceId, workspaces.id))
       .where(and(eq(checkinConfigs.id, suffix), eq(workspaces.isActive, true)))
       .limit(1);
-    return row ? { workspaceId: row.workspaceId, scheduleId: null, configId: suffix } : null;
+    return row
+      ? { workspaceId: row.workspaceId, scheduleId: null, configId: suffix, timezone: row.timezone || DEFAULT_TIMEZONE }
+      : null;
   }
 
   const scheduleId =
     suffix ?? (typeof data?.scheduleId === "string" ? data.scheduleId : null);
   if (!scheduleId) return null;
   const [row] = await db
-    .select({ workspaceId: schedules.workspaceId })
+    .select({ workspaceId: schedules.workspaceId, timezone: schedules.timezone })
     .from(schedules)
     .innerJoin(workspaces, eq(schedules.workspaceId, workspaces.id))
     .where(and(eq(schedules.id, scheduleId), eq(workspaces.isActive, true)))
     .limit(1);
-  return row ? { workspaceId: row.workspaceId, scheduleId } : null;
+  return row ? { workspaceId: row.workspaceId, scheduleId, timezone: row.timezone || DEFAULT_TIMEZONE } : null;
 }
 
 /**
@@ -352,10 +363,12 @@ async function processSchedulerJob(job: Job): Promise<SchedulerJobResult> {
   if (!owner) {
     return { skipped: true, reason: "workspace missing or inactive" };
   }
-  const { workspaceId, scheduleId, configId } = owner;
+  const { workspaceId, scheduleId, configId, timezone } = owner;
 
   const manual = job.data?.manual === true;
-  const date = dateInTimezone();
+  // The day in the zone the cron fired in, not the server's: a 17:00 New York
+  // close is already tomorrow in Jakarta.
+  const date = dateInTimezone(timezone);
   const idempotencyKey = manual
     ? `${job.name}:manual:${job.id}`
     : `${job.name}:${date}`;
@@ -398,7 +411,11 @@ async function processSchedulerJob(job: Job): Promise<SchedulerJobResult> {
   try {
     const result = await callApi(
       apiPath,
-      { ...(manual ? { resend: true } : {}), ...(configId ? { configId } : {}) },
+      {
+        ...(manual ? { resend: true } : {}),
+        // Check-ins work out their own date from their config.
+        ...(configId ? { configId } : { date }),
+      },
       workspaceId,
     );
     if (execution) {
@@ -458,7 +475,9 @@ worker.on("failed", (job, err) => {
 });
 
 if (import.meta.main) {
-  await reconcileSchedules();
+  await reconcileSchedules().catch((err) =>
+    logger.error({ err }, "Initial schedule reconcile failed"),
+  );
   const reconcileTimer = setInterval(() => {
     reconcileSchedules().catch((err) =>
       logger.error({ err }, "Schedule reconcile failed"),

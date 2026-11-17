@@ -1,6 +1,6 @@
 import { createDbClient, employees, standupAnswers, standupSessions, standups, teams } from "@repo/database";
 import { and, eq, inArray } from "drizzle-orm";
-import { CORE_STANDUP_ELEMENTS, dateInTimezone, isAdminRole, type StandupElement } from "@repo/shared";
+import { CORE_STANDUP_ELEMENTS, isAdminRole, type StandupElement } from "@repo/shared";
 import { getWhatsAppStatus, sendText } from "../whatsapp/service.js";
 import { getEmployee, listEmployees } from "../employees/service.js";
 import { HttpError } from "../../lib/http-error.js";
@@ -12,6 +12,7 @@ import {
   githubHints,
   standupPromptText,
   standupReminderText,
+  standupToday,
 } from "./engine.js";
 
 const db = createDbClient(
@@ -50,7 +51,7 @@ export async function sendStandupPrompts(
 ) {
   const send: SendFn =
     options.send ?? ((jid, text) => sendText(workspaceId, jid, text));
-  const date = options.date ?? dateInTimezone();
+  const date = options.date ?? (await standupToday(workspaceId));
 
   if (!options.send && !getWhatsAppStatus(workspaceId).connected) {
     return { date, ...NOT_CONNECTED, skipped: 0 };
@@ -177,7 +178,7 @@ export async function sendStandupReminders(
 ) {
   const send: SendFn =
     options.send ?? ((jid, text) => sendText(workspaceId, jid, text));
-  const date = options.date ?? dateInTimezone();
+  const date = options.date ?? (await standupToday(workspaceId));
 
   if (!options.send && !getWhatsAppStatus(workspaceId).connected) {
     return { date, ...NOT_CONNECTED, created: 0 };
@@ -224,7 +225,7 @@ export async function sendStandupReminders(
  * who never started, so late answers are no longer collected.
  */
 export async function closeStandups(workspaceId: string, options: { date?: string } = {}) {
-  const date = options.date ?? dateInTimezone();
+  const date = options.date ?? (await standupToday(workspaceId));
   if (await excludedDay(workspaceId, date)) return { date, missed: 0, excluded: true };
 
   let missed = 0;
@@ -260,7 +261,7 @@ export async function sendStandupSummary(
 ) {
   const send: SendFn =
     options.send ?? ((jid, text) => sendText(workspaceId, jid, text));
-  const date = options.date ?? dateInTimezone();
+  const date = options.date ?? (await standupToday(workspaceId));
 
   if (!options.send && !getWhatsAppStatus(workspaceId).connected) {
     return { date, ...NOT_CONNECTED, pending: 0 };
