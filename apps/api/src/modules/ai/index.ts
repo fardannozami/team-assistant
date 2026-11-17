@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { createDbClient, employees } from "@repo/database";
 import { requireRole, getRoleName } from "../auth/index.js";
 import { HttpError } from "../../lib/http-error.js";
-import { getActorId, getWorkspaceId } from "../../lib/tenant.js";
+import { getActorId, getActorRole, getWorkspaceId } from "../../lib/tenant.js";
 import { handleAiMessage } from "./service.js";
 import { deleteAiSettings, getAiSettings, saveAiSettings, type SaveAiSettingsInput } from "./settings.js";
 import { getAiPolicy, getAiUsageSummary, updateAiPolicy, type AiPolicy } from "./policy.js";
@@ -16,6 +16,19 @@ const db = createDbClient(
 export const aiApi = new Hono();
 
 const canChat = requireRole("Owner", "Admin", "Manager", "Employee");
+
+// Most to least privileged.
+const ROLE_ORDER = ["Owner", "Admin", "Manager", "PM", "Employee"];
+
+/**
+ * The login's role and its employee profile's role are set separately and
+ * can drift apart; the chat acts with the lesser of the two, so demoting a
+ * user also takes away what the assistant would do for them.
+ */
+function lesserRole(a: string | null, b: string | null): string | null {
+  const rank = (r: string | null) => (r === null ? ROLE_ORDER.length : Math.max(ROLE_ORDER.indexOf(r), 0));
+  return rank(a) >= rank(b) ? a : b;
+}
 
 aiApi.post("/chat", canChat, async (c) => {
   const ws = getWorkspaceId(c);
@@ -40,7 +53,7 @@ aiApi.post("/chat", canChat, async (c) => {
     throw new HttpError(403, "Employee profile is inactive");
   }
 
-  const roleName = await getRoleName(employee.roleId);
+  const roleName = lesserRole(getActorRole(c), await getRoleName(employee.roleId));
   const reply = await handleAiMessage({
     workspaceId: ws,
     phone: employee.phone,
