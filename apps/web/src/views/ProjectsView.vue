@@ -139,7 +139,7 @@
 
   <!-- Editor: teleported because the page's reveal transform would pin `fixed` to the page, under the header -->
   <Teleport to="body">
-  <div v-if="form"class="fixed inset-0 z-50 flex items-end justify-center bg-text/30 backdrop-blur-sm fade-in-fast sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="editor-title" @keydown.esc="closeEditor">
+  <div v-if="form"class="fixed inset-0 z-50 flex items-end justify-center bg-text/30 backdrop-blur-sm fade-in-fast sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="editor-title" @keydown.esc="closeEditor" @keydown.tab="trapTab">
     <form ref="formEl" novalidate :class="{ 'show-invalid': triedSave }" class="max-h-[92vh] w-full max-w-[720px] overflow-y-auto rounded-t-2xl border border-border bg-panel p-4 shadow-soft-lg sm:rounded-2xl sm:p-6" @submit.prevent="save">
       <div class="flex items-center justify-between gap-3">
         <h3 id="editor-title" class="text-lg font-extrabold text-text">{{ editingId ? "Ubah project" : "Tambah project" }}</h3>
@@ -251,7 +251,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import {
   ApiError,
   projectsApi,
@@ -442,7 +442,11 @@ async function remove(p: Project) {
 
 // ---- Editor ----
 
+// The button that opened the editor gets focus back when it closes.
+let editorOpener: HTMLElement | null = null;
+
 function openEditor(p: Project | null) {
+  editorOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   editingId.value = p?.id ?? null;
   triedSave.value = false;
   form.value = p
@@ -476,10 +480,31 @@ function openEditor(p: Project | null) {
         notes: null,
         members: [],
       };
+  // Move focus into the dialog: the first field (the name).
+  nextTick(() => formEl.value?.querySelector<HTMLElement>("input, select, textarea")?.focus());
 }
 function closeEditor() {
   form.value = null;
   editingId.value = null;
+  editorOpener?.focus();
+  editorOpener = null;
+}
+
+// Keep Tab inside the dialog: wrap from the last focusable to the first and back.
+function trapTab(event: KeyboardEvent) {
+  const focusable = Array.from(
+    formEl.value?.querySelectorAll<HTMLElement>("a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])") ?? [],
+  );
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (!first || !last) return;
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 
 // Empty input means "use fee received", stored as null.

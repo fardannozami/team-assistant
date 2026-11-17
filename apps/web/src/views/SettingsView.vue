@@ -2,12 +2,12 @@
   <div>
     <div class="mb-6 flex gap-1 overflow-x-auto rounded-2xl border border-border bg-panel p-1 shadow-soft" role="tablist" aria-label="Pengaturan">
       <button
-        v-for="s in sections"
+        v-for="s in visibleSections"
         :key="s.id"
         role="tab"
-        :aria-selected="section === s.id"
+        :aria-selected="currentId === s.id"
         class="min-h-11 flex-1 whitespace-nowrap rounded-xl px-4 text-sm font-semibold transition"
-        :class="section === s.id ? 'bg-accent text-white' : 'text-text-muted hover:bg-panel-hover'"
+        :class="currentId === s.id ? 'bg-accent text-white' : 'text-text-muted hover:bg-panel-hover'"
         @click="emit('section', s.id)"
       >
         {{ s.label }}
@@ -26,6 +26,7 @@ import AiView from "./AiView.vue";
 import CheckinsView from "./CheckinsView.vue";
 import GithubView from "./GithubView.vue";
 import UsersView from "./UsersView.vue";
+import { isAdmin } from "../session";
 
 const props = defineProps<{ section: string }>();
 const emit = defineEmits<{ (event: "section", id: string): void }>();
@@ -39,5 +40,11 @@ const sections = [
   { id: "checkins", label: "Check-in", view: CheckinsView },
   { id: "holidays", label: "Hari libur", view: HolidaysView },
 ];
-const current = computed(() => (sections.find((s) => s.id === props.section) ?? sections[0]!).view);
+// Managers reach Settings only through deep links; show them just the
+// sections the API lets them read (WhatsApp, users and AI are Owner/Admin).
+const ADMIN_ONLY = ["whatsapp", "users", "ai"];
+const visibleSections = computed(() => (isAdmin.value ? sections : sections.filter((s) => !ADMIN_ONLY.includes(s.id))));
+const currentSection = computed(() => visibleSections.value.find((s) => s.id === props.section) ?? visibleSections.value[0]!);
+const currentId = computed(() => currentSection.value.id);
+const current = computed(() => currentSection.value.view);
 </script>

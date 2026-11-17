@@ -67,6 +67,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { ApiError, aiApi, employeesApi, reportsApi, schedulesApi, whatsappApi, type DailyReport } from "../api";
+import { isAdmin } from "../session";
 
 const emit = defineEmits<{ (event: "navigate", tab: string): void; (event: "tour"): void }>();
 const report = ref<DailyReport | null>(null);
@@ -115,6 +116,7 @@ async function loadSetup() {
 
 onMounted(() => {
   loadSummary();
-  loadSetup();
+  // Setup is Owner/Admin work; for others these calls would only return 403.
+  if (isAdmin.value) loadSetup();
 });
 </script>

@@ -8,7 +8,9 @@
     </div>
   </header>
 
-  <div v-if="error" class="mb-5 px-4 py-3.5 rounded-xl border border-danger/30 bg-danger/5 text-danger text-[12px] font-extrabold slide-in">{{ error }}</div>
+  <!-- Each tab keeps its own error so one failure doesn't hide the other's empty state. -->
+  <div v-if="reportTab === 'daily' && dailyError" class="mb-5 px-4 py-3.5 rounded-xl border border-danger/30 bg-danger/5 text-danger text-[12px] font-extrabold slide-in">{{ dailyError }}</div>
+  <div v-if="reportTab === 'weekly' && weeklyError" class="mb-5 px-4 py-3.5 rounded-xl border border-danger/30 bg-danger/5 text-danger text-[12px] font-extrabold slide-in">{{ weeklyError }}</div>
 
   <div class="mb-7 flex overflow-x-auto border-b border-border">
     <button
@@ -67,7 +69,7 @@
       <pre class="border border-border rounded-xl bg-panel-hover p-5 overflow-auto font-mono text-[13px] leading-[1.7] text-text-muted whitespace-pre-wrap">{{ dailyReport.text }}</pre>
     </div>
 
-    <div v-if="!loadingDaily && !error && !dailyReport" class="flex flex-col items-center justify-center py-24 text-center fade-in">
+    <div v-if="!loadingDaily && !dailyError && !dailyReport" class="flex flex-col items-center justify-center py-24 text-center fade-in">
       <div class="w-14 h-14 rounded-full border border-border bg-panel-hover flex items-center justify-center text-text-dim mb-4" aria-hidden="true">—</div>
       <h3 class="text-[18px] font-extrabold tracking-tight text-text mb-1">Belum ada laporan</h3>
       <p class="text-text-muted text-sm">Pilih tanggal dan muat laporan harian.</p>
@@ -139,7 +141,7 @@
       <pre class="border border-border rounded-xl bg-panel-hover p-5 overflow-auto font-mono text-[13px] leading-[1.7] text-text-muted whitespace-pre-wrap">{{ weeklyReport.text }}</pre>
     </div>
 
-    <div v-if="!loadingWeekly && !error && !weeklyReport" class="flex flex-col items-center justify-center py-24 text-center fade-in">
+    <div v-if="!loadingWeekly && !weeklyError && !weeklyReport" class="flex flex-col items-center justify-center py-24 text-center fade-in">
       <div class="w-14 h-14 rounded-full border border-border bg-panel-hover flex items-center justify-center text-text-dim mb-4" aria-hidden="true">—</div>
       <h3 class="text-[18px] font-extrabold tracking-tight text-text mb-1">Belum ada laporan mingguan</h3>
       <p class="text-text-muted text-sm">Buat laporan mingguan untuk melihat progres tim.</p>
@@ -169,20 +171,20 @@ const TABS = [
 ];
 
 const reportTab = ref("daily");
-const error = ref("");
 
 // ---- Daily ----
 const dailyDate = ref(localIsoDate());
 const dailyReport = ref<DailyReport | null>(null);
 const loadingDaily = ref(false);
+const dailyError = ref("");
 
 async function loadDaily() {
   loadingDaily.value = true;
-  error.value = "";
+  dailyError.value = "";
   try {
     dailyReport.value = await reportsApi.daily(dailyDate.value);
   } catch (err) {
-    error.value = err instanceof ApiError ? err.message : "Gagal memuat laporan harian.";
+    dailyError.value = err instanceof ApiError ? err.message : "Gagal memuat laporan harian.";
   } finally {
     loadingDaily.value = false;
   }
@@ -195,14 +197,15 @@ onMounted(() => {
 // ---- Weekly ----
 const weeklyReport = ref<WeeklyReport | null>(null);
 const loadingWeekly = ref(false);
+const weeklyError = ref("");
 
 async function loadWeekly() {
   loadingWeekly.value = true;
-  error.value = "";
+  weeklyError.value = "";
   try {
     weeklyReport.value = await reportsApi.weekly();
   } catch (err) {
-    error.value = err instanceof ApiError ? err.message : "Gagal memuat laporan mingguan.";
+    weeklyError.value = err instanceof ApiError ? err.message : "Gagal memuat laporan mingguan.";
   } finally {
     loadingWeekly.value = false;
   }

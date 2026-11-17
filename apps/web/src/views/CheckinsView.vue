@@ -20,11 +20,12 @@
           <p class="mt-1 text-sm text-text-muted">{{ META[form.kind].description }}</p>
         </div>
         <label class="inline-flex min-h-11 items-center gap-3 rounded-xl border border-border px-4 text-sm font-semibold text-text">
-          <input v-model="form.isActive" type="checkbox" class="h-5 w-5 accent-accent" />Aktif
+          <input v-model="form.isActive" type="checkbox" :disabled="!isAdmin" class="h-5 w-5 accent-accent" />Aktif
         </label>
       </div>
 
-      <div class="space-y-4">
+      <!-- Read-only for Managers: only Owner/Admin may change check-ins. -->
+      <fieldset class="min-w-0 space-y-4" :disabled="!isAdmin">
         <div class="grid gap-4 sm:grid-cols-2">
           <div>
             <label :for="`${form.kind}-time`" class="mb-1.5 block text-sm font-semibold text-text">Jam kirim</label>
@@ -65,18 +66,20 @@
                   <option value="text">Teks</option>
                   <option value="mood">Skor 1–5</option>
                 </select>
+                <template v-if="isAdmin">
                 <button type="button" class="grid h-11 w-11 place-items-center rounded-xl text-text-muted hover:bg-panel disabled:opacity-30" :disabled="i === 0" aria-label="Naikkan" @click="move(form.questions, i, -1)">↑</button>
                 <button type="button" class="grid h-11 w-11 place-items-center rounded-xl text-text-muted hover:bg-panel disabled:opacity-30" :disabled="i === form.questions.length - 1" aria-label="Turunkan" @click="move(form.questions, i, 1)">↓</button>
                 <button type="button" class="grid h-11 w-11 place-items-center rounded-xl text-text-muted hover:bg-danger/5 hover:text-danger disabled:opacity-30" :disabled="form.questions.length === 1" aria-label="Hapus" @click="form.questions.splice(i, 1)">✕</button>
+                </template>
               </div>
             </li>
           </ol>
-          <button type="button" class="min-h-11 rounded-xl px-3 text-sm font-semibold text-accent hover:bg-accent/5 disabled:opacity-40" :disabled="form.questions.length >= 10" @click="addQuestion(form.questions)">+ Tambah pertanyaan</button>
+          <button v-if="isAdmin" type="button" class="min-h-11 rounded-xl px-3 text-sm font-semibold text-accent hover:bg-accent/5 disabled:opacity-40" :disabled="form.questions.length >= 10" @click="addQuestion(form.questions)">+ Tambah pertanyaan</button>
         </fieldset>
 
         <p class="rounded-xl bg-panel-hover p-4 text-sm text-text-muted">{{ summary(form) }}</p>
 
-        <div class="flex flex-col gap-2 sm:flex-row">
+        <div v-if="isAdmin" class="flex flex-col gap-2 sm:flex-row">
           <button type="button" class="min-h-12 flex-1 rounded-xl bg-accent px-4 text-sm font-bold text-white disabled:opacity-60" :disabled="busy === form.kind" @click="save(form)">
             {{ busy === form.kind ? "Menyimpan…" : "Simpan" }}
           </button>
@@ -84,7 +87,7 @@
             {{ busy === `${form.kind}:send` ? "Mengirim…" : "Kirim sekarang" }}
           </button>
         </div>
-      </div>
+      </fieldset>
     </section>
   </div>
 </template>
@@ -92,6 +95,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { ApiError, checkinsApi, showToast, type CheckinConfig, type CheckinKind, type CheckinQuestion } from "../api";
+import { isAdmin } from "../session";
 
 const DAYS = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 const META: Record<CheckinKind, { title: string; description: string }> = {

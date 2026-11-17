@@ -104,17 +104,21 @@ const standups = ref<StandupSession[]>([]);
 const loading = ref(false);
 const error = ref("");
 
+// Changing the date quickly can leave several requests in flight; only the
+// latest one may update the list.
+let loadSeq = 0;
 async function load() {
   if (!date.value) return;
+  const seq = ++loadSeq;
   loading.value = true;
   error.value = "";
   try {
     const res = await standupsApi.list(date.value);
-    standups.value = res.standups;
+    if (seq === loadSeq) standups.value = res.standups;
   } catch (err) {
-    error.value = err instanceof ApiError ? err.message : "Gagal memuat standup.";
+    if (seq === loadSeq) error.value = err instanceof ApiError ? err.message : "Gagal memuat standup.";
   } finally {
-    loading.value = false;
+    if (seq === loadSeq) loading.value = false;
   }
 }
 

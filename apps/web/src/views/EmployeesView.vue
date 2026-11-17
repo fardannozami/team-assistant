@@ -7,6 +7,7 @@
       </p>
     </div>
     <button
+      v-if="isAdmin"
       :disabled="loading"
       class="inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover hover:shadow-[0_0_0_12px_rgba(63,68,226,0.45)] active:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
       @click="openAddForm"
@@ -25,7 +26,7 @@
         type="search"
         placeholder="Cari anggota…"
         class="w-full px-4 py-3.5 rounded-xl border text-sm placeholder-text-dim transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none bg-panel border-border"
-        @input="loadEmployees"
+        @input="searchEmployees"
       />
     </div>
     <select
@@ -68,7 +69,7 @@
       </form>
       <div v-else class="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3">
         <span class="badge" :class="roleBadgeUtils(e.roleName)">{{ e.roleName || 'Tanpa peran' }}</span>
-        <div class="flex gap-2">
+        <div v-if="isAdmin" class="flex gap-2">
           <button class="min-h-11 rounded-xl border border-border px-3 text-xs font-bold text-text" :disabled="savingId === e.id" @click="toggleActive(e)">{{ savingId === e.id ? '…' : e.isActive ? 'Nonaktifkan' : 'Aktifkan' }}</button>
           <button class="min-h-11 rounded-xl border border-border px-3 text-xs font-bold text-text" @click="startEdit(e)">Ubah</button>
           <button class="min-h-11 rounded-xl border border-danger/30 px-3 text-xs font-bold text-danger disabled:opacity-60" :disabled="deletingId === e.id" @click="removeEmployee(e)">{{ deletingId === e.id ? '…' : 'Hapus' }}</button>
@@ -86,7 +87,7 @@
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Tim</th>
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[16%]">Peran</th>
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[16%]">Status</th>
-          <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[26%]">Aksi</th>
+          <th v-if="isAdmin" class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[26%]">Aksi</th>
         </tr>
       </thead>
       <tbody>
@@ -117,7 +118,7 @@
           <td class="px-5 py-4 border-b border-border align-middle">
             <span class="badge" :class="e.isActive ? 'bg-success/8 text-success border-success/20' : 'bg-text-muted/10 text-text-dim border border-border'">{{ e.isActive ? "Aktif" : "Nonaktif" }}</span>
           </td>
-          <td class="px-5 py-4 border-b border-border align-middle text-text flex gap-2 items-end">
+          <td v-if="isAdmin" class="px-5 py-4 border-b border-border align-middle text-text flex gap-2 items-end">
             <div v-if="editingId === e.id" class="flex items-center gap-2">
               <button
                 class="px-3 py-2 rounded-xl border border-border text-[12px] font-extrabold text-text transition-colors duration-200 ease-in hover:bg-panel-hover"
@@ -161,7 +162,7 @@
     </table>
   </div>
 
-  <div v-if="showAddForm" class="mb-7 rounded-2xl border border-border bg-panel p-4 shadow-soft-lg sm:p-6 reveal">
+  <div v-if="isAdmin && showAddForm" class="mb-7 rounded-2xl border border-border bg-panel p-4 shadow-soft-lg sm:p-6 reveal">
     <div class="mb-4 flex items-center justify-between gap-3">
       <div>
         <div class="text-lg font-extrabold text-text">Tambah anggota</div>
@@ -205,7 +206,7 @@
     </form>
   </div>
 
-  <div class="rounded-2xl border border-border bg-panel p-4 shadow-soft-lg sm:p-6 reveal">
+  <div v-if="isAdmin" class="rounded-2xl border border-border bg-panel p-4 shadow-soft-lg sm:p-6 reveal">
     <div class="mb-4 text-lg font-extrabold text-text">Ubah nomor telepon</div>
     <form class="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-4 items-end" @submit.prevent="updatePhone">
       <div>
@@ -246,7 +247,8 @@ Simpan nomor
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, onMounted, onBeforeUnmount } from "vue";
+import { isAdmin } from "../session";
 import {
   employeesApi,
   rolesApi,
@@ -290,20 +292,32 @@ const editingId = ref<string | null>(null);
 const draft = ref({ name: "", teamId: null as string | null, roleId: null as string | null, newTeamName: "" });
 const savingEditId = ref<string | null>(null);
 
+// Only the latest request may write the list, so a slow response for an
+// older search or filter can't overwrite a newer one.
+let loadSeq = 0;
 async function loadEmployees() {
+  const seq = ++loadSeq;
   loading.value = true;
   error.value = "";
   try {
     const filters: { search?: string; active?: boolean | null } = {};
     if (searchQuery.value) filters.search = searchQuery.value;
     if (activeFilter.value !== null) filters.active = activeFilter.value;
-    employees.value = await employeesApi.list(filters);
+    const list = await employeesApi.list(filters);
+    if (seq === loadSeq) employees.value = list;
   } catch (err) {
-    error.value = err instanceof ApiError ? err.message : "Gagal memuat anggota.";
+    if (seq === loadSeq) error.value = err instanceof ApiError ? err.message : "Gagal memuat anggota.";
   } finally {
-    loading.value = false;
+    if (seq === loadSeq) loading.value = false;
   }
 }
+
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+function searchEmployees() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(loadEmployees, 250);
+}
+onBeforeUnmount(() => clearTimeout(searchTimer));
 
 async function loadRoles() {
   try {
@@ -456,6 +470,10 @@ async function saveEdit(id: string) {
         return;
       }
       teamId = (await teamsApi.create(teamName)).id;
+      // Point the draft at the new team so a retry after a failed update
+      // below reuses it instead of creating a duplicate.
+      draft.value.teamId = teamId;
+      draft.value.newTeamName = "";
       await loadTeams();
     }
     await employeesApi.update(id, { name, teamId, roleId: draft.value.roleId });

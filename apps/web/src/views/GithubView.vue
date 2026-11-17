@@ -28,7 +28,7 @@
           <h3 id="gh-connection" class="text-lg font-extrabold text-text">Koneksi</h3>
           <p class="mt-1 text-sm text-text-muted">Pasang GitHub App di akun atau organisasi, lalu pilih repositori yang boleh dibaca.</p>
         </div>
-        <button type="button" class="min-h-11 rounded-xl bg-accent px-4 text-sm font-bold text-white disabled:opacity-60" :disabled="!status.configured || busy === 'install'" @click="install">
+        <button v-if="isAdmin" type="button" class="min-h-11 rounded-xl bg-accent px-4 text-sm font-bold text-white disabled:opacity-60" :disabled="!status.configured || busy === 'install'" @click="install">
           {{ status.installations.length ? "Tambah akun GitHub" : "Hubungkan GitHub" }}
         </button>
       </div>
@@ -40,7 +40,7 @@
             <span class="ml-2 text-xs text-text-muted">{{ i.accountType === "Organization" ? "Organisasi" : "Pengguna" }} · {{ i.repositorySelection === "all" ? "semua repo" : "repo terpilih" }}</span>
             <span v-if="!i.isActive" class="ml-2 rounded-full bg-danger/10 px-2 py-0.5 text-xs font-bold text-danger">Ditangguhkan</span>
           </div>
-          <div class="flex gap-1">
+          <div v-if="isAdmin" class="flex gap-1">
             <button type="button" class="min-h-10 rounded-xl px-3 text-sm font-semibold text-text-muted hover:bg-panel-hover disabled:opacity-50" :disabled="busy === `sync:${i.id}`" @click="sync(i.id)">Sinkronkan repo</button>
             <button type="button" class="min-h-10 rounded-xl px-3 text-sm font-semibold text-text-muted hover:bg-danger/5 hover:text-danger" @click="unlink(i.id, i.accountLogin)">Lepas</button>
           </div>
@@ -55,7 +55,7 @@
       <ul class="grid gap-2 sm:grid-cols-2">
         <li v-for="r in status.repositories" :key="r.id">
           <label class="flex min-h-12 items-center gap-3 rounded-xl border border-border px-3 text-sm">
-            <input type="checkbox" class="h-5 w-5 accent-accent" :checked="r.isActive" @change="track(r, ($event.target as HTMLInputElement).checked)" />
+            <input type="checkbox" class="h-5 w-5 accent-accent" :checked="r.isActive" :disabled="!isAdmin" @change="track(r, ($event.target as HTMLInputElement).checked)" />
             <span class="min-w-0 flex-1 truncate font-semibold text-text">{{ r.fullName }}</span>
             <span v-if="r.isPrivate" class="rounded-full bg-panel-hover px-2 py-0.5 text-xs text-text-muted">private</span>
           </label>
@@ -73,8 +73,8 @@
         <li v-for="m in members" :key="m.employeeId" class="flex flex-col gap-2 rounded-xl bg-panel-hover p-3 sm:flex-row sm:items-center">
           <span class="min-w-0 flex-1 font-semibold text-text" :class="{ 'text-text-muted': !m.isActive }">{{ m.name }}<span v-if="!m.isActive" class="ml-2 text-xs font-normal">(nonaktif)</span></span>
           <div class="flex gap-2">
-            <input v-model="logins[m.employeeId]" type="text" placeholder="username GitHub" maxlength="40" :aria-label="`Username GitHub ${m.name}`" class="min-h-11 w-full rounded-xl border border-border bg-panel px-3 text-sm sm:w-56" @keydown.enter="saveLogin(m)" />
-            <button type="button" class="min-h-11 shrink-0 rounded-xl border border-border bg-panel px-3 text-sm font-semibold text-text disabled:opacity-40" :disabled="(logins[m.employeeId] ?? '').trim() === (m.login ?? '') || busy === `login:${m.employeeId}`" @click="saveLogin(m)">Simpan</button>
+            <input v-model="logins[m.employeeId]" type="text" placeholder="username GitHub" maxlength="40" :aria-label="`Username GitHub ${m.name}`" :disabled="!isAdmin" class="min-h-11 w-full rounded-xl border border-border bg-panel px-3 text-sm sm:w-56" @keydown.enter="saveLogin(m)" />
+            <button v-if="isAdmin" type="button" class="min-h-11 shrink-0 rounded-xl border border-border bg-panel px-3 text-sm font-semibold text-text disabled:opacity-40" :disabled="(logins[m.employeeId] ?? '').trim() === (m.login ?? '') || busy === `login:${m.employeeId}`" @click="saveLogin(m)">Simpan</button>
           </div>
         </li>
       </ul>
@@ -122,6 +122,7 @@ import {
   type GithubStatus,
   type GithubSummary,
 } from "../api";
+import { isAdmin } from "../session";
 
 const TYPE_LABEL: Record<string, string> = {
   commit: "commit",

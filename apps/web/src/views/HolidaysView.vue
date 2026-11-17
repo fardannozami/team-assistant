@@ -25,32 +25,35 @@
   <!-- Settings -->
   <div v-if="tab === 'settings'" class="max-w-[560px] rounded-2xl border border-border bg-panel p-4 shadow-soft-lg sm:p-6 reveal">
     <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-4">Pengaturan kalender</div>
+    <!-- Managers may read the calendar settings; only Owner/Admin may change them. -->
     <form class="flex flex-col gap-5" @submit.prevent="saveSettings">
-      <div>
-        <label class="mb-1.5 block text-sm font-semibold text-text">Negara</label>
-        <input v-model="settings.country" type="text"
-          class="w-full px-4 py-3.5 rounded-xl border text-sm placeholder-text-dim transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none bg-panel border-border"
-        />
-      </div>
-      <div>
-        <label class="mb-1.5 block text-sm font-semibold text-text">Zona waktu</label>
-        <input v-model="settings.timezone" type="text" placeholder="Asia/Jakarta"
-          class="w-full px-4 py-3.5 rounded-xl border text-sm placeholder-text-dim transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none bg-panel border-border"
-        />
-      </div>
-      <div class="flex items-center gap-2.5 mb-3 cursor-pointer leading-none">
-        <input id="skipWeekends" v-model="settings.skipWeekends" type="checkbox" class="w-4 h-4 shrink-0 accent-accent cursor-pointer" />
-        <label for="skipWeekends" class="text-[11px] font-extrabold tracking-tight text-text">Lewati akhir pekan</label>
-      </div>
-      <div class="flex items-center gap-2.5 mb-3 cursor-pointer leading-none">
-        <input id="skipNational" v-model="settings.skipNationalHolidays" type="checkbox" class="w-4 h-4 shrink-0 accent-accent cursor-pointer" />
-        <label for="skipNational" class="text-[11px] font-extrabold tracking-tight text-text">Lewati hari libur nasional</label>
-      </div>
-      <div class="flex items-center gap-2.5 mb-3 cursor-pointer leading-none">
-        <input id="skipJoint" v-model="settings.skipJointHolidays" type="checkbox" class="w-4 h-4 shrink-0 accent-accent cursor-pointer" />
-        <label for="skipJoint" class="text-[11px] font-extrabold tracking-tight text-text">Lewati cuti bersama</label>
-      </div>
-      <div class="flex gap-2 items-end">
+      <fieldset class="flex min-w-0 flex-col gap-5" :disabled="!isAdmin">
+        <div>
+          <label class="mb-1.5 block text-sm font-semibold text-text">Negara</label>
+          <input v-model="settings.country" type="text"
+            class="w-full px-4 py-3.5 rounded-xl border text-sm placeholder-text-dim transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none bg-panel border-border"
+          />
+        </div>
+        <div>
+          <label class="mb-1.5 block text-sm font-semibold text-text">Zona waktu</label>
+          <input v-model="settings.timezone" type="text" placeholder="Asia/Jakarta"
+            class="w-full px-4 py-3.5 rounded-xl border text-sm placeholder-text-dim transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none bg-panel border-border"
+          />
+        </div>
+        <div class="flex items-center gap-2.5 mb-3 cursor-pointer leading-none">
+          <input id="skipWeekends" v-model="settings.skipWeekends" type="checkbox" class="w-4 h-4 shrink-0 accent-accent cursor-pointer" />
+          <label for="skipWeekends" class="text-[11px] font-extrabold tracking-tight text-text">Lewati akhir pekan</label>
+        </div>
+        <div class="flex items-center gap-2.5 mb-3 cursor-pointer leading-none">
+          <input id="skipNational" v-model="settings.skipNationalHolidays" type="checkbox" class="w-4 h-4 shrink-0 accent-accent cursor-pointer" />
+          <label for="skipNational" class="text-[11px] font-extrabold tracking-tight text-text">Lewati hari libur nasional</label>
+        </div>
+        <div class="flex items-center gap-2.5 mb-3 cursor-pointer leading-none">
+          <input id="skipJoint" v-model="settings.skipJointHolidays" type="checkbox" class="w-4 h-4 shrink-0 accent-accent cursor-pointer" />
+          <label for="skipJoint" class="text-[11px] font-extrabold tracking-tight text-text">Lewati cuti bersama</label>
+        </div>
+      </fieldset>
+      <div v-if="isAdmin" class="flex gap-2 items-end">
         <button
           class="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
           type="submit"
@@ -117,7 +120,7 @@
       </table>
     </div>
 
-    <div class="rounded-2xl border border-border bg-panel p-4 shadow-soft-lg sm:p-6 reveal">
+    <div v-if="isAdmin" class="rounded-2xl border border-border bg-panel p-4 shadow-soft-lg sm:p-6 reveal">
       <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-4">Sinkronkan kalender nasional</div>
       <div class="flex items-center gap-3 mb-4 flex-wrap">
         <div class="min-w-[160px]">
@@ -153,7 +156,7 @@
             <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Tanggal</th>
             <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Alasan</th>
             <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[16%]">Lewati</th>
-            <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[18%]">Aksi</th>
+            <th v-if="isAdmin" class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[18%]">Aksi</th>
           </tr>
         </thead>
         <tbody>
@@ -163,7 +166,7 @@
             <td class="px-5 py-4 border-b border-border align-middle text-text">
               <span class="badge" :class="e.skip ? 'bg-success/8 text-success border-success/20' : 'bg-text-muted/10 text-text-dim border border-border'">{{ e.skip ? "Ya" : "Tidak" }}</span>
             </td>
-            <td class="px-5 py-4 border-b border-border align-middle text-text flex gap-2">
+            <td v-if="isAdmin" class="px-5 py-4 border-b border-border align-middle text-text flex gap-2">
               <button
                 class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-[12px] font-extrabold tracking-tight border border-danger/20 bg-danger/6 text-danger transition-all duration-200 ease-in hover:bg-danger/10 hover:border-danger/40 whitespace-nowrap"
                 @click="handleDeleteException(e.id)"
@@ -176,7 +179,7 @@
       </table>
     </div>
 
-    <div class="flex items-center gap-3 mb-4 flex-wrap mt-4">
+    <div v-if="isAdmin" class="flex items-center gap-3 mb-4 flex-wrap mt-4">
       <div class="min-w-[170px]" :class="{ 'border-danger': excError, 'border-border': !excError }">
         <label class="mb-1.5 block text-sm font-semibold text-text">Tanggal</label>
         <input v-model="excDate" type="date" class="w-full px-4 py-3.5 rounded-xl border text-sm placeholder-text-dim transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none bg-panel border-border"
@@ -243,6 +246,7 @@ import {
   type Holiday,
   type CalendarException,
 } from "../api";
+import { isAdmin } from "../session";
 
 const TABS = [
   { id: "settings", label: "Pengaturan" },
@@ -268,7 +272,10 @@ const settings = ref<CalendarSettings>({
   updatedAt: "",
 });
 
+// Each load or action clears the shared banner first, so an old failure
+// doesn't linger (and hide the empty state) after a later success.
 async function loadSettings() {
+  error.value = "";
   try {
     settings.value = await holidaysApi.getSettings();
   } catch (err) {
@@ -277,6 +284,7 @@ async function loadSettings() {
 }
 
 async function saveSettings() {
+  error.value = "";
   savingSettings.value = true;
   try {
     await holidaysApi.updateSettings({
@@ -300,6 +308,7 @@ const holidayYear = ref(new Date().getFullYear());
 const holidays = ref<Holiday[]>([]);
 
 async function loadHolidays() {
+  error.value = "";
   loadingHolidays.value = true;
   try {
     holidays.value = await holidaysApi.list(holidayYear.value);
@@ -319,6 +328,7 @@ const syncYearMax = syncYear.value + 1;
 const syncResult = ref<{ year: number; synced: number } | null>(null);
 
 async function syncHolidays() {
+  error.value = "";
   syncing.value = true;
   try {
     const result = await holidaysApi.sync(syncYear.value);
@@ -339,6 +349,7 @@ const loadingExceptions = ref(false);
 const exceptions = ref<CalendarException[]>([]);
 
 async function loadExceptions() {
+  error.value = "";
   loadingExceptions.value = true;
   try {
     exceptions.value = await holidaysApi.listExceptions();
@@ -361,6 +372,7 @@ async function addException() {
     excError.value = "Tanggal wajib diisi.";
     return;
   }
+  error.value = "";
   addingException.value = true;
   try {
     await holidaysApi.createException({
@@ -382,6 +394,7 @@ async function addException() {
 
 async function handleDeleteException(id: string) {
   if (!window.confirm("Hapus pengecualian ini?")) return;
+  error.value = "";
   try {
     await holidaysApi.deleteException(id);
     showToast("Pengecualian berhasil dihapus.", "success");
@@ -398,6 +411,7 @@ const checkResult = ref<{ excluded: boolean; reason?: string } | null>(null);
 
 async function checkExcluded() {
   if (!checkDate.value) return;
+  error.value = "";
   checking.value = true;
   try {
     checkResult.value = await holidaysApi.checkDate(checkDate.value);

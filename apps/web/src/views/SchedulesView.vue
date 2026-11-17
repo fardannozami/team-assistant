@@ -7,6 +7,7 @@
       </p>
     </div>
     <button
+      v-if="isAdmin"
       :disabled="loading"
       class="inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover hover:shadow-[0_0_0_12px_rgba(63,68,226,0.45)] active:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
       @click="showCreateForm = true; createStep = 1"
@@ -17,7 +18,7 @@
 
   <div v-if="error" class="mb-5 px-4 py-3.5 rounded-xl border border-danger/30 bg-danger/5 text-danger text-[12px] font-extrabold slide-in">{{ error }}</div>
 
-  <div v-if="showCreateForm" class="mb-7 rounded-2xl border border-border bg-panel p-4 shadow-soft-lg sm:p-6 reveal">
+  <div v-if="isAdmin && showCreateForm" class="mb-7 rounded-2xl border border-border bg-panel p-4 shadow-soft-lg sm:p-6 reveal">
     <div class="mb-4 flex items-center justify-between gap-3">
       <div>
         <div class="text-lg font-extrabold text-text">Buat jadwal</div>
@@ -62,7 +63,7 @@
     </form>
   </div>
 
-  <div v-if="editingId" class="mt-4 mb-7 rounded-2xl border border-border bg-panel p-4 shadow-soft-lg sm:p-6 reveal">
+  <div v-if="isAdmin && editingId" class="mt-4 mb-7 rounded-2xl border border-border bg-panel p-4 shadow-soft-lg sm:p-6 reveal">
     <div class="mb-4 flex items-center justify-between gap-3">
       <div>
         <div class="text-lg font-extrabold text-text">Ubah jadwal</div>
@@ -120,7 +121,7 @@
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Zona waktu</th>
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Pengingat</th>
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[12%]">Status</th>
-          <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[30%]">Aksi</th>
+          <th v-if="isAdmin" class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[30%]">Aksi</th>
         </tr>
       </thead>
       <tbody>
@@ -133,7 +134,7 @@
           <td class="px-5 py-4 border-b border-border align-middle text-text">
             <span class="badge" :class="s.isActive ? 'bg-success/8 text-success border-success/20' : 'bg-text-muted/10 text-text-dim border border-border'">{{ s.isActive ? "Aktif" : "Nonaktif" }}</span>
           </td>
-          <td class="px-5 py-4 border-b border-border align-middle text-text flex gap-2">
+          <td v-if="isAdmin" class="px-5 py-4 border-b border-border align-middle text-text flex gap-2">
             <button
               class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-[12px] font-extrabold tracking-tight border border-border text-text transition-colors duration-200 ease-in hover:bg-panel-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
               :disabled="editingId !== null && editingId !== s.id"
@@ -157,7 +158,7 @@
           </td>
         </tr>
         <tr v-if="!schedules.length && !loading && !error">
-          <td colspan="7" class="px-5 py-4 border-b border-border align-middle text-center text-text-muted">
+          <td :colspan="isAdmin ? 7 : 6" class="px-5 py-4 border-b border-border align-middle text-center text-text-muted">
             Belum ada jadwal. Buat jadwal untuk memulai.
           </td>
         </tr>
@@ -180,6 +181,7 @@ import {
   type Schedule,
 } from "../api";
 import ReminderFields, { type ReminderSettings } from "./ReminderFields.vue";
+import { isAdmin } from "../session";
 
 const DAYS = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 

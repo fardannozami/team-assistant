@@ -61,6 +61,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
 import { apiHealth, authApi, consumeOAuthRedirect, getToken, type Me, onUnauthorized, showToast, addToastListener, type Toast } from "./api";
+import { currentRole, isAdmin } from "./session";
 import AuthView from "./views/AuthView.vue";
 import HomeView from "./views/HomeView.vue";
 import EmployeesView from "./views/EmployeesView.vue";
@@ -94,7 +95,12 @@ const isPm = computed(() => me.value?.user.role === "PM");
 const tabs = computed(() =>
   isPm.value
     ? ALL_TABS.filter((t) => PM_TABS.includes(t.id))
-    : ALL_TABS.filter((t) => t.id !== "projects" || PROJECT_ROLES.includes(me.value?.user.role ?? "")),
+    : ALL_TABS.filter(
+        (t) =>
+          (t.id !== "projects" || PROJECT_ROLES.includes(me.value?.user.role ?? "")) &&
+          // Managers get Settings read-only, without the admin-only sections.
+          (t.id !== "settings" || isAdmin.value || currentRole.value === "Manager"),
+      ),
 );
 const initialPage = consumePageParam();
 const currentTab = ref(settingsSections.includes(initialPage) ? "settings" : initialPage);
@@ -138,12 +144,17 @@ addToastListener((toast) => {
   setTimeout(() => dismissToast(toast.id), 5000);
 });
 onUnauthorized(() => {
+  // Already logged out: a burst of 401s should show the toast only once.
+  if (!token.value) return;
   token.value = "";
+  me.value = null;
+  currentRole.value = null;
   currentTab.value = "home";
   showToast("Sesi berakhir. Silakan masuk kembali.", "error");
 });
 async function loadMe() {
   me.value = token.value ? await authApi.me().catch(() => null) : null;
+  currentRole.value = me.value?.user.role ?? null;
   // PMs only have the Projects page, whatever the link asked for.
   if (isPm.value && !PM_TABS.includes(currentTab.value)) currentTab.value = "projects";
   meLoaded.value = true;
@@ -161,5 +172,5 @@ function navigateTo(tab: string) {
     currentTab.value = tab;
   }
 }
-function handleLogout() { authApi.logout(); token.value = ""; me.value = null; currentTab.value = "home"; toasts.value = []; showTour.value = false; }
+function handleLogout() { authApi.logout(); token.value = ""; me.value = null; currentRole.value = null; currentTab.value = "home"; toasts.value = []; showTour.value = false; }
 </script>

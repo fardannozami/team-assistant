@@ -116,15 +116,21 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     body = await res.text();
   }
 
-  if (res.status === 401) {
+  // Only the first 401 for the current token ends the session: concurrent
+  // requests that fail after it (or a stale one from an older token) stay quiet.
+  if (res.status === 401 && token && getToken() === token) {
     setToken(null);
     triggerUnauthorized();
   }
 
   if (!res.ok) {
-    const message =
+    let message =
       (body as { error?: string } | null)?.error ??
       `The request failed (${res.status}). Please try again.`;
+    // requireRole answers a bare "Forbidden"; specific messages are kept.
+    if (res.status === 403 && message === "Forbidden") {
+      message = "Kamu tidak punya akses untuk tindakan ini.";
+    }
     throw new ApiError(res.status, message, body);
   }
 
@@ -153,7 +159,6 @@ export interface EmployeeUpdate {
   name?: string;
   teamId?: string | null;
   roleId?: string | null;
-  githubLogin?: string | null;
 }
 
 export interface Team {
@@ -188,6 +193,7 @@ export interface NewEmployee {
   phone: string;
   teamId?: string | null;
   roleId?: string | null;
+  githubLogin?: string | null;
 }
 
 export interface Schedule {
