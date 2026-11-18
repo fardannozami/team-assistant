@@ -9,11 +9,11 @@ import { describeCounts, notableItems } from "../github/digest.js";
 import { standupActivity } from "../github/service.js";
 import {
   getStandupSession,
-  githubHints,
-  standupPromptText,
+  openingText,
   standupReminderText,
   standupToday,
 } from "./engine.js";
+import { githubOpenings } from "./draft.js";
 
 const db = createDbClient(
   process.env.DATABASE_URL ??
@@ -85,8 +85,22 @@ export async function sendStandupPrompts(
   let sent = 0;
   let skipped = 0;
   let failed = 0;
-  const hints = await githubHints(workspaceId, date, targets.map((t) => t.id));
-  const prompt = (employeeId: string) => standupPromptText(date, hints.get(employeeId));
+  // GitHub context (and AI drafts) only for who will actually get a prompt.
+  const open = new Map(
+    (
+      await db
+        .select({ employeeId: standupSessions.employeeId, status: standupSessions.status })
+        .from(standupSessions)
+        .where(and(eq(standupSessions.workspaceId, workspaceId), eq(standupSessions.date, date)))
+    ).map((s) => [s.employeeId, s.status]),
+  );
+  const toPrompt = targets.filter((t) => {
+    const status = open.get(t.id);
+    return !status || (options.resend && (status === "pending" || status === "in_progress"));
+  });
+  const github = await githubOpenings(workspaceId, date, toPrompt.map((t) => t.id));
+  const prompt = (employeeId: string, sessionId: string) =>
+    openingText({ id: employeeId, workspaceId }, sessionId, date, github.get(employeeId));
 
   for (const employee of targets) {
     const existing = await getStandupSession(employee.id, date);
@@ -98,7 +112,7 @@ export async function sendStandupPrompts(
         (existing.status === "pending" || existing.status === "in_progress")
       ) {
         try {
-          await send(jidFor(employee.phone), prompt(employee.id));
+          await send(jidFor(employee.phone), await prompt(employee.id, existing.id));
           sent++;
         } catch {
           failed++;
@@ -121,9 +135,10 @@ export async function sendStandupPrompts(
     }
 
     try {
-      await send(jidFor(employee.phone), prompt(employee.id));
+      await send(jidFor(employee.phone), await prompt(employee.id, created.id));
       sent++;
     } catch {
+      // Also drops a drafted "kemarin" (cascade), so a retry drafts afresh.
       await db
         .delete(standupSessions)
         .where(eq(standupSessions.id, created.id));

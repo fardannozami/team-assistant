@@ -14,8 +14,7 @@ import {
   standupSessions,
   standups,
 } from "@repo/database";
-import { activityHint } from "../github/digest.js";
-import { standupActivity } from "../github/service.js";
+import { githubOpenings, type GithubOpening } from "./draft.js";
 
 const db = createDbClient(
   process.env.DATABASE_URL ??
@@ -62,17 +61,6 @@ export const STANDUP_QUESTIONS: Record<StandupElement, string> = {
   blockers: "Ada kendala atau blocker? (balas 'tidak ada' jika aman)",
 };
 
-/** GitHub activity to show beside the "kemarin" question, or null. */
-export async function githubHints(workspaceId: string, date: string, employeeIds: string[]) {
-  try {
-    const { from, byEmployee } = await standupActivity(workspaceId, date, employeeIds);
-    return new Map(employeeIds.map((id) => [id, activityHint(byEmployee.get(id), from)]));
-  } catch {
-    // Context only: a failed lookup must never hold back the prompt.
-    return new Map<string, string | null>();
-  }
-}
-
 export function standupPromptText(date: string, githubHint?: string | null): string {
   return [
     `Standup harian untuk ${date}:`,
@@ -82,6 +70,43 @@ export function standupPromptText(date: string, githubHint?: string | null): str
     `3. ${STANDUP_QUESTIONS.blockers}`,
     "Balas dalam satu pesan atau beberapa pesan - jawabanmu akan saya catat.",
   ].join("\n");
+}
+
+/** Prompt when "kemarin" was already drafted from GitHub: asks for the rest. */
+export function draftedPromptText(date: string, from: string, draft: string): string {
+  return [
+    `Standup harian untuk ${date}:`,
+    `Kemarin (dari aktivitas GitHub kamu sejak ${from}):`,
+    draft,
+    "Kalau kurang tepat, kirim: kemarin: <jawabanmu>",
+    "",
+    `1. ${STANDUP_QUESTIONS.today}`,
+    `2. ${STANDUP_QUESTIONS.blockers}`,
+    "Balas dalam satu pesan atau beberapa pesan - jawabanmu akan saya catat.",
+  ].join("\n");
+}
+
+/**
+ * The day's opening message. A "kemarin" drafted from GitHub is filed as the
+ * answer, unless one is there already, so the prompt asks only for the rest.
+ */
+export async function openingText(
+  employee: { id: string; workspaceId: string },
+  sessionId: string,
+  date: string,
+  github?: GithubOpening,
+): Promise<string> {
+  if (github?.draft) {
+    const row = await getOrCreateStandupRow(employee.workspaceId, sessionId, employee.id, date);
+    // Never over a "kemarin" the employee may have just sent.
+    const [filed] = await db
+      .insert(standupAnswers)
+      .values({ standupId: row.id, questionKey: "yesterday", answer: github.draft })
+      .onConflictDoNothing()
+      .returning({ id: standupAnswers.id });
+    if (filed) return draftedPromptText(date, github.from, github.draft);
+  }
+  return standupPromptText(date, github?.hint);
 }
 
 /** Asks only for the answers still missing (all three by default). */
@@ -101,11 +126,13 @@ export function standupReminderText(
 /**
  * Splits a reply into its labelled parts. `lead` is the part the bot just
  * asked for: unlabelled text before the first label belongs to it, so
- * "Selesai modul invoice, hari ini testing" keeps its first half.
+ * "Selesai modul invoice, hari ini testing" keeps its first half. Unlabelled
+ * lines fill `open` in turn, so a drafted "kemarin" is not overwritten.
  */
 export function parseStandupText(
   text: string,
   lead?: StandupElement,
+  open: readonly StandupElement[] = CORE_STANDUP_ELEMENTS,
 ): Partial<Record<StandupElement, string>> {
   const marks: {
     index: number;
@@ -140,15 +167,15 @@ export function parseStandupText(
   const parsed: Partial<Record<StandupElement, string>> = {};
 
   // Line-based fallback: if the user sends 2-3 separate lines without
-  // explicit keywords, treat them as yesterday / today / blockers in order.
+  // explicit keywords, treat them as the open parts in order.
   const lines = text
     .split(/\n+/)
     .map((l) => l.trim())
     .filter(Boolean);
   if (marks.length === 0 && lines.length >= 2) {
-    if (lines[0]) parsed.yesterday = lines[0];
-    if (lines[1]) parsed.today = lines[1];
-    if (lines[2]) parsed.blockers = lines[2];
+    open.forEach((key, i) => {
+      if (lines[i]) parsed[key] = lines[i];
+    });
     return parsed;
   }
   const leading = marks.length && lead
@@ -381,8 +408,8 @@ async function startStandup(employee: StandupCollector, date: string, rest: stri
   const answered = new Set((await getAnswers(row.id)).map((a) => a.questionKey));
   const missing = CORE_STANDUP_ELEMENTS.filter((key) => !answered.has(key));
   if (missing.length === CORE_STANDUP_ELEMENTS.length) {
-    const hints = await githubHints(employee.workspaceId, date, [employee.id]);
-    return standupPromptText(date, hints.get(employee.id));
+    const github = await githubOpenings(employee.workspaceId, date, [employee.id]);
+    return openingText(employee, session.id, date, github.get(employee.id));
   }
   return `Lanjutkan standup ${date}: ${STANDUP_QUESTIONS[missing[0]!]}`;
 }
@@ -421,7 +448,7 @@ async function recordAnswers(
   const missing = CORE_STANDUP_ELEMENTS.filter((key) => !answered.has(key));
   if (missing.length === 0) return null;
 
-  let parsed = parseStandupText(text, missing[0]);
+  let parsed = parseStandupText(text, missing[0], missing);
   if (Object.keys(parsed).length === 0) {
     // Free-form reply to the question we asked last: file it there.
     parsed = { [missing[0]!]: text };
