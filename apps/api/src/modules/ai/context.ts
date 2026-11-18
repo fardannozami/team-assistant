@@ -1,18 +1,24 @@
 import { and, desc, eq } from "drizzle-orm";
 import {
   createDbClient,
-  conversationMessages,
-  conversations,
   employees,
   roles,
   standupAnswers,
   standups,
   teams,
 } from "@repo/database";
-import { dateInTimezone, DEFAULT_TIMEZONE } from "@repo/shared";
+import { dateInTimezone } from "@repo/shared";
 import { listUpcomingHolidays } from "../holidays/service.js";
 import { listSchedules } from "../schedules/service.js";
 import { getStandupSession } from "../standups/engine.js";
+import { formatWeekdays, identityLines } from "./prompt.js";
+
+export { canViewOthers } from "./prompt.js";
+export {
+  appendConversationMessage,
+  getConversationHistory,
+  type HistoryMessage,
+} from "./conversation.js";
 
 const db = createDbClient(
   process.env.DATABASE_URL ??
@@ -34,17 +40,6 @@ export type AgentArgs = {
   employee: AgentEmployee;
   roleName: string | null;
 };
-
-/** Employees see only themselves; Owner/Admin/Manager may view others. */
-export function canViewOthers(roleName: string | null): boolean {
-  return !!roleName && ["Owner", "Admin", "Manager"].includes(roleName);
-}
-
-function formatWeekdays(days: unknown): string {
-  if (!Array.isArray(days)) return "custom days";
-  const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  return (days as number[]).map((d) => names[d] ?? String(d)).join(", ");
-}
 
 async function recentStandups(employeeId: string, limit: number) {
   const rows = await db
@@ -94,34 +89,7 @@ export async function buildAgentContext(args: AgentArgs): Promise<string> {
 
   const teamName = profile?.teamName ?? null;
   const resolvedRole = roleName ?? profile?.roleName ?? null;
-
-  const lines: string[] = [
-    "You are Team Assistant, a friendly AI helper for a small Indonesian team.",
-    "Style: reply in short, WhatsApp-style messages. Match the user's language (Bahasa Indonesia or English).",
-    "Use the provided tools for data about standups, schedules, holidays, activity and reports. Never invent data; if a tool fails, briefly say so.",
-    "Security: never ask for or repeat passwords, API keys or any credentials.",
-    "",
-    "Signed-in user:",
-    `- Name: ${employee.name}`,
-    `- WhatsApp: ${employee.phone}`,
-    `- Role: ${resolvedRole ?? "unknown"}`,
-    `- Team: ${teamName ?? "none"}`,
-    canViewOthers(resolvedRole)
-      ? "This user may look up any employee's profile and standup history, and see team activity and reports."
-      : "This user may only access their own profile and standup history (tools enforce this).",
-  ];
-  if (!canViewOthers(resolvedRole)) {
-    lines.push(
-      "This user is a regular employee and this assistant is only for their daily standup: recording or checking their own standup, the standup schedule and holidays.",
-      "Politely decline anything else in one short sentence and mention they can type STANDUP or BANTUAN.",
-    );
-  }
-  if (resolvedRole === "Owner" || resolvedRole === "Admin") {
-    lines.push(
-      "This user is an admin: they may manage employees (add, rename, change WhatsApp number, team or role, deactivate), teams, schedules, calendar exceptions, and send standup prompts or reminders now.",
-      "For any change, call the matching tool right away with what the user said (names are fine; the tool resolves them). The system then asks the user to confirm with YA/TIDAK, so do not ask for confirmation yourself. If a required detail is missing, ask for it briefly.",
-    );
-  }
+  const lines = identityLines(employee, resolvedRole, teamName);
 
   const history = await recentStandups(employee.id, 5);
   if (history.length > 0) {
@@ -167,77 +135,4 @@ export async function buildAgentContext(args: AgentArgs): Promise<string> {
   }
 
   return lines.join("\n");
-}
-
-export type HistoryMessage = { role: "user" | "assistant"; content: string };
-
-/** Reads the employee's recent conversation messages, oldest first. */
-export async function getConversationHistory(
-  employeeId: string,
-  limit = 10,
-): Promise<HistoryMessage[]> {
-  const rows = await db
-    .select({
-      role: conversationMessages.role,
-      content: conversationMessages.content,
-    })
-    .from(conversationMessages)
-    .innerJoin(
-      conversations,
-      eq(conversationMessages.conversationId, conversations.id),
-    )
-    .where(eq(conversations.employeeId, employeeId))
-    .orderBy(desc(conversationMessages.createdAt))
-    .limit(limit);
-
-  return rows
-    .reverse()
-    .map((r) => ({ role: r.role as "user" | "assistant", content: r.content }));
-}
-
-function isToday(when: Date): boolean {
-  return dateInTimezone(DEFAULT_TIMEZONE, when) === dateInTimezone();
-}
-
-/**
- * Appends a message to the employee's open conversation for today,
- * creating the conversation row when needed.
- */
-export async function appendConversationMessage(
-  workspaceId: string,
-  employeeId: string,
-  role: "user" | "assistant" | "system",
-  content: string,
-  channel = "whatsapp",
-): Promise<void> {
-  if (!content) return;
-
-  const [latest] = await db
-    .select({ id: conversations.id, startedAt: conversations.startedAt })
-    .from(conversations)
-    .where(
-      and(
-        eq(conversations.workspaceId, workspaceId),
-        eq(conversations.employeeId, employeeId),
-        eq(conversations.channel, channel),
-      ),
-    )
-    .orderBy(desc(conversations.startedAt))
-    .limit(1);
-
-  let conversationId = latest?.id;
-  if (!conversationId || !latest || !isToday(latest.startedAt)) {
-    const [created] = await db
-      .insert(conversations)
-      .values({ workspaceId, employeeId, channel })
-      .returning({ id: conversations.id });
-    if (!created) return;
-    conversationId = created.id;
-  }
-
-  await db.insert(conversationMessages).values({
-    conversationId,
-    role,
-    content,
-  });
 }
