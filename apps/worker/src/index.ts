@@ -12,7 +12,7 @@ import {
 } from "@repo/database";
 import { and, eq } from "drizzle-orm";
 import { dateInTimezone, DEFAULT_TIMEZONE } from "@repo/shared";
-import { reminderTimes } from "./reminder-times.js";
+import { reminderTimes, standupReminderTimes } from "./reminder-times.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 
@@ -122,7 +122,7 @@ async function desiredRepeatables(): Promise<DesiredRepeatable[]> {
         tz,
         ...owner,
       });
-      for (const time of reminderTimes({ ...schedule, timeOfDay: schedule.timeOfDay })) {
+      for (const time of standupReminderTimes({ ...schedule, timeOfDay: schedule.timeOfDay })) {
         desired.push({
           name: `standup-reminders:${schedule.id}@${time.replace(":", "")}`,
           pattern: cronFor(time, weekdays),

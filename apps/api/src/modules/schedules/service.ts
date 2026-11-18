@@ -19,14 +19,40 @@ function assertValidTimezone(timezone: string) {
   }
 }
 
-/** Close and summary times only make sense after the prompt, on the same day. */
-function assertDayOrder(s: { timeOfDay: string | null; closeTime?: string | null; summaryTime?: string | null }) {
+type DayTimes = {
+  timeOfDay: string | null;
+  closeTime?: string | null;
+  summaryTime?: string | null;
+  reminderMiddayTime?: string | null;
+  reminderAfternoonTime?: string | null;
+};
+
+/**
+ * Close, summary and reminder times only make sense after the prompt, on the
+ * same day; reminders also before the close, siang before sore.
+ */
+function assertDayOrder(s: DayTimes) {
   if (!s.timeOfDay) return;
   if (s.closeTime && s.closeTime <= s.timeOfDay) {
     throw new HttpError(400, `Jam tutup (${s.closeTime}) harus setelah jam standup (${s.timeOfDay}).`);
   }
   if (s.summaryTime && s.summaryTime <= s.timeOfDay) {
     throw new HttpError(400, `Jam ringkasan (${s.summaryTime}) harus setelah jam standup (${s.timeOfDay}).`);
+  }
+  for (const [label, time] of [
+    ["siang", s.reminderMiddayTime],
+    ["sore", s.reminderAfternoonTime],
+  ] as const) {
+    if (!time) continue;
+    if (time <= s.timeOfDay) {
+      throw new HttpError(400, `Pengingat ${label} (${time}) harus setelah jam standup (${s.timeOfDay}).`);
+    }
+    if (s.closeTime && time >= s.closeTime) {
+      throw new HttpError(400, `Pengingat ${label} (${time}) harus sebelum jam tutup (${s.closeTime}).`);
+    }
+  }
+  if (s.reminderMiddayTime && s.reminderAfternoonTime && s.reminderAfternoonTime <= s.reminderMiddayTime) {
+    throw new HttpError(400, `Pengingat sore (${s.reminderAfternoonTime}) harus setelah pengingat siang (${s.reminderMiddayTime}).`);
   }
 }
 
@@ -94,8 +120,8 @@ export async function createSchedule(
       timeOfDay: input.timeOfDay,
       weekdays: input.weekdays,
       timezone: input.timezone ?? "Asia/Jakarta",
-      reminderMinutes: input.reminderMinutes ?? null,
-      reminderRepeatMinutes: input.reminderRepeatMinutes ?? null,
+      reminderMiddayTime: input.reminderMiddayTime ?? null,
+      reminderAfternoonTime: input.reminderAfternoonTime ?? null,
       closeTime: input.closeTime ?? null,
       summaryTime: input.summaryTime ?? null,
       isActive: true,
@@ -136,6 +162,10 @@ export async function updateSchedule(
     timeOfDay: input.timeOfDay ?? existing.timeOfDay,
     closeTime: input.closeTime === undefined ? existing.closeTime : input.closeTime,
     summaryTime: input.summaryTime === undefined ? existing.summaryTime : input.summaryTime,
+    reminderMiddayTime:
+      input.reminderMiddayTime === undefined ? existing.reminderMiddayTime : input.reminderMiddayTime,
+    reminderAfternoonTime:
+      input.reminderAfternoonTime === undefined ? existing.reminderAfternoonTime : input.reminderAfternoonTime,
   });
   if (input.isActive === true && !existing.isActive) await assertNoOtherActive(workspaceId, id);
 
@@ -146,12 +176,8 @@ export async function updateSchedule(
   if (input.timeOfDay !== undefined) changes.timeOfDay = input.timeOfDay;
   if (input.weekdays !== undefined) changes.weekdays = input.weekdays;
   if (input.timezone !== undefined) changes.timezone = input.timezone;
-  if (input.reminderMinutes !== undefined) {
-    changes.reminderMinutes = input.reminderMinutes;
-  }
-  if (input.reminderRepeatMinutes !== undefined) {
-    changes.reminderRepeatMinutes = input.reminderRepeatMinutes;
-  }
+  if (input.reminderMiddayTime !== undefined) changes.reminderMiddayTime = input.reminderMiddayTime;
+  if (input.reminderAfternoonTime !== undefined) changes.reminderAfternoonTime = input.reminderAfternoonTime;
   if (input.closeTime !== undefined) changes.closeTime = input.closeTime;
   if (input.summaryTime !== undefined) changes.summaryTime = input.summaryTime;
   if (input.isActive !== undefined) changes.isActive = input.isActive;
@@ -238,7 +264,8 @@ export async function upsertStandupSchedule(
     timeOfDay?: string;
     weekdays?: number[];
     timezone?: string;
-    reminderMinutes?: number | null;
+    reminderMiddayTime?: string | null;
+    reminderAfternoonTime?: string | null;
     isActive?: boolean;
   },
   actorId?: string | null,
@@ -265,7 +292,8 @@ export async function upsertStandupSchedule(
         timeOfDay: patch.timeOfDay ?? "09:00",
         weekdays: patch.weekdays ?? [1, 2, 3, 4, 5],
         timezone: patch.timezone,
-        reminderMinutes: patch.reminderMinutes ?? null,
+        reminderMiddayTime: patch.reminderMiddayTime === undefined ? "12:00" : patch.reminderMiddayTime,
+        reminderAfternoonTime: patch.reminderAfternoonTime === undefined ? "15:00" : patch.reminderAfternoonTime,
       },
       actorId,
     );
@@ -278,7 +306,8 @@ export async function upsertStandupSchedule(
       timeOfDay: patch.timeOfDay,
       weekdays: patch.weekdays,
       timezone: patch.timezone,
-      reminderMinutes: patch.reminderMinutes,
+      reminderMiddayTime: patch.reminderMiddayTime,
+      reminderAfternoonTime: patch.reminderAfternoonTime,
       isActive: patch.isActive,
     },
     actorId,

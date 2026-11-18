@@ -6,7 +6,7 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 /**
  * Creates a workspace with its factory defaults: calendar settings and the
- * "standup" schedule (09:00 Mon-Fri, reminder 90 minutes later).
+ * "standup" schedule (09:00 Mon-Fri, reminders siang 12:00 and sore 15:00).
  */
 export async function createWorkspace(db: Db | Tx, input: { name: string; ownerUserId?: string | null }) {
   const [workspace] = await db
@@ -24,8 +24,8 @@ export async function createWorkspace(db: Db | Tx, input: { name: string; ownerU
       timeOfDay: "09:00",
       weekdays: [1, 2, 3, 4, 5],
       timezone: "Asia/Jakarta",
-      reminderMinutes: 30,
-      reminderRepeatMinutes: 60,
+      reminderMiddayTime: "12:00",
+      reminderAfternoonTime: "15:00",
       closeTime: "17:00",
       summaryTime: "11:00",
       isActive: true,

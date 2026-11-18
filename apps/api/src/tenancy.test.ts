@@ -288,9 +288,22 @@ describe.skipIf(!url)("tenant isolation", () => {
     expect(badClose.status).toBe(400);
     const ok = await req("b", `/schedules/${ws.b.scheduleId}`, {
       method: "PATCH",
-      body: JSON.stringify({ reminderMinutes: 30, reminderRepeatMinutes: 60, closeTime: "17:00", summaryTime: "11:00" }),
+      body: JSON.stringify({ reminderMiddayTime: "12:00", reminderAfternoonTime: "15:00", closeTime: "17:00", summaryTime: "11:00" }),
     });
-    expect((await ok.json()).closeTime).toBe("17:00");
+    const saved = await ok.json();
+    expect(saved.closeTime).toBe("17:00");
+    expect([saved.reminderMiddayTime, saved.reminderAfternoonTime]).toEqual(["12:00", "15:00"]);
+    // Sore before siang, or a reminder after the close, is refused.
+    const swapped = await req("b", `/schedules/${ws.b.scheduleId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ reminderMiddayTime: "15:00", reminderAfternoonTime: "12:00" }),
+    });
+    expect(swapped.status).toBe(400);
+    const afterClose = await req("b", `/schedules/${ws.b.scheduleId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ reminderAfternoonTime: "17:30" }),
+    });
+    expect(afterClose.status).toBe(400);
   });
 
   test("whatsapp status is per workspace and requires auth", async () => {

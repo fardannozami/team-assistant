@@ -240,13 +240,13 @@ function toggleWeekday(arr: number[], d: number) {
 }
 
 function defaultReminders(): ReminderSettings {
-  return { reminder: 30, repeat: 60, closeTime: "17:00", summaryTime: "11:00" };
+  return { midday: "12:00", afternoon: "15:00", closeTime: "17:00", summaryTime: "11:00" };
 }
 
 function remindersFrom(s: Schedule): ReminderSettings {
   return {
-    reminder: s.reminderMinutes,
-    repeat: s.reminderRepeatMinutes,
+    midday: s.reminderMiddayTime ?? "",
+    afternoon: s.reminderAfternoonTime ?? "",
     closeTime: s.closeTime ?? "",
     summaryTime: s.summaryTime ?? "",
   };
@@ -254,19 +254,19 @@ function remindersFrom(s: Schedule): ReminderSettings {
 
 /** Form values to API fields: empty inputs mean "off". */
 function reminderPayload(r: ReminderSettings) {
-  const num = (v: number | "" | null) => (typeof v === "number" && v > 0 ? v : null);
   return {
-    reminderMinutes: num(r.reminder),
-    reminderRepeatMinutes: num(r.reminder) ? num(r.repeat) : null,
+    reminderMiddayTime: r.midday || null,
+    reminderAfternoonTime: r.afternoon || null,
     closeTime: r.closeTime || null,
     summaryTime: r.summaryTime || null,
   };
 }
 
 function reminderLabel(s: Schedule) {
-  if (s.reminderMinutes == null) return s.closeTime ? `— · tutup ${s.closeTime}` : "—";
-  const repeat = s.reminderRepeatMinutes ? `, lalu tiap ${s.reminderRepeatMinutes}` : "";
-  return `+${s.reminderMinutes} mnt${repeat}${s.closeTime ? ` · tutup ${s.closeTime}` : ""}`;
+  const times = [s.reminderMiddayTime && `Siang ${s.reminderMiddayTime}`, s.reminderAfternoonTime && `sore ${s.reminderAfternoonTime}`]
+    .filter(Boolean)
+    .join(", ");
+  return `${times || "—"}${s.closeTime ? ` · tutup ${s.closeTime}` : ""}`;
 }
 
 function weekdayLabels(ws: number[]) {

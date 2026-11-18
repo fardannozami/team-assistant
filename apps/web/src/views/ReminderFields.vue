@@ -3,12 +3,12 @@
     <legend class="px-1 text-sm font-semibold text-text">Pengingat & penutupan</legend>
     <div class="grid gap-4 sm:grid-cols-2">
       <div>
-        <label :for="`${id}-first`" class="mb-1.5 block text-sm font-semibold text-text">Pengingat pertama (menit setelah standup)</label>
-        <input :id="`${id}-first`" v-model.number="model.reminder" type="number" min="0" max="1440" placeholder="Kosong = tanpa pengingat" :class="inputClass" />
+        <label :for="`${id}-midday`" class="mb-1.5 block text-sm font-semibold text-text">Pengingat siang</label>
+        <input :id="`${id}-midday`" v-model="model.midday" type="time" :class="inputClass" />
       </div>
       <div>
-        <label :for="`${id}-repeat`" class="mb-1.5 block text-sm font-semibold text-text">Ulangi tiap (menit)</label>
-        <input :id="`${id}-repeat`" v-model.number="model.repeat" type="number" min="15" max="720" placeholder="Kosong = sekali saja" :disabled="!hasReminder" :class="[inputClass, 'disabled:opacity-50']" />
+        <label :for="`${id}-afternoon`" class="mb-1.5 block text-sm font-semibold text-text">Pengingat sore</label>
+        <input :id="`${id}-afternoon`" v-model="model.afternoon" type="time" :class="inputClass" />
       </div>
       <div>
         <label :for="`${id}-close`" class="mb-1.5 block text-sm font-semibold text-text">Standup ditutup jam</label>
@@ -27,8 +27,8 @@
 import { computed, useId } from "vue";
 
 export type ReminderSettings = {
-  reminder: number | "" | null;
-  repeat: number | "" | null;
+  midday: string;
+  afternoon: string;
   closeTime: string;
   summaryTime: string;
 };
@@ -40,29 +40,19 @@ const id = useId();
 const inputClass =
   "min-h-12 w-full rounded-xl border border-border bg-panel px-4 text-base placeholder-text-dim focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20";
 
-const hasReminder = computed(() => typeof model.value.reminder === "number" && model.value.reminder > 0);
-
-const toMinutes = (t: string) => {
-  const [h = 0, m = 0] = t.split(":").map(Number);
-  return h * 60 + m;
-};
-const toTime = (n: number) => `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
-
-// Mirrors the worker's schedule so admins see exactly when reminders go out.
+// Mirrors the worker: a reminder only goes out between the prompt and the close.
 const preview = computed(() => {
   const parts: string[] = [];
-  if (hasReminder.value && props.time) {
-    const end = model.value.closeTime ? toMinutes(model.value.closeTime) : 1440;
-    const step = typeof model.value.repeat === "number" && model.value.repeat > 0 ? model.value.repeat : 0;
-    const times: string[] = [];
-    for (let t = toMinutes(props.time) + (model.value.reminder as number); t < end && times.length < 24; t += step) {
-      times.push(toTime(t));
-      if (!step) break;
-    }
-    parts.push(times.length ? `Pengingat ke yang belum selesai: ${times.join(", ")}.` : "Pengingat jatuh setelah jam tutup, jadi tidak terkirim.");
-  } else {
-    parts.push("Tanpa pengingat.");
-  }
+  const reminders = [
+    { label: "siang", time: model.value.midday },
+    { label: "sore", time: model.value.afternoon },
+  ].filter((r) => r.time);
+  const sendable = reminders.filter(
+    (r) => (!props.time || r.time > props.time) && (!model.value.closeTime || r.time < model.value.closeTime),
+  );
+  if (!reminders.length) parts.push("Tanpa pengingat.");
+  else if (sendable.length) parts.push(`Pengingat ke yang belum selesai: ${sendable.map((r) => `${r.label} ${r.time}`).join(", ")}.`);
+  if (sendable.length < reminders.length) parts.push("Pengingat harus setelah jam standup dan sebelum jam tutup.");
   if (model.value.summaryTime) parts.push(`Admin menerima daftar yang belum standup pukul ${model.value.summaryTime}.`);
   if (model.value.closeTime) parts.push(`Pukul ${model.value.closeTime} standup ditutup; yang belum selesai tercatat tidak mengisi.`);
   return parts.join(" ");

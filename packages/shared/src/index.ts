@@ -125,13 +125,25 @@ export const updateCalendarSettingsSchema = z.object({
   config: z.unknown().optional(),
 });
 
+/** "siang 12:00, sore 15:00" for the standup reminders that are set, or null. */
+export function describeStandupReminders(s: {
+  reminderMiddayTime: string | null;
+  reminderAfternoonTime: string | null;
+}): string | null {
+  const parts = [
+    s.reminderMiddayTime && `siang ${s.reminderMiddayTime}`,
+    s.reminderAfternoonTime && `sore ${s.reminderAfternoonTime}`,
+  ].filter(Boolean);
+  return parts.length ? parts.join(", ") : null;
+}
+
 export const createScheduleSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
   timeOfDay: timeOfDaySchema,
   weekdays: weekdaysSchema,
   timezone: timezoneNameSchema.optional(),
-  reminderMinutes: z.number().int().min(0).max(1440).nullish(),
-  reminderRepeatMinutes: z.number().int().min(15).max(720).nullish(),
+  reminderMiddayTime: timeOfDaySchema.nullish(),
+  reminderAfternoonTime: timeOfDaySchema.nullish(),
   closeTime: timeOfDaySchema.nullish(),
   summaryTime: timeOfDaySchema.nullish(),
 });
@@ -141,8 +153,8 @@ export const updateScheduleSchema = z.object({
   timeOfDay: timeOfDaySchema.optional(),
   weekdays: weekdaysSchema.optional(),
   timezone: timezoneNameSchema.optional(),
-  reminderMinutes: z.number().int().min(0).max(1440).nullable().optional(),
-  reminderRepeatMinutes: z.number().int().min(15).max(720).nullable().optional(),
+  reminderMiddayTime: timeOfDaySchema.nullable().optional(),
+  reminderAfternoonTime: timeOfDaySchema.nullable().optional(),
   closeTime: timeOfDaySchema.nullable().optional(),
   summaryTime: timeOfDaySchema.nullable().optional(),
   isActive: z.boolean().optional(),

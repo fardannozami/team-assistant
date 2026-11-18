@@ -78,15 +78,11 @@ function pendingSummary(tool: string, args: Record<string, unknown>): string {
       parts.push(`days (${(args.weekdays as unknown[]).map(String).join(", ")})`);
     }
     if (args.timezone) parts.push(`timezone ${args.timezone}`);
-    if (args.reminderMinutes !== undefined) {
-      parts.push(
-        args.reminderMinutes === null
-          ? "disable reminder"
-          : `reminder ${args.reminderMinutes} min`,
-      );
+    if (args.reminderMiddayTime !== undefined) {
+      parts.push(args.reminderMiddayTime === null ? "no siang reminder" : `siang reminder at ${args.reminderMiddayTime}`);
     }
-    if (args.reminderRepeatMinutes !== undefined) {
-      parts.push(args.reminderRepeatMinutes === null ? "single reminder" : `repeat every ${args.reminderRepeatMinutes} min`);
+    if (args.reminderAfternoonTime !== undefined) {
+      parts.push(args.reminderAfternoonTime === null ? "no sore reminder" : `sore reminder at ${args.reminderAfternoonTime}`);
     }
     if (args.closeTime !== undefined) parts.push(args.closeTime === null ? "never close" : `close at ${args.closeTime}`);
     if (args.summaryTime !== undefined) parts.push(args.summaryTime === null ? "no admin summary" : `admin summary at ${args.summaryTime}`);

@@ -1,5 +1,6 @@
 import {
   MOOD_EMOJI,
+  describeStandupReminders,
   isAdminRole,
   phoneNumberSchema,
   type CheckinKind,
@@ -102,7 +103,7 @@ const MENU_TEXT = [
   "START STANDUP - kirim prompt standup hari ini sekarang",
   "SCHEDULE - lihat jadwal standup",
   "SET SCHEDULE <HH:mm> [HARI] - ubah waktu standup",
-  "SET REMINDER <menit>|OFF - ubah pengingat standup",
+  "SET REMINDER <siang> <sore>|OFF - ubah jam pengingat standup, contoh SET REMINDER 12:00 15:00",
   "START CHECKOUT / START MOOD - kirim check-out mingguan / ice breaking sekarang",
   "REPORT CHECKOUT / REPORT MOOD - hasil check-out / mood terakhir",
   "Atau ketik: jadwalkan standup senin sampai jumat jam 9 pagi WIB",
@@ -199,15 +200,14 @@ function savedScheduleReply(schedule: {
   timeOfDay: string | null;
   weekdays: unknown;
   timezone: string;
-  reminderMinutes: number | null;
+  reminderMiddayTime: string | null;
+  reminderAfternoonTime: string | null;
 }): string {
   const days = Array.isArray(schedule.weekdays)
     ? formatWeekdays(schedule.weekdays as number[])
     : "custom days";
-  const reminder =
-    schedule.reminderMinutes != null
-      ? `\nPengingat dikirim ${schedule.reminderMinutes} menit setelahnya.`
-      : "";
+  const reminders = describeStandupReminders(schedule);
+  const reminder = reminders ? `\nPengingat: ${reminders}.` : "";
   return `Jadwal tersimpan.\nStandup berjalan ${days} pukul ${schedule.timeOfDay} (${schedule.timezone}).${reminder}`;
 }
 
@@ -350,10 +350,8 @@ async function showSchedules(workspaceId: string): Promise<string> {
         : null;
       const when = schedule.timeOfDay ?? schedule.cronExpression ?? "?";
       const days = weekdays ? formatWeekdays(weekdays) : "custom cron";
-      const reminder =
-        schedule.reminderMinutes != null
-          ? `, reminder ${schedule.reminderMinutes} min after`
-          : "";
+      const reminders = describeStandupReminders(schedule);
+      const reminder = reminders ? `, pengingat ${reminders}` : "";
       return `- ${schedule.name} (${schedule.isActive ? "active" : "disabled"}): ${when} ${days}, ${schedule.timezone}${reminder}`;
     })
     .join("\n");
@@ -386,28 +384,37 @@ async function setScheduleCommand(workspaceId: string, rest: string): Promise<st
   return savedScheduleReply(schedule);
 }
 
-async function setReminderCommand(workspaceId: string, rest: string): Promise<string> {
-  const token = rest.trim().toUpperCase();
-  if (!token) {
-    return "Format: SET REMINDER <menit> (setelah standup) atau SET REMINDER OFF";
-  }
+const REMINDER_FORMAT =
+  "Format: SET REMINDER <siang HH:mm> <sore HH:mm>, contoh SET REMINDER 12:00 15:00, atau SET REMINDER OFF";
 
-  if (/^(OFF|NONE|DISABLED?)$/.test(token)) {
-    await upsertStandupSchedule(workspaceId, { reminderMinutes: null });
+function parseClock(token: string): string | null {
+  const match = token.match(/^(\d{1,2})[:.](\d{2})$/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour > 23 || minute > 59) return null;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+/** Standup reminders go out twice: siang and sore. */
+async function setReminderCommand(workspaceId: string, rest: string): Promise<string> {
+  const tokens = rest.trim().toUpperCase().split(/\s+/).filter(Boolean);
+  if (tokens.length === 1 && /^(OFF|NONE|DISABLED?)$/.test(tokens[0]!)) {
+    await upsertStandupSchedule(workspaceId, { reminderMiddayTime: null, reminderAfternoonTime: null });
     return "Pengingat dimatikan.";
   }
+  if (tokens.length !== 2) return REMINDER_FORMAT;
 
-  if (!/^\d{1,4}$/.test(token)) {
-    return "Format: SET REMINDER <menit> (setelah standup) atau SET REMINDER OFF";
+  const [midday, afternoon] = tokens.map(parseClock);
+  if (!midday || !afternoon) return REMINDER_FORMAT;
+
+  try {
+    await upsertStandupSchedule(workspaceId, { reminderMiddayTime: midday, reminderAfternoonTime: afternoon });
+  } catch (error) {
+    if (error instanceof HttpError) return error.message;
+    throw error;
   }
-
-  const minutes = Number(token);
-  if (minutes > 1440) {
-    return "Pengingat maksimal 1440 menit (24 jam).";
-  }
-
-  await upsertStandupSchedule(workspaceId, { reminderMinutes: minutes });
-  return `Pengingat akan dikirim ${minutes} menit setelah standup.`;
+  return `Pengingat standup dikirim siang pukul ${midday} dan sore pukul ${afternoon} ke yang belum selesai.`;
 }
 
 // Keyed by `${workspaceId}:${phone}`.

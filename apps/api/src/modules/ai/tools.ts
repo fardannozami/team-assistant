@@ -12,6 +12,7 @@ import {
   createScheduleSchema,
   createTeamSchema,
   dateInTimezone,
+  describeStandupReminders,
   isNoBlocker,
   DEFAULT_TIMEZONE,
   phoneNumberSchema,
@@ -149,10 +150,8 @@ export const AI_TOOLS: ToolSpec[] = [
             description: "0=Sunday..6=Saturday.",
           },
           timezone: { type: "string", description: "IANA timezone, e.g. Asia/Jakarta." },
-          reminderMinutes: {
-            type: "integer",
-            description: "Optional reminder, minutes after the standup (0-1440).",
-          },
+          reminderMiddayTime: { type: "string", description: "Optional HH:mm \"siang\" reminder to whoever has not finished, e.g. 12:00." },
+          reminderAfternoonTime: { type: "string", description: "Optional HH:mm \"sore\" reminder, e.g. 15:00." },
         },
         required: ["name", "timeOfDay", "weekdays"],
       },
@@ -172,8 +171,8 @@ export const AI_TOOLS: ToolSpec[] = [
           timeOfDay: { type: "string", description: "HH:mm 24-hour time." },
           weekdays: { type: "array", items: { type: "integer" }, description: "0=Sunday..6=Saturday." },
           timezone: { type: "string", description: "IANA timezone, e.g. Asia/Jakarta." },
-          reminderMinutes: { type: "integer", description: "First reminder, minutes after the standup (0-1440), or null to disable." },
-          reminderRepeatMinutes: { type: "integer", description: "Repeat the reminder every N minutes (15-720) until closeTime, or null for a single reminder." },
+          reminderMiddayTime: { type: "string", description: "HH:mm \"siang\" reminder to whoever has not finished (after the standup, before closeTime), or null to disable." },
+          reminderAfternoonTime: { type: "string", description: "HH:mm \"sore\" reminder (after the siang one, before closeTime), or null to disable." },
           closeTime: { type: "string", description: "HH:mm when today's standup closes: reminders stop and unfinished ones count as missed. null to never close." },
           summaryTime: { type: "string", description: "HH:mm when admins get the list of who has not finished. null to disable." },
           isActive: { type: "boolean", description: "Enable or disable the schedule." },
@@ -493,8 +492,8 @@ function describeSchedule(row: {
   cronExpression: string | null;
   weekdays: unknown;
   timezone: string;
-  reminderMinutes: number | null;
-  reminderRepeatMinutes: number | null;
+  reminderMiddayTime: string | null;
+  reminderAfternoonTime: string | null;
   closeTime: string | null;
   summaryTime: string | null;
 }): string {
@@ -502,10 +501,8 @@ function describeSchedule(row: {
   const days = Array.isArray(row.weekdays)
     ? (row.weekdays as number[]).map((d) => DAY_NAMES[d] ?? String(d)).join(", ")
     : "custom days";
-  const reminder =
-    row.reminderMinutes != null
-      ? `, reminder ${row.reminderMinutes} min after${row.reminderRepeatMinutes ? `, then every ${row.reminderRepeatMinutes} min` : ""}`
-      : "";
+  const reminders = describeStandupReminders(row);
+  const reminder = reminders ? `, reminders ${reminders}` : "";
   const close = row.closeTime ? `, closes ${row.closeTime}` : "";
   const summary = row.summaryTime ? `, admin summary ${row.summaryTime}` : "";
   return `- ${row.name} (${row.isActive ? "active" : "disabled"}): ${when} ${days}, ${row.timezone}${reminder}${close}${summary}`;

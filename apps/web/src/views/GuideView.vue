@@ -102,7 +102,7 @@ const adminCommands = [
   { cmd: "START STANDUP", desc: "Kirim prompt standup hari ini ke semua anggota sekarang juga." },
   { cmd: "SCHEDULE", desc: "Lihat jadwal standup." },
   { cmd: "SET SCHEDULE 09:00 MON-FRI", desc: "Ubah waktu (dan hari) standup." },
-  { cmd: "SET REMINDER 30 / OFF", desc: "Kirim pengingat sekian menit setelah prompt standup, atau matikan." },
+  { cmd: "SET REMINDER 12:00 15:00 / OFF", desc: "Atur jam pengingat standup siang dan sore, atau matikan." },
   { cmd: "REPORT TODAY", desc: "Laporan standup hari ini." },
   { cmd: "REPORT WEEKLY", desc: "Laporan standup minggu ini." },
   { cmd: "START CHECKOUT / START MOOD", desc: "Kirim check-out mingguan / ice breaking sekarang juga." },

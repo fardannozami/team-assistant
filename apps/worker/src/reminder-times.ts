@@ -37,3 +37,21 @@ export function reminderTimes(schedule: {
   }
   return times;
 }
+
+/**
+ * Standup reminder times for one day: siang and sore, each only when set and
+ * between the prompt and the close time.
+ */
+export function standupReminderTimes(schedule: {
+  timeOfDay: string;
+  reminderMiddayTime: string | null;
+  reminderAfternoonTime: string | null;
+  closeTime: string | null;
+}): string[] {
+  const start = toMinutes(schedule.timeOfDay);
+  const end = schedule.closeTime ? toMinutes(schedule.closeTime) : 1440;
+  const times = [schedule.reminderMiddayTime, schedule.reminderAfternoonTime].filter(
+    (time): time is string => !!time && toMinutes(time) > start && toMinutes(time) < end,
+  );
+  return [...new Set(times)].sort();
+}
