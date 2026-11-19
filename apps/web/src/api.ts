@@ -373,6 +373,7 @@ export interface DailyReportGithub {
   name: string;
   counts: Record<string, number>;
   summary: string;
+  recentCommits: { hash: string | null; title: string | null; url: string | null; repository: string | null; occurredAt: string }[];
 }
 
 export interface DailyReportSubmission {

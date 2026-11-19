@@ -1,6 +1,6 @@
 import { createDbClient, employees, roles, standupAnswers, standupSessions, standups } from "@repo/database";
 import { and, eq, gte, isNull, lte, notInArray, or } from "drizzle-orm";
-import { describeCounts } from "../github/digest.js";
+import { describeCounts, recentCommits } from "../github/digest.js";
 import { standupActivity } from "../github/service.js";
 import { standupToday } from "../standups/engine.js";
 import { isNoBlocker } from "@repo/shared";
@@ -76,6 +76,7 @@ export async function generateDailyReport(workspaceId: string, date?: string) {
       name: e.name,
       counts: activity.byEmployee.get(e.id)!.counts,
       summary: describeCounts(activity.byEmployee.get(e.id)!.counts),
+      recentCommits: recentCommits(activity.byEmployee.get(e.id)!.items),
     }));
 
   const submitted = [...byEmployee.entries()]
@@ -106,7 +107,12 @@ export async function generateDailyReport(workspaceId: string, date?: string) {
     "",
     `GitHub activity (since ${activity.from}):`,
     ...(github.length
-      ? github.map((g) => `- ${g.name}: ${g.summary}`)
+      ? github.flatMap((g) => [
+          `- ${g.name}: ${g.summary}`,
+          ...g.recentCommits.map(
+            (c) => `  • ${[c.hash, c.title].filter(Boolean).join(" ")}${c.url ? ` - ${c.url}` : ""}`,
+          ),
+        ])
       : ["- none"]),
   ];
 

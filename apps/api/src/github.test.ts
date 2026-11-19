@@ -9,7 +9,7 @@ import { createHmac } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { normalizeEvent } from "./modules/github/events.js";
 import { verifyWebhookSignature } from "./modules/github/app.js";
-import { activityHint, describeCounts, previousWorkday, standupWindow } from "./modules/github/digest.js";
+import { activityHint, describeCounts, previousWorkday, recentCommits, standupWindow } from "./modules/github/digest.js";
 
 const SECRET = "test-webhook-secret";
 const sign = (body: string) => `sha256=${createHmac("sha256", SECRET).update(body).digest("hex")}`;
@@ -93,6 +93,23 @@ describe("github normalization", () => {
       ].join("\n"),
     );
     expect(activityHint(undefined, "2026-11-10")).toBeNull();
+  });
+
+  test("recent commits: newest three, short hash from the URL", () => {
+    const commit = (n: number) => ({
+      type: "commit",
+      title: `commit ${n}`,
+      url: `https://github.com/acme/api/commit/${String(n).repeat(40).slice(0, 40)}`,
+      repository: "acme/api",
+      occurredAt: new Date(Date.UTC(2026, 10, 10, n)),
+    });
+    const items = [commit(1), commit(4), { ...commit(5), type: "pr_merged" }, commit(2), commit(3)];
+    expect(recentCommits(items).map((c) => [c.hash, c.title])).toEqual([
+      ["4444444", "commit 4"],
+      ["3333333", "commit 3"],
+      ["2222222", "commit 2"],
+    ]);
+    expect(recentCommits([{ ...commit(1), url: null }])[0]!.hash).toBeNull();
   });
 
   test("signature verification", () => {

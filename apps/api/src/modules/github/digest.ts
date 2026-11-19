@@ -104,6 +104,21 @@ export function notableItems(items: StandupActivityItem[], max = 5) {
   return { shown: picked.slice(0, max), more: Math.max(picked.length - max, 0) };
 }
 
+/** The latest `max` commits, newest first, with the short hash from the commit URL. */
+export function recentCommits(items: StandupActivityItem[], max = 3) {
+  return items
+    .filter((i) => i.type === "commit")
+    .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())
+    .slice(0, max)
+    .map((i) => ({
+      hash: i.url?.match(/\/commit\/([0-9a-f]{7,40})/i)?.[1]?.slice(0, 7) ?? null,
+      title: i.title,
+      url: i.url,
+      repository: i.repository,
+      occurredAt: i.occurredAt,
+    }));
+}
+
 /** Block for the WhatsApp prompt, or null when there is nothing to show. */
 export function activityHint(activity: StandupActivity | undefined, from: string) {
   if (!activity?.items.length) return null;
