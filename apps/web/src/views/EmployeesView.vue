@@ -86,12 +86,11 @@
         <tr class="text-text-dim">
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Nama</th>
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Telepon</th>
-          <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Tim</th>
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[16%]">Peran</th>
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Shift</th>
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Lead</th>
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[16%]">Status</th>
-          <th v-if="isAdmin" class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[26%]">Aksi</th>
+          <th v-if="isAdmin" class="text-right px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Aksi</th>
         </tr>
       </thead>
       <tbody>
@@ -101,17 +100,6 @@
             <template v-else>{{ e.name }}</template>
           </td>
           <td class="px-5 py-4 border-b border-border align-middle text-text font-mono text-[13px] text-text-dim">{{ e.phone }}</td>
-          <td class="px-5 py-4 border-b border-border align-middle text-text">
-            <div v-if="editingId === e.id" class="flex flex-col gap-2">
-              <select v-model="draft.teamId" class="px-3 py-2 rounded-xl border border-border text-[13px] bg-panel transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none pr-7 cursor-pointer w-full min-w-[140px]">
-                <option :value="null">Tanpa tim</option>
-                <option v-for="t in teams" :key="t.id" :value="t.id">{{ t.name }}</option>
-                <option :value="NEW_TEAM">+ Tim baru…</option>
-              </select>
-              <input v-if="draft.teamId === NEW_TEAM" v-model="draft.newTeamName" type="text" placeholder="Nama tim baru" class="px-3 py-2 rounded-xl border border-border text-[13px] bg-panel transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none w-full" />
-            </div>
-            <template v-else>{{ e.teamName || "—" }}</template>
-          </td>
           <td class="px-5 py-4 border-b border-border align-middle">
             <select v-if="editingId === e.id" v-model="draft.roleId" class="px-3 py-2 rounded-xl border border-border text-[13px] bg-panel transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none pr-7 cursor-pointer w-full min-w-[120px]">
               <option :value="null">Tanpa peran</option>
@@ -135,42 +123,39 @@
           <td class="px-5 py-4 border-b border-border align-middle">
             <span class="badge" :class="e.isActive ? 'bg-success/8 text-success border-success/20' : 'bg-text-muted/10 text-text-dim border border-border'">{{ e.isActive ? "Aktif" : "Nonaktif" }}</span>
           </td>
-          <td v-if="isAdmin" class="px-5 py-4 border-b border-border align-middle text-text flex gap-2 items-end">
-            <div v-if="editingId === e.id" class="flex items-center gap-2">
-              <button
-                class="px-3 py-2 rounded-xl border border-border text-[12px] font-extrabold text-text transition-colors duration-200 ease-in hover:bg-panel-hover"
-                @click="editingId = null"
-              >
-                Batal
+          <td v-if="isAdmin" class="px-5 py-4 border-b border-border align-middle text-text">
+            <div v-if="editingId === e.id" class="flex items-center justify-end gap-1.5">
+              <button type="button" class="h-9 w-9 grid place-items-center rounded-xl border transition-colors duration-200 ease-in disabled:opacity-60 disabled:cursor-not-allowed border-border text-text-muted hover:bg-panel-hover" aria-label="Batal" title="Batal" @click="editingId = null">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
               </button>
-              <button
-                :disabled="savingEditId === e.id"
-                class="px-3.5 py-2 rounded-xl text-[12px] font-extrabold bg-accent text-white hover:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap transition-colors duration-200 ease-in"
-                @click="saveEdit(e.id)"
-              >
-                {{ savingEditId === e.id ? "…" : "Simpan" }}
+              <button type="button" :disabled="savingEditId === e.id" class="h-9 w-9 grid place-items-center rounded-xl border transition-colors duration-200 ease-in disabled:opacity-60 disabled:cursor-not-allowed border-accent bg-accent text-white hover:bg-accent-hover" aria-label="Simpan" title="Simpan" @click="saveEdit(e.id)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
               </button>
             </div>
-            <div v-else class="flex items-center gap-2">
+            <div v-else class="flex items-center justify-end gap-1.5">
               <button
-                class="px-3 py-2 rounded-xl border border-border text-[12px] font-extrabold text-text transition-colors duration-200 ease-in hover:bg-panel-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+                type="button"
+                class="h-9 w-9 grid place-items-center rounded-xl border transition-colors duration-200 ease-in disabled:opacity-60 disabled:cursor-not-allowed border-border hover:bg-panel-hover"
+                :class="e.isActive ? 'text-text-muted' : 'text-success'"
                 :disabled="savingId === e.id"
+                :aria-label="e.isActive ? `Nonaktifkan ${e.name}` : `Aktifkan ${e.name}`"
+                :title="e.isActive ? 'Nonaktifkan' : 'Aktifkan'"
                 @click="toggleActive(e)"
               >
-                {{ savingId === e.id ? "…" : e.isActive ? "Nonaktifkan" : "Aktifkan" }}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v10" /><path d="M18.4 6.6a9 9 0 1 1-12.77.04" /></svg>
+              </button>
+              <button type="button" class="h-9 w-9 grid place-items-center rounded-xl border transition-colors duration-200 ease-in disabled:opacity-60 disabled:cursor-not-allowed border-border text-text hover:bg-panel-hover" :aria-label="`Ubah ${e.name}`" title="Ubah" @click="startEdit(e)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
               </button>
               <button
-                class="px-3 py-2 rounded-xl border border-border text-[12px] font-extrabold text-text transition-colors duration-200 ease-in hover:bg-panel-hover"
-                @click="startEdit(e)"
-              >
-                Ubah
-              </button>
-              <button
-                class="px-3 py-2 rounded-xl border border-danger/30 text-[12px] font-extrabold text-danger transition-colors duration-200 ease-in hover:bg-danger/5 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+                type="button"
+                class="h-9 w-9 grid place-items-center rounded-xl border transition-colors duration-200 ease-in disabled:opacity-60 disabled:cursor-not-allowed border-danger/30 text-danger hover:bg-danger/5"
                 :disabled="deletingId === e.id"
+                :aria-label="`Hapus ${e.name}`"
+                title="Hapus"
                 @click="removeEmployee(e)"
               >
-                {{ deletingId === e.id ? "…" : "Hapus" }}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6M14 11v6" /></svg>
               </button>
             </div>
           </td>
