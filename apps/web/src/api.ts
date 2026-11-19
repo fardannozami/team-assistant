@@ -137,6 +137,24 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return body as T;
 }
 
+/** A POST answered with a file (e.g. a PDF), as a Blob. */
+async function requestBlob(path: string, payload: unknown): Promise<Blob> {
+  const token = getToken();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, { method: "POST", headers, body: JSON.stringify(payload) });
+  } catch (err) {
+    throw new ApiError(0, `Couldn't reach the API at ${API_BASE}. Make sure the backend is running.`, err);
+  }
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new ApiError(res.status, body?.error ?? `The request failed (${res.status}). Please try again.`, body);
+  }
+  return res.blob();
+}
+
 /* ------------------------------------------------------------------ */
 /* Domain types                                                       */
 /* ------------------------------------------------------------------ */
@@ -150,6 +168,7 @@ export interface Employee {
   roleId: string | null;
   roleName: string | null;
   shift: EmployeeShift;
+  lead: EmployeeLead | null;
   isActive: boolean;
   userId: string | null;
   createdAt: string;
@@ -157,12 +176,14 @@ export interface Employee {
 }
 
 export type EmployeeShift = "day" | "night";
+export type EmployeeLead = "design" | "development";
 
 export interface EmployeeUpdate {
   name?: string;
   teamId?: string | null;
   roleId?: string | null;
   shift?: EmployeeShift;
+  lead?: EmployeeLead | null;
 }
 
 export interface Team {
@@ -199,6 +220,7 @@ export interface NewEmployee {
   roleId?: string | null;
   githubLogin?: string | null;
   shift?: EmployeeShift;
+  lead?: EmployeeLead | null;
 }
 
 export interface Schedule {
@@ -790,6 +812,8 @@ export interface ProjectMember {
   role: ProjectMemberRole;
   sharePercent: number;
   fee: number;
+  /** When this member's bonus for the project was finalized; null while unpaid. */
+  bonusPaidAt: string | null;
 }
 
 export interface Project {
@@ -811,6 +835,8 @@ export interface Project {
   notes: string | null;
   updatedAt: string;
   members: ProjectMember[];
+  /** Lead bonuses already finalized for this project. */
+  leadPaid: { employeeName: string; group: string; paidAt: string }[];
 }
 
 export interface ProjectInput {
@@ -844,6 +870,79 @@ export const projectsApi = {
   update: (id: string, input: ProjectInput) =>
     request<Project>(`/projects/${id}`, { method: "PUT", body: JSON.stringify(input) }),
   remove: (id: string) => request<{ deleted: boolean }>(`/projects/${id}`, { method: "DELETE" }),
+};
+
+export type FeeGroup = "pm" | "maker" | "lead_design" | "lead_development";
+
+export interface FeeRow {
+  projectId: string;
+  platform: string;
+  name: string;
+  type: ProjectType;
+  endDate: string;
+  members: string[];
+  total: number;
+  carried: boolean;
+  amounts: Partial<Record<FeeGroup, number>>;
+  contributionPercent: number;
+  fee: number;
+}
+
+export interface FeeGroupTotal {
+  group: FeeGroup;
+  base: number;
+  eligible: boolean;
+  tierPercent: number;
+  percent: number;
+  bonus: number;
+}
+
+export interface FeePerson {
+  employee: { id: string; name: string; phone: string; lead: EmployeeLead | null; isActive: boolean };
+  statement: { employeeId: string; rows: FeeRow[]; groups: FeeGroupTotal[]; total: number };
+}
+
+export interface FeeOverview {
+  from: string;
+  to: string;
+  startDate: string | null;
+  people: FeePerson[];
+}
+
+export interface FeePayout {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  group: FeeGroup;
+  periodFrom: string;
+  periodTo: string;
+  base: number;
+  percent: number;
+  bonus: number;
+  createdAt: string;
+  projects: { name: string; amount: number }[];
+}
+
+export interface FeeStatementInput {
+  from: string;
+  to: string;
+  employeeId: string;
+  percents?: Partial<Record<FeeGroup, number>>;
+}
+
+export const feesApi = {
+  overview: (from: string, to: string) =>
+    request<FeeOverview>(`/fees?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
+  saveSettings: (startDate: string | null) =>
+    request<{ startDate: string | null }>("/fees/settings", { method: "PUT", body: JSON.stringify({ startDate }) }),
+  pdf: (input: FeeStatementInput) => requestBlob("/fees/statement/pdf", input),
+  send: (input: FeeStatementInput) =>
+    request<{ sent: boolean; phone: string }>("/fees/statement/send", { method: "POST", body: JSON.stringify(input) }),
+  finalize: (input: FeeStatementInput) =>
+    request<{ total: number }>("/fees/statement/finalize", { method: "POST", body: JSON.stringify(input) }),
+  payouts: (employeeId?: string) =>
+    request<{ payouts: FeePayout[] }>(`/fees/payouts${employeeId ? `?employeeId=${employeeId}` : ""}`).then((r) => r.payouts),
+  undoPayout: (id: string) => request<{ deleted: boolean }>(`/fees/payouts/${id}`, { method: "DELETE" }),
 };
 
 export const rolesApi = {

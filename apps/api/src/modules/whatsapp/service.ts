@@ -8,7 +8,7 @@ import { botPhoneFromJid, bots, db, logger, sessionDir, starting } from "./bot/s
 
 export { startWhatsApp, stopWhatsApp } from "./bot/lifecycle.js";
 export { normalizePhoneNumber, pairWithPhoneNumber } from "./bot/pairing.js";
-export { sendText } from "./bot/send.js";
+export { sendDocument, sendText } from "./bot/send.js";
 
 const START_SPACING_MS = 1_500;
 

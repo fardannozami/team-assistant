@@ -30,6 +30,33 @@ export async function replyText(workspaceId: string, jid: string, text: string) 
   await sendText(workspaceId, jid, text);
 }
 
+/** Sends a file (e.g. a fee statement PDF) with an optional caption. */
+export async function sendDocument(
+  workspaceId: string,
+  jid: string,
+  file: { buffer: Buffer; fileName: string; mimetype: string; caption?: string },
+) {
+  const socket = bots.get(workspaceId)?.sock;
+  if (!socket) throw new Error("WhatsApp not connected");
+  await socket.sendMessage(jid, {
+    document: file.buffer,
+    mimetype: file.mimetype,
+    fileName: file.fileName,
+    caption: file.caption,
+  });
+  await db
+    .insert(whatsappMessages)
+    .values({
+      workspaceId,
+      messageId: `out-${Date.now()}-${Math.random()}`,
+      fromPhone: "bot",
+      toPhone: jid.replace(/@s\.whatsapp\.net$/, ""),
+      direction: "outbound",
+      body: `[${file.fileName}]${file.caption ? ` ${file.caption}` : ""}`,
+    })
+    .onConflictDoNothing({ target: [whatsappMessages.workspaceId, whatsappMessages.messageId] });
+}
+
 export async function sendText(workspaceId: string, jid: string, text: string) {
   const socket = bots.get(workspaceId)?.sock;
   if (!socket) throw new Error("WhatsApp not connected");

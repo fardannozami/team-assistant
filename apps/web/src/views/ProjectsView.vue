@@ -29,7 +29,13 @@
     </select>
   </div>
 
-  <div class="-mt-2 mb-5 grid gap-3 sm:grid-cols-[auto_1fr_1fr]">
+  <div class="-mt-2 mb-5 grid gap-3 sm:grid-cols-[auto_auto_1fr_1fr]">
+    <label class="sr-only" for="filter-bonus">Status bonus</label>
+    <select id="filter-bonus" v-model="bonusFilter" :class="inputClass">
+      <option value="">Semua bonus</option>
+      <option value="unpaid">Bonus belum dibayar</option>
+      <option value="paid">Bonus sudah dibayar</option>
+    </select>
     <label class="sr-only" for="filter-period">Periode</label>
     <select id="filter-period" v-model="period" :class="inputClass">
       <option v-for="(label, key) in PERIOD_LABEL" :key="key" :value="key">{{ label }}</option>
@@ -119,12 +125,23 @@
             <ul v-if="membersOf(p, role.id).length" class="mt-1 space-y-0.5 text-[13px]">
               <li v-for="m in membersOf(p, role.id)" :key="m.employeeId" class="flex justify-between gap-2">
                 <span class="truncate text-text">{{ m.employeeName }} <span class="text-text-dim">{{ m.sharePercent }}%</span></span>
-                <span class="shrink-0 tabular-nums text-text-muted">{{ money(m.fee, p.currency) }}</span>
+                <span class="flex shrink-0 items-center gap-1.5">
+                  <span class="tabular-nums text-text-muted">{{ money(m.fee, p.currency) }}</span>
+                  <span
+                    class="rounded-full px-1.5 text-[10px] font-bold"
+                    :class="m.bonusPaidAt ? 'bg-success/10 text-success' : 'bg-text-muted/10 text-text-dim'"
+                    :title="m.bonusPaidAt ? `Bonus difinalisasi ${formatDate(m.bonusPaidAt.slice(0, 10))}` : 'Bonus belum dibayar'"
+                  >{{ m.bonusPaidAt ? "Bonus ✓" : "Bonus belum" }}</span>
+                </span>
               </li>
             </ul>
             <p v-else class="mt-1 text-[13px] text-text-dim">—</p>
           </div>
         </div>
+
+        <p v-if="p.leadPaid.length" class="mt-2 text-xs text-success">
+          Bonus lead dibayar: <span v-for="(l, i) in p.leadPaid" :key="l.group + l.employeeName">{{ i ? ", " : "" }}{{ l.employeeName }} ({{ formatDate(l.paidAt.slice(0, 10)) }})</span>
+        </p>
 
         <p v-if="p.notes" class="mt-3 whitespace-pre-wrap text-sm text-text-muted">{{ p.notes }}</p>
 
@@ -305,6 +322,9 @@ const search = ref("");
 const typeFilter = ref<ProjectType | "">("");
 const statusFilter = ref<ProjectStatus | "">("");
 const paymentFilter = ref<PaymentStatus | "">("");
+// "paid": every member's bonus finalized; "unpaid": someone's is still open.
+const bonusFilter = ref<"" | "paid" | "unpaid">("");
+const bonusPaid = (p: Project) => p.members.length > 0 && p.members.every((m) => m.bonusPaidAt);
 
 // Date filter: a preset fills the range; editing a date by hand makes it "custom".
 type Period = "this_month" | "last_month" | "this_year" | "all" | "custom";
@@ -376,6 +396,7 @@ const filtered = computed(() => {
       (!typeFilter.value || p.type === typeFilter.value) &&
       (!statusFilter.value || p.status === statusFilter.value) &&
       (!paymentFilter.value || p.paymentStatus === paymentFilter.value) &&
+      (!bonusFilter.value || (bonusFilter.value === "paid") === bonusPaid(p)) &&
       inDateRange(p) &&
       (!q || [p.name, p.platform, ...p.members.map((m) => m.employeeName)].some((s) => s.toLowerCase().includes(q))),
   );

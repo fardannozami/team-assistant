@@ -1,6 +1,9 @@
 // Shared package: Zod schemas, types, constants, time-zone helpers.
 
 import { z } from "zod";
+import { EMPLOYEE_LEADS, FEE_GROUPS } from "./fees.js";
+
+export * from "./fees.js";
 
 export const DEFAULT_TIMEZONE = "Asia/Jakarta";
 export const CORE_STANDUP_ELEMENTS = [
@@ -68,6 +71,7 @@ export const createEmployeeSchema = z.object({
   // Optional: designers on Figma have no GitHub account.
   githubLogin: z.string().trim().max(40).nullish(),
   shift: z.enum(EMPLOYEE_SHIFTS).optional(), // day when left out
+  lead: z.enum(EMPLOYEE_LEADS).nullish(), // lead of design or development projects
 });
 
 export const updateEmployeeSchema = z.object({
@@ -76,6 +80,7 @@ export const updateEmployeeSchema = z.object({
   roleId: z.string().uuid().nullable().optional(),
   isActive: z.boolean().optional(),
   shift: z.enum(EMPLOYEE_SHIFTS).optional(),
+  lead: z.enum(EMPLOYEE_LEADS).nullable().optional(),
 });
 
 export const updateEmployeePhoneSchema = z.object({
@@ -301,6 +306,27 @@ export const projectInputSchema = z
   });
 
 export type ProjectInput = z.infer<typeof projectInputSchema>;
+
+// ---- Bonus fees (Owner/Admin) ----
+
+export const feeRangeSchema = z
+  .object({ from: isoDate, to: isoDate })
+  .refine((r) => r.from <= r.to, { message: "Tanggal sampai sebelum tanggal dari", path: ["to"] });
+
+export const feeStatementInputSchema = z.object({
+  from: isoDate,
+  to: isoDate,
+  employeeId: z.string().uuid(),
+  // Percents replacing the tier table's, per group.
+  percents: z.record(z.enum(FEE_GROUPS), z.number().finite().min(0).max(100)).optional(),
+});
+
+export const feeSettingsSchema = z.object({
+  // Projects ending before this were paid outside the app: never carried over.
+  startDate: isoDate.nullable(),
+});
+
+export type FeeStatementInput = z.infer<typeof feeStatementInputSchema>;
 export type UpdateWebUserInput = z.infer<typeof updateWebUserSchema>;
 
 export const githubLoginSchema = z.object({

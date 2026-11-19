@@ -15,6 +15,7 @@ import { aiApi } from "./modules/ai/index.js";
 import { githubApi } from "./modules/github/index.js";
 import { usersApi } from "./modules/users/index.js";
 import { projectsApi } from "./modules/projects/index.js";
+import { feesApi } from "./modules/fees/index.js";
 import { startAllWhatsApp, stopAllWhatsApp } from "./modules/whatsapp/service.js";
 import { HttpError } from "./lib/http-error.js";
 import { isBadInputError } from "./lib/db.js";
@@ -69,6 +70,7 @@ app.route("/ai", aiApi);
 app.route("/github", githubApi);
 app.route("/users", usersApi);
 app.route("/projects", projectsApi);
+app.route("/fees", feesApi);
 
 export { app };
 

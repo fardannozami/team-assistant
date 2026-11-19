@@ -1,4 +1,4 @@
-import { createDbClient, employees, projectMembers, projects } from "@repo/database";
+import { createDbClient, employees, feePayoutItems, feePayouts, projectMembers, projects } from "@repo/database";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { ProjectInput } from "@repo/shared";
 import { HttpError } from "../../lib/http-error.js";
@@ -74,6 +74,21 @@ export async function listProjects(workspaceId: string) {
     .where(inArray(projectMembers.projectId, rows.map((r) => r.id)))
     .orderBy(asc(employees.name));
 
+  // Bonus payouts covering these projects, to show what is paid already.
+  const paidItems = await db
+    .select({
+      projectId: feePayoutItems.projectId,
+      employeeId: feePayoutItems.employeeId,
+      employeeName: employees.name,
+      group: feePayoutItems.group,
+      paidAt: feePayouts.createdAt,
+    })
+    .from(feePayoutItems)
+    .innerJoin(feePayouts, eq(feePayoutItems.payoutId, feePayouts.id))
+    .innerJoin(employees, eq(feePayoutItems.employeeId, employees.id))
+    .where(inArray(feePayoutItems.projectId, rows.map((r) => r.id)));
+  const roleGroup = (role: string) => (role === "pm_sales" ? "pm" : "maker");
+
   return rows.map((p) => {
     const figures = {
       feeReceived: Number(p.feeReceived),
@@ -85,6 +100,7 @@ export async function listProjects(workspaceId: string) {
       .filter((m) => m.projectId === p.id)
       .map(({ projectId: _, ...m }) => ({ ...m, sharePercent: Number(m.sharePercent) }));
     const memberFees = splitFees(fees.splitBase, own);
+    const paid = paidItems.filter((i) => i.projectId === p.id);
     return {
       id: p.id,
       platform: p.platform,
@@ -101,7 +117,14 @@ export async function listProjects(workspaceId: string) {
       paymentStatus: p.paymentStatus,
       notes: p.notes,
       updatedAt: p.updatedAt,
-      members: own.map((m, i) => ({ ...m, fee: memberFees[i]! })),
+      members: own.map((m, i) => ({
+        ...m,
+        fee: memberFees[i]!,
+        bonusPaidAt: paid.find((x) => x.employeeId === m.employeeId && x.group === roleGroup(m.role))?.paidAt ?? null,
+      })),
+      leadPaid: paid
+        .filter((x) => x.group.startsWith("lead_"))
+        .map((x) => ({ employeeName: x.employeeName, group: x.group, paidAt: x.paidAt })),
     };
   });
 }
