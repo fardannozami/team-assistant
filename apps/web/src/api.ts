@@ -149,16 +149,20 @@ export interface Employee {
   teamName: string | null;
   roleId: string | null;
   roleName: string | null;
+  shift: EmployeeShift;
   isActive: boolean;
   userId: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
+export type EmployeeShift = "day" | "night";
+
 export interface EmployeeUpdate {
   name?: string;
   teamId?: string | null;
   roleId?: string | null;
+  shift?: EmployeeShift;
 }
 
 export interface Team {
@@ -194,6 +198,7 @@ export interface NewEmployee {
   teamId?: string | null;
   roleId?: string | null;
   githubLogin?: string | null;
+  shift?: EmployeeShift;
 }
 
 export interface Schedule {

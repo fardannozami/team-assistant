@@ -1,4 +1,4 @@
-import { dateInTimezone, DEFAULT_TIMEZONE, type StandupElement } from "@repo/shared";
+import { dateInTimezone, DEFAULT_TIMEZONE, shiftDate, type StandupElement } from "@repo/shared";
 import { and, asc, eq } from "drizzle-orm";
 import {
   calendarSettings,
@@ -20,6 +20,8 @@ export type StandupCollector = {
   name: string;
   phone: string;
   isActive: boolean;
+  /** day | night; day when unknown. */
+  shift?: string | null;
 };
 
 /**
@@ -47,6 +49,11 @@ export async function standupTimezone(workspaceId: string): Promise<string> {
 /** Today's date for the workspace's standups. */
 export async function standupToday(workspaceId: string): Promise<string> {
   return dateInTimezone(await standupTimezone(workspaceId));
+}
+
+/** The standup date the employee is in now: a night shift's morning is still the evening before's. */
+export async function employeeStandupDate(employee: { workspaceId: string; shift?: string | null }) {
+  return shiftDate(employee.shift, await standupTimezone(employee.workspaceId));
 }
 
 export async function getStandupSession(employeeId: string, date: string) {

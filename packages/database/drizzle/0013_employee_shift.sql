@@ -1,0 +1,1 @@
+ALTER TABLE "employees" ADD COLUMN "shift" text DEFAULT 'day' NOT NULL;

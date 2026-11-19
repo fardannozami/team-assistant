@@ -54,7 +54,7 @@
   <div class="mb-7 space-y-3 md:hidden">
     <article v-for="e in employees" :key="e.id" class="rounded-2xl border border-border bg-panel p-4 shadow-soft">
       <div class="flex items-start justify-between gap-3">
-        <div class="min-w-0"><h3 class="font-bold text-text">{{ e.name }}</h3><p class="mt-0.5 break-all font-mono text-xs text-text-dim">{{ e.phone }}</p><p class="mt-1 text-xs text-text-muted">{{ e.teamName || 'Tanpa tim' }}</p></div>
+        <div class="min-w-0"><h3 class="font-bold text-text">{{ e.name }}</h3><p class="mt-0.5 break-all font-mono text-xs text-text-dim">{{ e.phone }}</p><p class="mt-1 text-xs text-text-muted">{{ e.teamName || 'Tanpa tim' }} · Shift {{ SHIFT_LABEL[e.shift].toLowerCase() }}</p></div>
         <span class="badge shrink-0" :class="e.isActive ? 'bg-success/8 text-success border-success/20' : 'bg-text-muted/10 text-text-dim border border-border'">{{ e.isActive ? 'Aktif' : 'Nonaktif' }}</span>
       </div>
       <form v-if="editingId === e.id" class="mt-3 space-y-2 border-t border-border pt-3" @submit.prevent="saveEdit(e.id)">
@@ -62,6 +62,7 @@
         <select v-model="draft.teamId" class="min-h-11 w-full rounded-xl border border-border bg-panel px-3 text-sm"><option :value="null">Tanpa tim</option><option v-for="t in teams" :key="t.id" :value="t.id">{{ t.name }}</option><option :value="NEW_TEAM">+ Tim baru…</option></select>
         <input v-if="draft.teamId === NEW_TEAM" v-model="draft.newTeamName" type="text" required placeholder="Nama tim baru" class="min-h-11 w-full rounded-xl border border-border bg-panel px-3 text-sm" />
         <select v-model="draft.roleId" class="min-h-11 w-full rounded-xl border border-border bg-panel px-3 text-sm"><option :value="null">Tanpa peran</option><option v-for="r in roles" :key="r.id" :value="r.id">{{ r.name }}</option></select>
+        <select v-model="draft.shift" aria-label="Shift" class="min-h-11 w-full rounded-xl border border-border bg-panel px-3 text-sm"><option v-for="(label, key) in SHIFT_LABEL" :key="key" :value="key">Shift {{ label.toLowerCase() }}</option></select>
         <div class="flex gap-2">
           <button type="button" class="min-h-11 flex-1 rounded-xl border border-border px-3 text-sm font-bold" @click="editingId = null">Batal</button>
           <button type="submit" :disabled="savingEditId === e.id" class="min-h-11 flex-1 rounded-xl bg-accent px-3 text-sm font-bold text-white disabled:opacity-60">{{ savingEditId === e.id ? '…' : 'Simpan' }}</button>
@@ -86,6 +87,7 @@
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Telepon</th>
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Tim</th>
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[16%]">Peran</th>
+          <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Shift</th>
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[16%]">Status</th>
           <th v-if="isAdmin" class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[26%]">Aksi</th>
         </tr>
@@ -114,6 +116,12 @@
               <option v-for="r in roles" :key="r.id" :value="r.id">{{ r.name }}</option>
             </select>
             <span v-else class="badge" :class="roleBadgeUtils(e.roleName)">{{ e.roleName || "—" }}</span>
+          </td>
+          <td class="px-5 py-4 border-b border-border align-middle text-text">
+            <select v-if="editingId === e.id" v-model="draft.shift" aria-label="Shift" class="px-3 py-2 rounded-xl border border-border text-[13px] bg-panel transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none pr-7 cursor-pointer w-full min-w-[100px]">
+              <option v-for="(label, key) in SHIFT_LABEL" :key="key" :value="key">{{ label }}</option>
+            </select>
+            <template v-else>{{ SHIFT_LABEL[e.shift] }}</template>
           </td>
           <td class="px-5 py-4 border-b border-border align-middle">
             <span class="badge" :class="e.isActive ? 'bg-success/8 text-success border-success/20' : 'bg-text-muted/10 text-text-dim border border-border'">{{ e.isActive ? "Aktif" : "Nonaktif" }}</span>
@@ -195,7 +203,14 @@
             <option v-for="r in roles" :key="r.id" :value="r.id">{{ r.name }}</option>
           </select>
         </div>
-        <div class="rounded-xl bg-panel-hover p-4 text-sm text-text-muted">{{ empName }} · {{ empPhone }}<span v-if="empGithub.trim()"> · GitHub @{{ empGithub.trim().replace(/^@/, '') }}</span><span v-if="empRoleId"> · {{ roles.find((role) => role.id === empRoleId)?.name }}</span></div>
+        <div>
+          <label for="emp-shift" class="mb-1.5 block text-sm font-semibold text-text">Shift</label>
+          <select id="emp-shift" v-model="empShift" class="min-h-12 w-full rounded-xl border border-border bg-panel px-4 text-base focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20">
+            <option v-for="(label, key) in SHIFT_LABEL" :key="key" :value="key">{{ label }}</option>
+          </select>
+          <p class="mt-1.5 text-xs text-text-muted">{{ SHIFT_HINT[empShift] }}</p>
+        </div>
+        <div class="rounded-xl bg-panel-hover p-4 text-sm text-text-muted">{{ empName }} · {{ empPhone }}<span v-if="empGithub.trim()"> · GitHub @{{ empGithub.trim().replace(/^@/, '') }}</span><span v-if="empRoleId"> · {{ roles.find((role) => role.id === empRoleId)?.name }}</span> · Shift {{ SHIFT_LABEL[empShift].toLowerCase() }}</div>
       </template>
       <p v-if="createError" class="text-sm font-semibold text-danger" role="alert">{{ createError }}</p>
       <div class="flex gap-2 pt-1">
@@ -256,6 +271,7 @@ import {
   ApiError,
   showToast,
   type Employee,
+  type EmployeeShift,
   type Role,
   type Team,
 } from "../api";
@@ -275,6 +291,13 @@ const empName = ref("");
 const empPhone = ref("");
 const empRoleId = ref<string | null>(null);
 const empGithub = ref("");
+const empShift = ref<EmployeeShift>("day");
+
+const SHIFT_LABEL: Record<EmployeeShift, string> = { day: "Siang", night: "Malam" };
+const SHIFT_HINT: Record<EmployeeShift, string> = {
+  day: "Standup pagi sesuai jadwal (default 09:00), checkout 16:00.",
+  night: "Standup 19:00, checkout 07:00 keesokan paginya.",
+};
 const creating = ref(false);
 const createError = ref("");
 
@@ -289,7 +312,7 @@ const deletingId = ref<string | null>(null);
 // Sentinel select value: create a team from draft.newTeamName on save.
 const NEW_TEAM = "__new__";
 const editingId = ref<string | null>(null);
-const draft = ref({ name: "", teamId: null as string | null, roleId: null as string | null, newTeamName: "" });
+const draft = ref({ name: "", teamId: null as string | null, roleId: null as string | null, shift: "day" as EmployeeShift, newTeamName: "" });
 const savingEditId = ref<string | null>(null);
 
 // Only the latest request may write the list, so a slow response for an
@@ -366,6 +389,7 @@ function resetAddForm() {
   empPhone.value = "";
   empRoleId.value = null;
   empGithub.value = "";
+  empShift.value = "day";
   createError.value = "";
   addStep.value = 1;
 }
@@ -389,6 +413,7 @@ async function createEmployee() {
       phone: empPhone.value.trim(),
       roleId: empRoleId.value,
       githubLogin: empGithub.value.trim() || null,
+      shift: empShift.value,
     });
     showToast("Anggota berhasil ditambahkan.", "success");
     resetAddForm();
@@ -448,6 +473,7 @@ function startEdit(employee: Employee) {
     name: employee.name,
     teamId: employee.teamId,
     roleId: employee.roleId,
+    shift: employee.shift,
     newTeamName: "",
   };
   editingId.value = employee.id;
@@ -476,7 +502,7 @@ async function saveEdit(id: string) {
       draft.value.newTeamName = "";
       await loadTeams();
     }
-    await employeesApi.update(id, { name, teamId, roleId: draft.value.roleId });
+    await employeesApi.update(id, { name, teamId, roleId: draft.value.roleId, shift: draft.value.shift });
     showToast("Anggota berhasil diperbarui.", "success");
     editingId.value = null;
     await loadEmployees();

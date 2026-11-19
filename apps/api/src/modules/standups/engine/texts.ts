@@ -1,4 +1,4 @@
-import { CHECKOUT_TIME, MORNING_STANDUP_ELEMENTS, isNoBlocker, type StandupElement } from "@repo/shared";
+import { MORNING_STANDUP_ELEMENTS, SHIFT_TIMES, isNoBlocker, type StandupElement } from "@repo/shared";
 
 export const STANDUP_QUESTIONS: Record<StandupElement, string> = {
   yesterday: "Apa yang kamu kerjakan kemarin?",
@@ -16,7 +16,7 @@ export const EMPLOYEE_MENU = [
   "Perintah standup:",
   "STANDUP - mulai atau lanjutkan standup pagi (rencana hari ini)",
   "UBAH STANDUP hari ini: ... - ubah rencana yang sudah terkirim",
-  `CHECKOUT - isi/lanjutkan checkout harian (jam ${CHECKOUT_TIME})`,
+  `CHECKOUT - isi/lanjutkan checkout harian (jam ${SHIFT_TIMES.day.checkout}, shift malam jam ${SHIFT_TIMES.night.checkout})`,
   "UBAH CHECKOUT ... - ganti yang dikerjakan hari ini (TAMBAH: ... untuk menambah, KENDALA: ... untuk kendala)",
   "CHECKOUT MINGGUAN - isi/lanjutkan check-out mingguan",
   "MOOD - isi/lanjutkan ice breaking awal minggu",
@@ -32,6 +32,7 @@ export const EDIT_HINT = "Untuk mengubah, kirim UBAH STANDUP diikuti bagiannya, 
 export function morningPromptText(
   date: string,
   opening?: { from: string; yesterday: string | null; source: "checkout" | "github" | null } | null,
+  shift?: string | null,
 ): string {
   const yesterday = opening?.yesterday
     ? [
@@ -43,7 +44,15 @@ export function morningPromptText(
         "",
       ]
     : [];
-  return [`Selamat pagi! Standup harian ${date} ☀️`, ...yesterday, STANDUP_QUESTIONS.today].join("\n");
+  const greeting = shift === "night" ? `Selamat malam! Standup shift malam ${date} 🌙` : `Selamat pagi! Standup harian ${date} ☀️`;
+  return [greeting, ...yesterday, STANDUP_QUESTIONS.today].join("\n");
+}
+
+/** When the checkout will come, said after the plan is in. */
+export function checkoutLaterText(shift?: string | null) {
+  return shift === "night"
+    ? `Besok jam ${SHIFT_TIMES.night.checkout} pagi aku kirim checkout untuk mencatat yang kamu kerjakan shift ini.`
+    : `Jam ${SHIFT_TIMES.day.checkout} nanti aku kirim checkout untuk mencatat yang kamu kerjakan hari ini.`;
 }
 
 /** Asks only for the morning answers still missing. */

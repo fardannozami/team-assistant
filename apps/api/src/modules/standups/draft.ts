@@ -9,6 +9,7 @@ import { standupAnswers, standups } from "@repo/database";
 import { and, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import { chatWithTools, type AiConfig } from "../ai/client.js";
 import { resolveAiConfig } from "../ai/settings.js";
+import { NIGHT_SHIFT_OFFSET_HOURS } from "@repo/shared";
 import { notableItems, standupWindow, startOfDay, type StandupActivity } from "../github/digest.js";
 import { activityBetween } from "../github/service.js";
 import { db } from "./engine/store.js";
@@ -164,13 +165,24 @@ async function lastCheckouts(employeeIds: string[], from: string, date: string) 
   return latest;
 }
 
+// A night shift's work runs noon to noon, so its windows sit that much later.
+const shiftOffsetMs = (shift?: string | null) => (shift === "night" ? NIGHT_SHIFT_OFFSET_HOURS * 60 * 60 * 1000 : 0);
+const later = (d: Date, ms: number) => new Date(d.getTime() + ms);
+
 /**
- * What each employee's morning standup tells them they did "kemarin": their
- * checkout of the previous workday, else work drafted from GitHub activity
- * in that window (Monday covers Friday and the weekend).
+ * What each employee's standup tells them they did "kemarin": their checkout
+ * of the previous workday's shift, else work drafted from GitHub activity in
+ * that window (Monday covers Friday and the weekend). All of one shift.
  */
-export async function morningOpenings(workspaceId: string, date: string, employeeIds: string[], timezone?: string) {
+export async function morningOpenings(
+  workspaceId: string,
+  date: string,
+  employeeIds: string[],
+  timezone?: string,
+  shift?: string | null,
+) {
   const window = standupWindow(date, timezone);
+  const offset = shiftOffsetMs(shift);
   const openings = new Map<string, MorningOpening>();
   if (employeeIds.length === 0) return openings;
 
@@ -181,8 +193,8 @@ export async function morningOpenings(workspaceId: string, date: string, employe
   const drafts = await draftWork({
     workspaceId,
     employeeIds: employeeIds.filter((id) => !checkouts.has(id)),
-    since: window.since,
-    until: window.until,
+    since: later(window.since, offset),
+    until: later(window.until, offset),
     from: window.from,
     question: YESTERDAY_QUESTION,
   });
@@ -198,12 +210,18 @@ export async function morningOpenings(workspaceId: string, date: string, employe
   return openings;
 }
 
-/** Today's GitHub activity, up to now, written up for the checkout. */
-export async function checkoutDrafts(workspaceId: string, date: string, employeeIds: string[], timezone?: string) {
+/** The shift's GitHub activity, up to now, written up for the checkout. All of one shift. */
+export async function checkoutDrafts(
+  workspaceId: string,
+  date: string,
+  employeeIds: string[],
+  timezone?: string,
+  shift?: string | null,
+) {
   return draftWork({
     workspaceId,
     employeeIds,
-    since: startOfDay(date, timezone),
+    since: later(startOfDay(date, timezone), shiftOffsetMs(shift)),
     until: new Date(),
     from: date,
     question: TODAY_DONE_QUESTION,

@@ -1,28 +1,31 @@
 import { getEmployee } from "../../employees/service.js";
 import { HttpError } from "../../../lib/http-error.js";
+import { shiftDate } from "@repo/shared";
 import { checkoutDrafts } from "../draft.js";
-import { closeStaleCheckouts, getStandupSession, openCheckout, standupTimezone, standupToday } from "../engine.js";
+import { closeStaleCheckouts, getStandupSession, openCheckout, standupTimezone } from "../engine.js";
 import { excludedDay, jidFor, NOT_CONNECTED, notConnected, senderFor, type SendFn } from "./delivery.js";
 import { standupTargets } from "./progress.js";
 
 /**
- * Sends the afternoon checkout to every standup target who has not had one
- * today: what they did today, drafted from today's GitHub activity, to
- * confirm or extend, then the blocker question. `resend` sends it again to
- * checkouts that are still open.
+ * Sends the checkout to every standup target of the shift who has not had
+ * one for the date: what they did in the shift, drafted from its GitHub
+ * activity, to confirm or extend, then the blocker question. A night shift's
+ * checkout (07:00) is for the shift that started the evening before.
+ * `resend` sends it again to checkouts that are still open.
  */
 export async function sendCheckoutPrompts(
   workspaceId: string,
-  options: { employeeId?: string; date?: string; send?: SendFn; force?: boolean; resend?: boolean } = {},
+  options: {
+    employeeId?: string;
+    shift?: "day" | "night";
+    date?: string;
+    send?: SendFn;
+    force?: boolean;
+    resend?: boolean;
+  } = {},
 ) {
   const send = senderFor(workspaceId, options.send);
-  const date = options.date ?? (await standupToday(workspaceId));
-
-  if (notConnected(workspaceId, options.send)) return { date, ...NOT_CONNECTED, skipped: 0 };
-  if (!options.force) {
-    const check = await excludedDay(workspaceId, date);
-    if (check.excluded) return { date, sent: 0, skipped: 0, failed: 0, excluded: true, reason: check.reason };
-  }
+  const tz = await standupTimezone(workspaceId);
 
   let targets;
   if (options.employeeId) {
@@ -31,9 +34,17 @@ export async function sendCheckoutPrompts(
     if (!employee.isActive) throw new HttpError(400, "Employee is not active");
     targets = [employee];
   } else {
-    targets = await standupTargets(workspaceId);
+    targets = await standupTargets(workspaceId, options.shift ?? "day");
   }
-  await closeStaleCheckouts(workspaceId, date);
+  const shift = options.employeeId ? targets[0]!.shift : (options.shift ?? "day");
+  const date = options.date ?? shiftDate(shift, tz);
+
+  if (notConnected(workspaceId, options.send)) return { date, ...NOT_CONNECTED, skipped: 0 };
+  if (!options.force) {
+    const check = await excludedDay(workspaceId, date);
+    if (check.excluded) return { date, sent: 0, skipped: 0, failed: 0, excluded: true, reason: check.reason };
+  }
+  await closeStaleCheckouts(workspaceId, date, shift);
 
   const toPrompt = [];
   let skipped = 0;
@@ -43,8 +54,7 @@ export async function sendCheckoutPrompts(
     else skipped++;
   }
 
-  const tz = await standupTimezone(workspaceId);
-  const drafts = await checkoutDrafts(workspaceId, date, toPrompt.map((e) => e.id), tz);
+  const drafts = await checkoutDrafts(workspaceId, date, toPrompt.map((e) => e.id), tz, shift);
 
   let sent = 0;
   let failed = 0;

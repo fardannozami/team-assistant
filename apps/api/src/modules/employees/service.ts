@@ -32,6 +32,7 @@ const employeeColumns = {
   teamName: teams.name,
   roleId: employees.roleId,
   roleName: roles.name,
+  shift: employees.shift,
   isActive: employees.isActive,
   userId: employees.userId,
   createdAt: employees.createdAt,
@@ -172,6 +173,7 @@ export async function createEmployee(
         phone: input.phone,
         teamId: input.teamId ?? null,
         roleId,
+        shift: input.shift ?? "day",
       })
       .returning({ id: employees.id });
     if (!created) throw new Error("Failed to create employee");
@@ -215,6 +217,7 @@ export async function updateEmployee(
   if (input.teamId !== undefined) changes.teamId = input.teamId;
   if (input.roleId !== undefined) changes.roleId = input.roleId;
   if (input.isActive !== undefined) changes.isActive = input.isActive;
+  if (input.shift !== undefined) changes.shift = input.shift;
 
   await db
     .update(employees)

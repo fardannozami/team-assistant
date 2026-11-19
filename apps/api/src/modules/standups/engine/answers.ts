@@ -1,4 +1,4 @@
-import { CHECKOUT_TIME, MORNING_STANDUP_ELEMENTS, isNoBlocker, type StandupElement } from "@repo/shared";
+import { MORNING_STANDUP_ELEMENTS, isNoBlocker, type StandupElement } from "@repo/shared";
 import { standupAnswers, standupSessions } from "@repo/database";
 import { morningOpenings, type MorningOpening } from "../draft.js";
 import { parseStandupText } from "./parse.js";
@@ -12,7 +12,7 @@ import {
   upsertAnswer,
   type StandupCollector,
 } from "./store.js";
-import { closedText, EDIT_HINT, morningPromptText, STANDUP_QUESTIONS, summarize } from "./texts.js";
+import { checkoutLaterText, closedText, EDIT_HINT, morningPromptText, STANDUP_QUESTIONS, summarize } from "./texts.js";
 
 /**
  * The morning message. "Kemarin" (the previous checkout, else drafted from
@@ -20,7 +20,7 @@ import { closedText, EDIT_HINT, morningPromptText, STANDUP_QUESTIONS, summarize 
  * the prompt asks only for today's plan.
  */
 export async function openingText(
-  employee: { id: string; workspaceId: string },
+  employee: { id: string; workspaceId: string; shift?: string | null },
   sessionId: string,
   date: string,
   opening?: MorningOpening,
@@ -33,9 +33,9 @@ export async function openingText(
       .values({ standupId: row.id, questionKey: "yesterday", answer: opening.yesterday })
       .onConflictDoNothing()
       .returning({ id: standupAnswers.id });
-    if (!filed) return morningPromptText(date);
+    if (!filed) return morningPromptText(date, null, employee.shift);
   }
-  return morningPromptText(date, opening);
+  return morningPromptText(date, opening, employee.shift);
 }
 
 async function saveParsed(standupId: string, parsed: Partial<Record<StandupElement, string>>) {
@@ -73,7 +73,7 @@ export async function startStandup(employee: StandupCollector, date: string, res
   }
   if (!answered.size) {
     const tz = await standupTimezone(employee.workspaceId);
-    const openings = await morningOpenings(employee.workspaceId, date, [employee.id], tz);
+    const openings = await morningOpenings(employee.workspaceId, date, [employee.id], tz, employee.shift);
     return openingText(employee, session.id, date, openings.get(employee.id));
   }
   return `Lanjutkan standup ${date}: ${STANDUP_QUESTIONS[missing[0]!]}`;
@@ -127,7 +127,7 @@ export async function recordAnswers(
     await setSessionStatus(session.id, "completed");
     return [
       summarize(date, "Standup tercatat untuk", await getAnswers(standupRow.id)),
-      `Terima kasih 😊 Jam ${CHECKOUT_TIME} nanti aku kirim checkout untuk mencatat yang kamu kerjakan hari ini.`,
+      `Terima kasih 😊 ${checkoutLaterText(employee.shift)}`,
     ].join("\n");
   }
   return `Diterima. ${STANDUP_QUESTIONS[stillMissing[0]!]}`;

@@ -9,14 +9,15 @@ import { standupTargets } from "./progress.js";
 
 type PromptOptions = {
   employeeId?: string;
+  shift?: "day" | "night";
   date?: string;
   send?: SendFn;
   force?: boolean;
   resend?: boolean;
 };
 
-async function promptTargets(workspaceId: string, employeeId?: string) {
-  if (!employeeId) return standupTargets(workspaceId);
+async function promptTargets(workspaceId: string, employeeId?: string, shift: string = "day") {
+  if (!employeeId) return standupTargets(workspaceId, shift);
   const employee = await getEmployee(workspaceId, employeeId);
   if (!employee) throw new HttpError(404, "Employee not found");
   if (!employee.isActive) throw new HttpError(400, "Employee is not active");
@@ -59,9 +60,10 @@ export async function sendStandupPrompts(workspaceId: string, options: PromptOpt
     }
   }
 
-  const targets = await promptTargets(workspaceId, options.employeeId);
-  // A new day: yesterday's unfinished checkouts stop taking replies.
-  await closeStaleCheckouts(workspaceId, date);
+  const targets = await promptTargets(workspaceId, options.employeeId, options.shift);
+  const shift = options.employeeId ? targets[0]?.shift : (options.shift ?? "day");
+  // A new shift: the previous one's unfinished checkouts stop taking replies.
+  await closeStaleCheckouts(workspaceId, date, shift);
 
   let sent = 0;
   let skipped = 0;
@@ -73,9 +75,9 @@ export async function sendStandupPrompts(workspaceId: string, options: PromptOpt
     return !status || (options.resend && (status === "pending" || status === "in_progress"));
   });
   const tz = await standupTimezone(workspaceId);
-  const openings = await morningOpenings(workspaceId, date, toPrompt.map((t) => t.id), tz);
+  const openings = await morningOpenings(workspaceId, date, toPrompt.map((t) => t.id), tz, shift);
   const prompt = (employeeId: string, sessionId: string) =>
-    openingText({ id: employeeId, workspaceId }, sessionId, date, openings.get(employeeId));
+    openingText({ id: employeeId, workspaceId, shift }, sessionId, date, openings.get(employeeId));
 
   for (const employee of targets) {
     const existing = await getStandupSession(employee.id, date);

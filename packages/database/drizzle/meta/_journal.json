@@ -92,6 +92,13 @@
       "when": 1795064091682,
       "tag": "0012_daily_checkout",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795064659056,
+      "tag": "0013_employee_shift",
+      "breakpoints": true
     }
   ]
 }

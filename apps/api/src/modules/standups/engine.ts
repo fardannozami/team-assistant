@@ -1,6 +1,6 @@
 import { editStandup, recordAnswers, startStandup } from "./engine/answers.js";
 import { editCheckout, OPEN_CHECKOUT, recordCheckout, startCheckout } from "./engine/checkout.js";
-import { getStandupSession, standupTimezone, standupToday, type StandupCollector } from "./engine/store.js";
+import { employeeStandupDate, getStandupSession, standupTimezone, type StandupCollector } from "./engine/store.js";
 import { EMPLOYEE_MENU } from "./engine/texts.js";
 import { checkoutDrafts } from "./draft.js";
 
@@ -8,6 +8,7 @@ export { openingText } from "./engine/answers.js";
 export { closeStaleCheckouts, openCheckout, OPEN_CHECKOUT } from "./engine/checkout.js";
 export { parseStandupText } from "./engine/parse.js";
 export {
+  employeeStandupDate,
   getStandupSession,
   standupTimezone,
   standupToday,
@@ -44,7 +45,7 @@ export async function handleStandupMessage(args: {
   if (!text || !args.employee.isActive) return null;
 
   const { employee } = args;
-  const date = args.date ?? (await standupToday(employee.workspaceId));
+  const date = args.date ?? (await employeeStandupDate(employee));
   if (HELP_COMMAND.test(text)) return EMPLOYEE_MENU;
 
   const edit = text.match(EDIT_COMMAND);
@@ -57,7 +58,7 @@ export async function handleStandupMessage(args: {
   if (checkout) {
     return startCheckout(employee, date, text.slice(checkout[0].length), async () => {
       const tz = await standupTimezone(employee.workspaceId);
-      return (await checkoutDrafts(employee.workspaceId, date, [employee.id], tz)).get(employee.id) ?? null;
+      return (await checkoutDrafts(employee.workspaceId, date, [employee.id], tz, employee.shift)).get(employee.id) ?? null;
     });
   }
 

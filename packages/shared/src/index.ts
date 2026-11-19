@@ -13,8 +13,27 @@ export const CORE_STANDUP_ELEMENTS = [
 // previous checkout (or GitHub), and blockers are asked at the checkout.
 export const MORNING_STANDUP_ELEMENTS = ["today"] as const;
 
-// Daily checkout, in the standup schedule's timezone on its weekdays.
-export const CHECKOUT_TIME = "16:00";
+// Work shifts. Siang follows the standup schedule's time (09:00 by default)
+// and checks out at 16:00; malam starts at 19:00 and checks out at 07:00 the
+// next morning, for the shift that started the evening before. All in the
+// standup schedule's timezone, on its weekdays.
+export const EMPLOYEE_SHIFTS = ["day", "night"] as const;
+export type EmployeeShift = (typeof EMPLOYEE_SHIFTS)[number];
+export const SHIFT_TIMES: Record<EmployeeShift, { standup: string; checkout: string }> = {
+  day: { standup: "09:00", checkout: "16:00" },
+  night: { standup: "19:00", checkout: "07:00" },
+};
+/** Hours the night shift's work window sits after the day's: noon to noon. */
+export const NIGHT_SHIFT_OFFSET_HOURS = 12;
+
+/**
+ * The standup date a moment belongs to for a shift: a night shift's morning
+ * (before noon) still belongs to the shift that started the evening before.
+ */
+export function shiftDate(shift: string | null | undefined, timezone: string = DEFAULT_TIMEZONE, at: Date = new Date()) {
+  if (shift !== "night") return dateInTimezone(timezone, at);
+  return dateInTimezone(timezone, new Date(at.getTime() - NIGHT_SHIFT_OFFSET_HOURS * 60 * 60 * 1000));
+}
 
 export const ROLE_NAMES = ["Owner", "Admin", "Manager", "Employee", "PM"] as const;
 export const ADMIN_ROLES = ["Owner", "Admin"] as const;
@@ -48,6 +67,7 @@ export const createEmployeeSchema = z.object({
   roleId: z.string().uuid().nullish(),
   // Optional: designers on Figma have no GitHub account.
   githubLogin: z.string().trim().max(40).nullish(),
+  shift: z.enum(EMPLOYEE_SHIFTS).optional(), // day when left out
 });
 
 export const updateEmployeeSchema = z.object({
@@ -55,6 +75,7 @@ export const updateEmployeeSchema = z.object({
   teamId: z.string().uuid().nullable().optional(),
   roleId: z.string().uuid().nullable().optional(),
   isActive: z.boolean().optional(),
+  shift: z.enum(EMPLOYEE_SHIFTS).optional(),
 });
 
 export const updateEmployeePhoneSchema = z.object({
@@ -88,6 +109,8 @@ export const standupDateSchema = z
 
 export const triggerStandupSchema = z.object({
   employeeId: z.string().uuid().optional(),
+  // Which shift's employees to prompt; day when left out.
+  shift: z.enum(EMPLOYEE_SHIFTS).optional(),
   date: standupDateSchema.optional(),
   force: z.boolean().optional(),
   resend: z.boolean().optional(),

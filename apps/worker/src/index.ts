@@ -11,7 +11,7 @@ import {
   workspaces,
 } from "@repo/database";
 import { and, eq } from "drizzle-orm";
-import { CHECKOUT_TIME, dateInTimezone, DEFAULT_TIMEZONE } from "@repo/shared";
+import { dateInTimezone, DEFAULT_TIMEZONE, SHIFT_TIMES, shiftDate } from "@repo/shared";
 import { reminderTimes, standupReminderTimes } from "./reminder-times.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
@@ -50,11 +50,15 @@ const OWNED_PREFIXES = [
   "standup-summary",
   "standup-close",
   "standup-checkout",
+  "standup-prompts-night",
+  "standup-checkout-night",
   "daily-report",
   "checkin-prompts",
   "checkin-reminders",
   "checkin-close",
 ];
+
+const NIGHT_JOBS = new Set(["standup-prompts-night", "standup-checkout-night"]);
 
 // Check-in jobs carry a checkin_configs id as their suffix.
 const CHECKIN_PREFIXES = new Set(["checkin-prompts", "checkin-reminders", "checkin-close"]);
@@ -65,6 +69,8 @@ const API_PATHS: Record<string, string> = {
   "standup-summary": "/standups/summary",
   "standup-close": "/standups/close",
   "standup-checkout": "/standups/checkout",
+  "standup-prompts-night": "/standups/trigger",
+  "standup-checkout-night": "/standups/checkout",
   "daily-report": "/reports/daily/notify",
   "checkin-prompts": "/checkins/trigger",
   "checkin-reminders": "/checkins/reminders",
@@ -150,7 +156,21 @@ async function desiredRepeatables(): Promise<DesiredRepeatable[]> {
       }
       desired.push({
         name: `standup-checkout:${schedule.id}`,
-        pattern: cronFor(CHECKOUT_TIME, weekdays),
+        pattern: cronFor(SHIFT_TIMES.day.checkout, weekdays),
+        tz,
+        ...owner,
+      });
+      // Night shift: its evening standup on the schedule's days, its
+      // checkout the morning after.
+      desired.push({
+        name: `standup-prompts-night:${schedule.id}`,
+        pattern: cronFor(SHIFT_TIMES.night.standup, weekdays),
+        tz,
+        ...owner,
+      });
+      desired.push({
+        name: `standup-checkout-night:${schedule.id}`,
+        pattern: cronFor(SHIFT_TIMES.night.checkout, weekdays.map((d) => (d + 1) % 7)),
         tz,
         ...owner,
       });
@@ -378,8 +398,10 @@ async function processSchedulerJob(job: Job): Promise<SchedulerJobResult> {
 
   const manual = job.data?.manual === true;
   // The day in the zone the cron fired in, not the server's: a 17:00 New York
-  // close is already tomorrow in Jakarta.
-  const date = dateInTimezone(timezone);
+  // close is already tomorrow in Jakarta. Night jobs carry the shift's date:
+  // the 07:00 checkout is for the shift that started the evening before.
+  const night = NIGHT_JOBS.has(baseName);
+  const date = night ? shiftDate("night", timezone) : dateInTimezone(timezone);
   const idempotencyKey = manual
     ? `${job.name}:manual:${job.id}`
     : `${job.name}:${date}`;
@@ -426,6 +448,7 @@ async function processSchedulerJob(job: Job): Promise<SchedulerJobResult> {
         ...(manual ? { resend: true } : {}),
         // Check-ins work out their own date from their config.
         ...(configId ? { configId } : { date }),
+        ...(night ? { shift: "night" } : {}),
       },
       workspaceId,
     );

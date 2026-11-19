@@ -4,7 +4,7 @@
  * answers the blocker question. Stored on the day's standup: answers "done"
  * and "blockers", with its own status on the session (`checkoutStatus`).
  */
-import { checkinSessions, standupAnswers, standupSessions } from "@repo/database";
+import { checkinSessions, employees, standupAnswers, standupSessions } from "@repo/database";
 import { isNoBlocker } from "@repo/shared";
 import { and, eq, inArray, lt } from "drizzle-orm";
 import {
@@ -201,16 +201,25 @@ export async function editCheckout(employee: StandupCollector, date: string, res
   return `${checkoutSummary(date, "Checkout diperbarui untuk", await getAnswers(row.id))} 😊`;
 }
 
-/** Checkouts left open on earlier days are closed, so they stop taking replies. */
-export async function closeStaleCheckouts(workspaceId: string, today: string) {
+/**
+ * The shift's checkouts left open before `date` are closed, so they stop
+ * taking replies. Per shift: a night checkout sent at 07:00 is still open
+ * when the day shift starts.
+ */
+export async function closeStaleCheckouts(workspaceId: string, date: string, shift: string = "day") {
+  const onShift = db
+    .select({ id: employees.id })
+    .from(employees)
+    .where(and(eq(employees.workspaceId, workspaceId), eq(employees.shift, shift)));
   await db
     .update(standupSessions)
     .set({ checkoutStatus: "missed", updatedAt: new Date() })
     .where(
       and(
         eq(standupSessions.workspaceId, workspaceId),
-        lt(standupSessions.date, today),
+        lt(standupSessions.date, date),
         inArray(standupSessions.checkoutStatus, OPEN_CHECKOUT),
+        inArray(standupSessions.employeeId, onShift),
       ),
     );
 }

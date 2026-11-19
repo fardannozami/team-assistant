@@ -13,28 +13,37 @@ type SessionSummary = {
   employeeId: string;
   employeeName: string;
   employeePhone: string;
+  employeeShift: string;
   teamName: string | null;
   standupId: string | null;
   answers: Record<string, string>;
 };
 
-/** Employees expected to send a standup: active, admins only when enabled. */
-export async function standupTargets(workspaceId: string) {
-  const active = await listEmployees(workspaceId, { active: true });
+/**
+ * Employees expected to send a standup: active, admins only when enabled,
+ * and only those on `shift` when one is given.
+ */
+export async function standupTargets(workspaceId: string, shift?: string) {
+  const active = (await listEmployees(workspaceId, { active: true })).filter((e) => !shift || e.shift === shift);
   if (process.env.STANDUP_INCLUDE_ADMINS === "true") return active;
   return active.filter((employee) => !isAdminRole(employee.roleName));
 }
 
-/** Who still owes today's morning standup, and which answers each one is missing. */
+/**
+ * Who on the day shift still owes today's morning standup, and which answers
+ * each one is missing. The schedule's reminders, close and summary act on
+ * these; the night shift has its own times.
+ */
 export async function standupProgress(workspaceId: string, date: string) {
   const [targets, sessions] = await Promise.all([
-    standupTargets(workspaceId),
+    standupTargets(workspaceId, "day"),
     listStandupsByDate(workspaceId, date),
   ]);
   const byEmployee = new Map(sessions.map((s) => [s.employeeId, s]));
-  // Anyone with an open session counts too, e.g. an admin who typed STANDUP.
+  // Anyone else on the day shift with an open session counts too, e.g. an admin who typed STANDUP.
   const people = new Map(targets.map((t) => [t.id, { id: t.id, name: t.name, phone: t.phone }]));
   for (const s of sessions) {
+    if (s.employeeShift === "night") continue;
     if (!people.has(s.employeeId) && (s.status === "pending" || s.status === "in_progress")) {
       people.set(s.employeeId, { id: s.employeeId, name: s.employeeName, phone: s.employeePhone });
     }
@@ -55,6 +64,7 @@ export async function listStandupsByDate(workspaceId: string, date: string) {
       employeeId: employees.id,
       employeeName: employees.name,
       employeePhone: employees.phone,
+      employeeShift: employees.shift,
       teamName: teams.name,
       standupId: standups.id,
       questionKey: standupAnswers.questionKey,
@@ -82,6 +92,7 @@ export async function listStandupsByDate(workspaceId: string, date: string) {
       employeeId: row.employeeId,
       employeeName: row.employeeName,
       employeePhone: row.employeePhone,
+      employeeShift: row.employeeShift,
       teamName: row.teamName,
       standupId: row.standupId,
       answers: {},

@@ -54,7 +54,7 @@ export async function generateDailyReport(workspaceId: string, date?: string) {
   }
 
   const allEmployees = await db
-    .select({ id: employees.id, name: employees.name })
+    .select({ id: employees.id, name: employees.name, shift: employees.shift })
     .from(employees)
     .leftJoin(roles, eq(employees.roleId, roles.id))
     .where(
@@ -84,8 +84,9 @@ export async function generateDailyReport(workspaceId: string, date?: string) {
   const submitted = [...byEmployee.entries()]
     .filter(([, v]) => v.status === "completed")
     .map(([id, v]) => ({ id, name: v.name, answers: v.answers }));
+  // The night shift starts in the evening: no session yet is not "not submitted".
   const notSubmitted = allEmployees
-    .filter((e) => !byEmployee.has(e.id) || byEmployee.get(e.id)!.status !== "completed")
+    .filter((e) => (byEmployee.has(e.id) ? byEmployee.get(e.id)!.status !== "completed" : e.shift !== "night"))
     .map((e) => e.name);
 
   // Checkout: the work done today and its blockers.

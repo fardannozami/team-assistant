@@ -18,6 +18,7 @@ export const employees = pgTable("employees", {
   phone: text("phone").notNull(),
   teamId: uuid("team_id").references(() => teams.id),
   roleId: uuid("role_id"),
+  shift: text("shift").notNull().default("day"), // day | night
   isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
