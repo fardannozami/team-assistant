@@ -199,7 +199,7 @@
         <div>
           <label class="mb-1.5 block text-sm font-semibold text-text">Peran</label>
           <select v-model="empRoleId" class="min-h-12 w-full rounded-xl border border-border bg-panel px-4 text-base focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20" @input="createError = ''">
-            <option :value="null">Peran bawaan</option>
+            <option v-if="!defaultRoleId()" :value="null">Peran bawaan</option>
             <option v-for="r in roles" :key="r.id" :value="r.id">{{ r.name }}</option>
           </select>
         </div>
@@ -342,10 +342,17 @@ function searchEmployees() {
 }
 onBeforeUnmount(() => clearTimeout(searchTimer));
 
+// New members start as Employee, the role the server would give them anyway.
+function defaultRoleId() {
+  return roles.value.find((r) => r.name === "Employee")?.id ?? null;
+}
+
 async function loadRoles() {
   try {
     // PM is a dashboard-only role, never a WhatsApp member's.
     roles.value = (await rolesApi.list()).filter((r) => r.name !== "PM");
+    // The add form may have opened before the roles arrived.
+    empRoleId.value ??= defaultRoleId();
   } catch {
     roles.value = [];
   }
@@ -387,7 +394,7 @@ async function toggleActive(e: Employee) {
 function resetAddForm() {
   empName.value = "";
   empPhone.value = "";
-  empRoleId.value = null;
+  empRoleId.value = defaultRoleId();
   empGithub.value = "";
   empShift.value = "day";
   createError.value = "";
