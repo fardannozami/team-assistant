@@ -126,7 +126,8 @@ export async function generateDailyReport(workspaceId: string, date?: string) {
       ? github.flatMap((g) => [
           `- ${g.name}: ${g.summary}`,
           ...g.recentCommits.map(
-            (c) => `  • ${[c.hash, c.title].filter(Boolean).join(" ")}${c.url ? ` - ${c.url}` : ""}`,
+            // The hash is the link on the web (recentCommits carries the URL).
+            (c) => `  • ${[c.hash, c.title].filter(Boolean).join(" ")}`,
           ),
         ])
       : ["- none"]),

@@ -66,7 +66,7 @@
           <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mt-2">Hambatan</div>
         </div>
       </div>
-      <pre class="border border-border rounded-xl bg-panel-hover p-5 overflow-auto font-mono text-[13px] leading-[1.7] text-text-muted whitespace-pre-wrap"><template v-for="(part, i) in linkParts(dailyReport.text)" :key="i"><a v-if="part.url" :href="part.url" target="_blank" rel="noopener noreferrer" class="text-accent underline hover:text-accent-hover">{{ part.text }}</a><template v-else>{{ part.text }}</template></template></pre>
+      <pre class="border border-border rounded-xl bg-panel-hover p-5 overflow-auto font-mono text-[13px] leading-[1.7] text-text-muted whitespace-pre-wrap"><template v-for="(part, i) in linkParts(dailyReport.text, commitLinks(dailyReport))" :key="i"><a v-if="part.url" :href="part.url" target="_blank" rel="noopener noreferrer" class="text-accent underline hover:text-accent-hover">{{ part.text }}</a><template v-else>{{ part.text }}</template></template></pre>
     </div>
 
     <div v-if="!loadingDaily && !dailyError && !dailyReport" class="flex flex-col items-center justify-center py-24 text-center fade-in">
@@ -163,9 +163,16 @@ import {
   type WeeklyReport,
 } from "../api";
 
-// Report text with its http(s) URLs (commit links) split out to render as links.
-function linkParts(text: string) {
-  return text.split(/(https?:\/\/\S+)/).map((part) => ({ text: part, url: /^https?:\/\//.test(part) ? part : null }));
+// Each listed commit's short hash, linked to the commit on GitHub.
+function commitLinks(report: DailyReport) {
+  return new Map(
+    report.github.flatMap((g) => g.recentCommits.filter((c) => c.hash && c.url).map((c) => [c.hash!, c.url!] as const)),
+  );
+}
+
+// Report text with the commit hashes split out to render as links.
+function linkParts(text: string, links: Map<string, string>) {
+  return text.split(/(?<=• )([0-9a-f]{7})\b/).map((part) => ({ text: part, url: links.get(part) ?? null }));
 }
 
 const TABS = [
