@@ -220,6 +220,7 @@ export type InviteUserInput = z.infer<typeof inviteUserSchema>;
 
 // ---- Projects & fee splits (PM) ----
 
+export const PROJECT_TYPES = ["development", "design"] as const;
 export const PROJECT_STATUSES = ["ongoing", "completed", "cancelled"] as const;
 export const PAYMENT_TYPES = ["fixed", "hourly"] as const;
 export const PAYMENT_STATUSES = ["pending", "accepted", "paid"] as const;
@@ -233,6 +234,7 @@ export const projectInputSchema = z
   .object({
     platform: z.string().trim().min(1, "Platform wajib diisi").max(100),
     name: z.string().trim().min(1, "Nama project wajib diisi").max(300),
+    type: z.enum(PROJECT_TYPES).default("development"),
     startDate: isoDate.nullish(),
     endDate: isoDate.nullish(),
     status: z.enum(PROJECT_STATUSES),

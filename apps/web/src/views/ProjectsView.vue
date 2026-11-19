@@ -92,7 +92,7 @@
       <li v-for="p in filtered" :key="p.id" class="rounded-2xl border border-border bg-panel p-4 shadow-soft sm:p-5">
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div class="min-w-0 flex-1">
-            <div class="text-xs font-bold uppercase tracking-wider text-text-dim">{{ p.platform }} · {{ PAYMENT_TYPE_LABEL[p.paymentType] }}</div>
+            <div class="text-xs font-bold uppercase tracking-wider text-text-dim">{{ PROJECT_TYPE_LABEL[p.type] }} · {{ p.platform }} · {{ PAYMENT_TYPE_LABEL[p.paymentType] }}</div>
             <h3 class="mt-0.5 font-bold text-text">{{ p.name }}</h3>
             <p class="mt-0.5 text-xs text-text-muted">{{ dateRange(p) }}</p>
           </div>
@@ -141,9 +141,15 @@
       </div>
 
       <div class="mt-4 grid gap-4 sm:grid-cols-2">
-        <label class="block sm:col-span-2">
+        <label class="block">
           <span :class="labelClass">Nama project</span>
           <input v-model="form.name" required maxlength="300" :class="inputClass" class="w-full" />
+        </label>
+        <label class="block">
+          <span :class="labelClass">Tipe project</span>
+          <select v-model="form.type" :class="inputClass" class="w-full">
+            <option v-for="(label, key) in PROJECT_TYPE_LABEL" :key="key" :value="key">{{ label }}</option>
+          </select>
         </label>
         <label class="block">
           <span :class="labelClass">Platform</span>
@@ -257,11 +263,13 @@ import {
   type ProjectMemberRole,
   type ProjectPerson,
   type ProjectStatus,
+  type ProjectType,
 } from "../api";
 import { localIsoDate } from "../dates";
 
 type FormMember = ProjectInput["members"][number];
 
+const PROJECT_TYPE_LABEL: Record<ProjectType, string> = { development: "Development", design: "Design" };
 const STATUS_LABEL: Record<ProjectStatus, string> = { ongoing: "Ongoing", completed: "Completed", cancelled: "Batal" };
 const PAYMENT_TYPE_LABEL: Record<PaymentType, string> = { fixed: "Fixed", hourly: "Hourly" };
 const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = { pending: "Pending", accepted: "Accepted", paid: "Dibayar ke tim" };
@@ -442,6 +450,7 @@ function openEditor(p: Project | null) {
     ? {
         platform: p.platform,
         name: p.name,
+        type: p.type,
         startDate: p.startDate,
         endDate: p.endDate,
         status: p.status,
@@ -457,6 +466,7 @@ function openEditor(p: Project | null) {
     : {
         platform: "Upwork",
         name: "",
+        type: "development",
         startDate: null,
         endDate: null,
         status: "ongoing",

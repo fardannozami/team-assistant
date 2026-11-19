@@ -11,6 +11,7 @@ export const projects = pgTable(
     workspaceId: workspaceRef(),
     platform: text("platform").notNull(), // Upwork, Fiverr, Direct, ...
     name: text("name").notNull(),
+    type: text("type").notNull().default("development"), // development | design
     startDate: date("start_date"),
     endDate: date("end_date"),
     status: text("status").notNull().default("ongoing"), // ongoing | completed | cancelled

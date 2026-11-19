@@ -770,6 +770,7 @@ export const aiApi = {
     }),
 };
 
+export type ProjectType = "development" | "design";
 export type ProjectStatus = "ongoing" | "completed" | "cancelled";
 export type PaymentType = "fixed" | "hourly";
 export type PaymentStatus = "pending" | "accepted" | "paid";
@@ -787,6 +788,7 @@ export interface Project {
   id: string;
   platform: string;
   name: string;
+  type: ProjectType;
   startDate: string | null;
   endDate: string | null;
   status: ProjectStatus;
@@ -806,6 +808,7 @@ export interface Project {
 export interface ProjectInput {
   platform: string;
   name: string;
+  type: ProjectType;
   startDate: string | null;
   endDate: string | null;
   status: ProjectStatus;

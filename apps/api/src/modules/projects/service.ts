@@ -89,6 +89,7 @@ export async function listProjects(workspaceId: string) {
       id: p.id,
       platform: p.platform,
       name: p.name,
+      type: p.type,
       startDate: p.startDate,
       endDate: p.endDate,
       status: p.status,
@@ -119,6 +120,7 @@ function columns(input: ProjectInput) {
   return {
     platform: input.platform,
     name: input.name,
+    type: input.type,
     startDate: input.startDate ?? null,
     endDate: input.endDate ?? null,
     status: input.status,
