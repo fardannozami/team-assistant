@@ -64,7 +64,8 @@ describe("project fee math", () => {
         { employeeId: b, role: "designer", sharePercent: 50.01 },
       ],
     });
-    expect(over.success).toBe(false);
+    // Shares may add up past 100%.
+    expect(over.success).toBe(true);
 
     const dup = projectInputSchema.safeParse({
       ...base,

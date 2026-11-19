@@ -258,17 +258,13 @@ export const projectInputSchema = z
       ctx.addIssue({ code: "custom", path: ["endDate"], message: "End date sebelum start date" });
     }
     if (p.totalFee != null && p.totalFee > p.feeReceived) {
-      ctx.addIssue({ code: "custom", path: ["totalFee"], message: "Total fee dibagi tidak boleh lebih dari fee diterima" });
+      ctx.addIssue({ code: "custom", path: ["totalFee"], message: "Fee diterima tidak boleh lebih dari fee" });
     }
     const seen = new Set<string>();
     for (const m of p.members) {
       const key = `${m.role}:${m.employeeId}`;
       if (seen.has(key)) ctx.addIssue({ code: "custom", path: ["members"], message: "Anggota yang sama tercatat dua kali di peran yang sama" });
       seen.add(key);
-    }
-    // Every share is a part of the one split fee, so together they never pass 100%.
-    if (p.members.reduce((sum, m) => sum + m.sharePercent, 0) > 100.001) {
-      ctx.addIssue({ code: "custom", path: ["members"], message: "Total pembagian fee lebih dari 100%" });
     }
   });
 

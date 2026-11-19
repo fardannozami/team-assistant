@@ -52,18 +52,14 @@
 
   <template v-else-if="projects.length">
     <!-- Totals of what is filtered, cancelled projects left out -->
-    <section class="mb-6 grid gap-3 sm:grid-cols-3" aria-label="Ringkasan">
+    <section class="mb-6 grid gap-3 sm:grid-cols-2" aria-label="Ringkasan">
       <div class="rounded-2xl border border-border bg-panel p-4 shadow-soft">
         <div class="font-display text-[26px] font-extrabold tracking-tight text-text">{{ counted.length }}</div>
         <div class="mt-1 text-[11px] font-extrabold uppercase tracking-wider text-text-dim">Project (tanpa batal)</div>
       </div>
       <div class="rounded-2xl border border-border bg-panel p-4 shadow-soft">
         <div class="font-display text-[20px] font-extrabold tracking-tight text-success">{{ formatTotals(totals.received) }}</div>
-        <div class="mt-1 text-[11px] font-extrabold uppercase tracking-wider text-text-dim">Fee diterima</div>
-      </div>
-      <div class="rounded-2xl border border-border bg-panel p-4 shadow-soft">
-        <div class="font-display text-[20px] font-extrabold tracking-tight text-warning">{{ formatTotals(totals.unpaid) }}</div>
-        <div class="mt-1 text-[11px] font-extrabold uppercase tracking-wider text-text-dim">Belum dibayar ke tim</div>
+        <div class="mt-1 text-[11px] font-extrabold uppercase tracking-wider text-text-dim">Fee</div>
       </div>
     </section>
 
@@ -76,8 +72,7 @@
             <tr class="text-text-dim">
               <th class="border-b border-border px-3 py-2.5 text-left text-[11px] font-extrabold uppercase tracking-wider">Nama</th>
               <th class="border-b border-border px-3 py-2.5 text-right text-[11px] font-extrabold uppercase tracking-wider">Project</th>
-              <th class="border-b border-border px-3 py-2.5 text-right text-[11px] font-extrabold uppercase tracking-wider">Total fee</th>
-              <th class="border-b border-border px-3 py-2.5 text-right text-[11px] font-extrabold uppercase tracking-wider">Sudah dibayar</th>
+              <th class="border-b border-border px-3 py-2.5 text-right text-[11px] font-extrabold uppercase tracking-wider">Total achievement</th>
             </tr>
           </thead>
           <tbody>
@@ -85,7 +80,6 @@
               <td class="border-b border-border px-3 py-2.5 text-text">{{ p.name }}</td>
               <td class="border-b border-border px-3 py-2.5 text-right tabular-nums text-text">{{ p.projects }}</td>
               <td class="border-b border-border px-3 py-2.5 text-right font-bold tabular-nums text-text">{{ formatTotals(p.total) }}</td>
-              <td class="border-b border-border px-3 py-2.5 text-right tabular-nums text-text-muted">{{ formatTotals(p.paid) }}</td>
             </tr>
           </tbody>
         </table>
@@ -109,9 +103,9 @@
         </div>
 
         <dl class="mt-3 grid grid-cols-2 gap-3 border-t border-border pt-3 text-sm sm:grid-cols-3">
-          <div><dt class="text-xs font-bold text-text-dim">Fee diterima</dt><dd class="tabular-nums text-text">{{ money(p.feeReceived, p.currency) }}</dd></div>
+          <div><dt class="text-xs font-bold text-text-dim">Fee</dt><dd class="tabular-nums text-text">{{ money(p.feeReceived, p.currency) }}</dd></div>
           <div><dt class="text-xs font-bold text-text-dim">Potongan platform {{ p.platformFeePercent }}%</dt><dd class="tabular-nums text-text">{{ money(p.platformFee, p.currency) }}</dd></div>
-          <div><dt class="text-xs font-bold text-text-dim">Total fee dibagi</dt><dd class="font-bold tabular-nums text-text">{{ money(p.splitBase, p.currency) }}</dd></div>
+          <div><dt class="text-xs font-bold text-text-dim">Fee diterima</dt><dd class="font-bold tabular-nums text-text">{{ money(p.splitBase, p.currency) }}</dd></div>
         </dl>
 
         <div class="mt-3 grid gap-3 sm:grid-cols-3">
@@ -192,7 +186,7 @@
             <input v-model="form.currency" required maxlength="3" :class="inputClass" class="w-full uppercase" />
           </label>
           <label class="block">
-            <span :class="labelClass">Fee diterima</span>
+            <span :class="labelClass">Fee</span>
             <input v-model.number="form.feeReceived" type="number" min="0" step="0.01" required :class="inputClass" class="w-full" />
           </label>
           <label class="block">
@@ -200,15 +194,15 @@
             <input v-model.number="form.platformFeePercent" type="number" min="0" max="99" step="0.01" required :class="inputClass" class="w-full" />
           </label>
           <label class="block">
-            <span :class="labelClass">Total fee dibagi</span>
+            <span :class="labelClass">Fee diterima</span>
             <input v-model.number="totalFeeInput" type="number" min="0" step="0.01" :placeholder="`Otomatis: ${preview.auto}`" :class="inputClass" class="w-full" />
           </label>
         </div>
         <p class="mt-2 text-sm text-text-muted">
-          Potongan platform: <strong class="text-text">{{ money(preview.cut, form.currency) }}</strong> · Dibagi ke tim: <strong class="text-text">{{ money(preview.base, form.currency) }}</strong>.
-          "Total fee dibagi" otomatis fee diterima dikurangi potongan platform; isi hanya kalau jumlahnya berbeda.
+          Potongan platform: <strong class="text-text">{{ money(preview.cut, form.currency) }}</strong> · Fee diterima: <strong class="text-text">{{ money(preview.base, form.currency) }}</strong>.
+          "Fee diterima" otomatis fee dikurangi potongan platform; isi hanya kalau jumlahnya berbeda.
         </p>
-        <p v-if="totalFeeTooHigh" class="mt-1 text-sm font-semibold text-danger">Total fee dibagi lebih besar dari fee diterima.</p>
+        <p v-if="totalFeeTooHigh" class="mt-1 text-sm font-semibold text-danger">Fee diterima lebih besar dari fee.</p>
       </fieldset>
 
       <fieldset v-for="role in MEMBER_ROLES" :key="role.id" class="mt-6">
@@ -234,7 +228,7 @@
           <button v-if="formMembers(role.id).length > 1" type="button" class="min-h-10 rounded-xl px-3 text-sm font-semibold text-text-muted hover:bg-panel-hover" @click="splitEvenly(role.id)">Bagi rata</button>
         </div>
       </fieldset>
-      <p v-if="form.members.length" class="mt-4 rounded-xl border px-4 py-3 text-sm font-semibold" :class="shareTotal > 100 ? 'border-danger/30 bg-danger/5 text-danger' : shareTotal === 100 ? 'border-border text-text-muted' : 'border-warning/30 bg-warning/5 text-warning'">{{ shareLabel }}</p>
+      <p v-if="form.members.length" class="mt-4 rounded-xl border px-4 py-3 text-sm font-semibold" :class="shareTotal >= 100 ? 'border-border text-text-muted' : 'border-warning/30 bg-warning/5 text-warning'">{{ shareLabel }}</p>
 
       <label class="mt-6 block">
         <span :class="labelClass">Catatan</span>
@@ -380,22 +374,17 @@ const add = (t: Totals, currency: string, n: number) => {
 
 const totals = computed(() => {
   const received: Totals = {};
-  const unpaid: Totals = {};
-  for (const p of counted.value) {
-    add(received, p.currency, p.feeReceived);
-    if (p.paymentStatus !== "paid") add(unpaid, p.currency, p.members.reduce((s, m) => s + m.fee, 0));
-  }
-  return { received, unpaid };
+  for (const p of counted.value) add(received, p.currency, p.feeReceived);
+  return { received };
 });
 
 const perPerson = computed(() => {
-  const map = new Map<string, { employeeId: string; name: string; projects: Set<string>; total: Totals; paid: Totals }>();
+  const map = new Map<string, { employeeId: string; name: string; projects: Set<string>; total: Totals }>();
   for (const p of counted.value) {
     for (const m of p.members) {
-      const entry = map.get(m.employeeId) ?? { employeeId: m.employeeId, name: m.employeeName, projects: new Set(), total: {}, paid: {} };
+      const entry = map.get(m.employeeId) ?? { employeeId: m.employeeId, name: m.employeeName, projects: new Set(), total: {} };
       entry.projects.add(p.id);
       add(entry.total, p.currency, m.fee);
-      if (p.paymentStatus === "paid") add(entry.paid, p.currency, m.fee);
       map.set(m.employeeId, entry);
     }
   }
@@ -542,15 +531,15 @@ const previewFees = computed(() => {
   return new Map(members.map((m, k) => [m, cents[k]! / 100]));
 });
 
-// Every member's percent is a part of the one split fee: together at most 100%.
+// Every member's percent is a part of the one fee received; together they may pass 100%.
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const sumShares = (members: FormMember[]) => round2(members.reduce((s, m) => s + (Number(m.sharePercent) || 0), 0));
 const shareTotal = computed(() => sumShares(form.value?.members ?? []));
 const shareLabel = computed(() => {
   const total = shareTotal.value;
-  if (total === 100) return "Total pembagian: 100% dari fee dibagi.";
-  if (total > 100) return `Total pembagian ${total}%, lebih ${round2(total - 100)}% dari fee dibagi. Kurangi persennya.`;
-  return `Total pembagian ${total}%, sisa ${round2(100 - total)}% fee belum dibagi.`;
+  if (total === 100) return "Total pembagian: 100% dari fee diterima.";
+  if (total > 100) return `Total pembagian ${total}%, lebih ${round2(total - 100)}% dari fee diterima.`;
+  return `Total pembagian ${total}%, sisa ${round2(100 - total)}% fee diterima belum dibagi.`;
 });
 function formMembers(role: ProjectMemberRole) {
   return form.value?.members.filter((m) => m.role === role) ?? [];
@@ -608,11 +597,7 @@ async function save() {
     return;
   }
   if (totalFeeTooHigh.value) {
-    showToast("Total fee dibagi tidak boleh lebih dari fee diterima.", "error");
-    return;
-  }
-  if (shareTotal.value > 100) {
-    showToast("Total pembagian fee lebih dari 100%.", "error");
+    showToast("Fee diterima tidak boleh lebih dari fee.", "error");
     return;
   }
   saving.value = true;
