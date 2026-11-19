@@ -1,6 +1,6 @@
-import { CORE_STANDUP_ELEMENTS, isNoBlocker, type StandupElement } from "@repo/shared";
+import { CHECKOUT_TIME, MORNING_STANDUP_ELEMENTS, isNoBlocker, type StandupElement } from "@repo/shared";
 import { standupAnswers, standupSessions } from "@repo/database";
-import { githubOpenings, type GithubOpening } from "../draft.js";
+import { morningOpenings, type MorningOpening } from "../draft.js";
 import { parseStandupText } from "./parse.js";
 import {
   db,
@@ -8,39 +8,34 @@ import {
   getOrCreateStandupRow,
   getStandupSession,
   setSessionStatus,
+  standupTimezone,
   upsertAnswer,
   type StandupCollector,
 } from "./store.js";
-import {
-  closedText,
-  draftedPromptText,
-  EDIT_HINT,
-  STANDUP_QUESTIONS,
-  standupPromptText,
-  summarize,
-} from "./texts.js";
+import { closedText, EDIT_HINT, morningPromptText, STANDUP_QUESTIONS, summarize } from "./texts.js";
 
 /**
- * The day's opening message. A "kemarin" drafted from GitHub is filed as the
- * answer, unless one is there already, so the prompt asks only for the rest.
+ * The morning message. "Kemarin" (the previous checkout, else drafted from
+ * GitHub) is filed as the answer, unless one is there already, and shown, so
+ * the prompt asks only for today's plan.
  */
 export async function openingText(
   employee: { id: string; workspaceId: string },
   sessionId: string,
   date: string,
-  github?: GithubOpening,
+  opening?: MorningOpening,
 ): Promise<string> {
-  if (github?.draft) {
+  if (opening?.yesterday) {
     const row = await getOrCreateStandupRow(employee.workspaceId, sessionId, employee.id, date);
     // Never over a "kemarin" the employee may have just sent.
     const [filed] = await db
       .insert(standupAnswers)
-      .values({ standupId: row.id, questionKey: "yesterday", answer: github.draft })
+      .values({ standupId: row.id, questionKey: "yesterday", answer: opening.yesterday })
       .onConflictDoNothing()
       .returning({ id: standupAnswers.id });
-    if (filed) return draftedPromptText(date, github.from, github.draft);
+    if (!filed) return morningPromptText(date);
   }
-  return standupPromptText(date, github?.hint);
+  return morningPromptText(date, opening);
 }
 
 async function saveParsed(standupId: string, parsed: Partial<Record<StandupElement, string>>) {
@@ -71,10 +66,15 @@ export async function startStandup(employee: StandupCollector, date: string, res
 
   const row = await getOrCreateStandupRow(employee.workspaceId, session.id, employee.id, date);
   const answered = new Set((await getAnswers(row.id)).map((a) => a.questionKey));
-  const missing = CORE_STANDUP_ELEMENTS.filter((key) => !answered.has(key));
-  if (missing.length === CORE_STANDUP_ELEMENTS.length) {
-    const github = await githubOpenings(employee.workspaceId, date, [employee.id]);
-    return openingText(employee, session.id, date, github.get(employee.id));
+  const missing = MORNING_STANDUP_ELEMENTS.filter((key) => !answered.has(key));
+  if (missing.length === 0) {
+    await setSessionStatus(session.id, "completed");
+    return `${summarize(date, "Standup kamu sudah tercatat untuk", await getAnswers(row.id))}\n${EDIT_HINT}`;
+  }
+  if (!answered.size) {
+    const tz = await standupTimezone(employee.workspaceId);
+    const openings = await morningOpenings(employee.workspaceId, date, [employee.id], tz);
+    return openingText(employee, session.id, date, openings.get(employee.id));
   }
   return `Lanjutkan standup ${date}: ${STANDUP_QUESTIONS[missing[0]!]}`;
 }
@@ -85,7 +85,7 @@ export async function editStandup(employee: StandupCollector, date: string, rest
   if (!session) return `Belum ada standup untuk ${date}. Kirim STANDUP untuk mulai.`;
   if (session.status === "missed") return closedText(date);
   if (session.status !== "completed") {
-    return rest ? recordAnswers(employee, session, date, rest) : `Standup ${date} belum selesai. ${STANDUP_QUESTIONS.yesterday}`;
+    return rest ? recordAnswers(employee, session, date, rest) : `Standup ${date} belum selesai. ${STANDUP_QUESTIONS.today}`;
   }
 
   const parsed = parseStandupText(rest);
@@ -107,7 +107,7 @@ export async function recordAnswers(
 
   const answers = await getAnswers(standupRow.id);
   const answered = new Set(answers.map((a) => a.questionKey));
-  const missing = CORE_STANDUP_ELEMENTS.filter((key) => !answered.has(key));
+  const missing = MORNING_STANDUP_ELEMENTS.filter((key) => !answered.has(key));
   if (missing.length === 0) return null;
 
   let parsed = parseStandupText(text, missing[0], missing);
@@ -122,22 +122,13 @@ export async function recordAnswers(
     await setSessionStatus(session.id, "in_progress");
   }
 
-  const stillMissing = CORE_STANDUP_ELEMENTS.filter(
-    (key) => !answered.has(key),
-  );
-
+  const stillMissing = MORNING_STANDUP_ELEMENTS.filter((key) => !answered.has(key));
   if (stillMissing.length === 0) {
     await setSessionStatus(session.id, "completed");
     return [
       summarize(date, "Standup tercatat untuk", await getAnswers(standupRow.id)),
-      "Terima kasih 😊",
+      `Terima kasih 😊 Jam ${CHECKOUT_TIME} nanti aku kirim checkout untuk mencatat yang kamu kerjakan hari ini.`,
     ].join("\n");
   }
-
-  const got = CORE_STANDUP_ELEMENTS.filter((key) => answered.has(key));
-  const gotLabel = got
-    .map((key) => (key === "yesterday" ? "kemarin" : key === "today" ? "hari ini" : "kendala"))
-    .join(" dan ");
-  const gotPrefix = got.length ? `Diterima ${gotLabel}. ` : "";
-  return `${gotPrefix}${STANDUP_QUESTIONS[stillMissing[0]!]}`;
+  return `Diterima. ${STANDUP_QUESTIONS[stillMissing[0]!]}`;
 }

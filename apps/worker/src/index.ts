@@ -11,7 +11,7 @@ import {
   workspaces,
 } from "@repo/database";
 import { and, eq } from "drizzle-orm";
-import { dateInTimezone, DEFAULT_TIMEZONE } from "@repo/shared";
+import { CHECKOUT_TIME, dateInTimezone, DEFAULT_TIMEZONE } from "@repo/shared";
 import { reminderTimes, standupReminderTimes } from "./reminder-times.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
@@ -49,6 +49,7 @@ const OWNED_PREFIXES = [
   "standup-reminders",
   "standup-summary",
   "standup-close",
+  "standup-checkout",
   "daily-report",
   "checkin-prompts",
   "checkin-reminders",
@@ -63,6 +64,7 @@ const API_PATHS: Record<string, string> = {
   "standup-reminders": "/standups/reminders",
   "standup-summary": "/standups/summary",
   "standup-close": "/standups/close",
+  "standup-checkout": "/standups/checkout",
   "daily-report": "/reports/daily/notify",
   "checkin-prompts": "/checkins/trigger",
   "checkin-reminders": "/checkins/reminders",
@@ -146,6 +148,12 @@ async function desiredRepeatables(): Promise<DesiredRepeatable[]> {
           ...owner,
         });
       }
+      desired.push({
+        name: `standup-checkout:${schedule.id}`,
+        pattern: cronFor(CHECKOUT_TIME, weekdays),
+        tz,
+        ...owner,
+      });
     } else if (schedule.cronExpression) {
       desired.push({
         name: `standup-prompts:${schedule.id}`,

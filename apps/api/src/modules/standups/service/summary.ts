@@ -1,4 +1,4 @@
-import { CORE_STANDUP_ELEMENTS, isAdminRole, type StandupElement } from "@repo/shared";
+import { MORNING_STANDUP_ELEMENTS, isAdminRole, type StandupElement } from "@repo/shared";
 import { listEmployees } from "../../employees/service.js";
 import { standupToday } from "../engine.js";
 import { excludedDay, jidFor, NOT_CONNECTED, notConnected, senderFor, type SendFn } from "./delivery.js";
@@ -31,7 +31,7 @@ export async function sendStandupSummary(
   const describe = (p: (typeof pending)[number]) => {
     const status = p.session?.status;
     if (status === "missed") return "tidak mengisi";
-    if (!p.session || p.missing.length === CORE_STANDUP_ELEMENTS.length) return "belum mulai";
+    if (!p.session || p.missing.length === MORNING_STANDUP_ELEMENTS.length) return "belum mulai";
     return `kurang ${p.missing.map((k) => MISSING_LABEL[k]).join(", ")}`;
   };
   const text = pending.length

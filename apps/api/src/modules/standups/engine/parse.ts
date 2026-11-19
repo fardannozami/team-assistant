@@ -87,7 +87,8 @@ export function parseStandupText(
     .split(/\n+/)
     .map((l) => l.trim())
     .filter(Boolean);
-  if (marks.length === 0 && lines.length >= 2) {
+  // With one open part, an unlabelled multi-line reply is all that part.
+  if (marks.length === 0 && lines.length >= 2 && open.length >= 2) {
     open.forEach((key, i) => {
       if (lines[i]) parsed[key] = lines[i];
     });

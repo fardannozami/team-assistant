@@ -118,10 +118,11 @@ const aiExamples = [
 ];
 
 const standupCommands = [
-  { cmd: "STANDUP", desc: "Mulai atau lanjutkan standup hari ini." },
-  { cmd: "STANDUP kemarin: … hari ini: … kendala: …", desc: "Isi semua jawaban sekaligus." },
-  { cmd: "UBAH STANDUP kendala: …", desc: "Ubah jawaban yang sudah terkirim." },
-  { cmd: "CHECKOUT", desc: "Isi atau lanjutkan check-out mingguan (juga setelah hari Jumat)." },
+  { cmd: "STANDUP", desc: "Mulai atau lanjutkan standup pagi: bot memberi tahu yang dikerjakan kemarin, lalu menanyakan rencana hari ini." },
+  { cmd: "UBAH STANDUP hari ini: …", desc: "Ubah rencana yang sudah terkirim (atau kemarin: …)." },
+  { cmd: "CHECKOUT", desc: "Isi atau lanjutkan checkout harian (otomatis jam 16:00): yang dikerjakan hari ini dari GitHub, bisa dibalas OK, ditambah, atau GANTI: …, lalu kendala." },
+  { cmd: "UBAH CHECKOUT … / TAMBAH: … / KENDALA: …", desc: "Ganti atau tambah yang dikerjakan hari ini, atau ubah kendalanya." },
+  { cmd: "CHECKOUT MINGGUAN", desc: "Isi atau lanjutkan check-out mingguan (juga setelah hari Jumat)." },
   { cmd: "MOOD", desc: "Isi atau lanjutkan ice breaking awal minggu." },
   { cmd: "BANTUAN", desc: "Tampilkan bantuan standup." },
 ];

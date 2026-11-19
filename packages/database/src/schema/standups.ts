@@ -11,7 +11,10 @@ export const standupSessions = pgTable(
       .notNull()
       .references(() => employees.id, { onDelete: "cascade" }),
     date: date("date").notNull(),
-    status: text("status").default("pending").notNull(), // pending | in_progress | completed
+    status: text("status").default("pending").notNull(), // pending | in_progress | completed | missed
+    // Afternoon checkout, apart from the morning plan: null until prompted.
+    checkoutStatus: text("checkout_status"), // pending | in_progress | completed | missed
+    checkoutAt: timestamp("checkout_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -48,7 +51,7 @@ export const standupAnswers = pgTable(
     standupId: uuid("standup_id")
       .notNull()
       .references(() => standups.id, { onDelete: "cascade" }),
-    questionKey: text("question_key").notNull(), // yesterday | today | blockers
+    questionKey: text("question_key").notNull(), // yesterday | today (morning) | done | blockers (checkout)
     answer: text("answer").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()

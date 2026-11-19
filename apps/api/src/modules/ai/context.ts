@@ -96,7 +96,7 @@ export async function buildAgentContext(args: AgentArgs): Promise<string> {
     lines.push("", "Recent standups:");
     for (const [date, answers] of history) {
       lines.push(
-        `- ${date}: yesterday="${answers.yesterday ?? "-"}", today="${answers.today ?? "-"}", blockers="${answers.blockers ?? "-"}"`,
+        `- ${date}: yesterday="${answers.yesterday ?? "-"}", today="${answers.today ?? "-"}", done="${answers.done ?? "-"}", blockers="${answers.blockers ?? "-"}"`,
       );
     }
   }

@@ -442,14 +442,19 @@ export async function summarizeActivity(workspaceId: string, since: Date) {
  */
 export async function standupActivity(workspaceId: string, date: string, employeeIds?: string[]) {
   const window = standupWindow(date);
+  return { ...window, byEmployee: await activityBetween(workspaceId, window.since, window.until, employeeIds) };
+}
+
+/** Each mapped employee's activity in [since, until). Employees without activity are absent. */
+export async function activityBetween(workspaceId: string, since: Date, until: Date, employeeIds?: string[]) {
   const byEmployee = new Map<string, StandupActivity>();
-  if (employeeIds && employeeIds.length === 0) return { ...window, byEmployee };
+  if (employeeIds && employeeIds.length === 0) return byEmployee;
 
   const conditions = [
     eq(activityEvents.workspaceId, workspaceId),
     eq(activityEvents.provider, PROVIDER),
-    gte(activityEvents.occurredAt, window.since),
-    lt(activityEvents.occurredAt, window.until),
+    gte(activityEvents.occurredAt, since),
+    lt(activityEvents.occurredAt, until),
     isNotNull(activityEvents.employeeId),
   ];
   if (employeeIds) conditions.push(inArray(activityEvents.employeeId, employeeIds));
@@ -474,5 +479,5 @@ export async function standupActivity(workspaceId: string, date: string, employe
     entry.items.push(item);
     byEmployee.set(employeeId!, entry);
   }
-  return { ...window, byEmployee };
+  return byEmployee;
 }

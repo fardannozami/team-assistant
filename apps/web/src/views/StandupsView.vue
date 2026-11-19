@@ -3,7 +3,7 @@
     <div>
       <h2 class="text-[26px] font-display font-extrabold tracking-tight text-text">Standup</h2>
       <p class="text-text-muted text-sm mt-1">
-        Lihat jawaban standup tim berdasarkan tanggal.
+        Lihat rencana pagi dan checkout sore tim berdasarkan tanggal.
       </p>
     </div>
   </header>
@@ -41,12 +41,16 @@
     <article v-for="s in standups" :key="s.sessionId" class="rounded-2xl border border-border bg-panel p-4 shadow-soft">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0"><h3 class="font-bold text-text">{{ s.employeeName }}</h3><p class="mt-0.5 break-all font-mono text-xs text-text-dim">{{ s.employeePhone }}</p><p class="mt-1 text-xs text-text-muted">{{ s.teamName || 'Tanpa tim' }}</p></div>
-        <span class="badge shrink-0" :class="statusBadgeUtils(s.status)">{{ statusLabel(s.status) }}</span>
+        <div class="flex shrink-0 flex-col items-end gap-1">
+          <span class="badge" :class="statusBadgeUtils(s.status)">Pagi: {{ statusLabel(s.status) }}</span>
+          <span class="badge" :class="statusBadgeUtils(s.checkoutStatus)">Checkout: {{ statusLabel(s.checkoutStatus) }}</span>
+        </div>
       </div>
       <dl class="mt-4 space-y-3 border-t border-border pt-3 text-sm">
         <div><dt class="text-xs font-bold text-text-dim">Kemarin</dt><dd class="mt-0.5 whitespace-pre-wrap text-text">{{ s.answers.yesterday || 'Belum ada jawaban' }}</dd></div>
         <div v-if="s.github"><dt class="text-xs font-bold text-text-dim">GitHub sejak {{ s.githubSince }}</dt><dd class="mt-0.5"><GithubActivity :activity="s.github" /></dd></div>
-        <div><dt class="text-xs font-bold text-text-dim">Hari ini</dt><dd class="mt-0.5 whitespace-pre-wrap text-text">{{ s.answers.today || 'Belum ada jawaban' }}</dd></div>
+        <div><dt class="text-xs font-bold text-text-dim">Rencana hari ini</dt><dd class="mt-0.5 whitespace-pre-wrap text-text">{{ s.answers.today || 'Belum ada jawaban' }}</dd></div>
+        <div><dt class="text-xs font-bold text-text-dim">Dikerjakan (checkout)</dt><dd class="mt-0.5 whitespace-pre-wrap text-text">{{ s.answers.done || 'Belum checkout' }}</dd></div>
         <div><dt class="text-xs font-bold text-text-dim">Hambatan</dt><dd class="mt-0.5 whitespace-pre-wrap text-text">{{ s.answers.blockers || 'Tidak ada' }}</dd></div>
       </dl>
     </article>
@@ -60,7 +64,8 @@
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Tim</th>
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[14%]">Status</th>
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Kemarin</th>
-          <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Hari ini</th>
+          <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Rencana hari ini</th>
+          <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Dikerjakan</th>
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Hambatan</th>
         </tr>
       </thead>
@@ -72,7 +77,10 @@
           </td>
           <td class="px-5 py-4 border-b border-border align-middle text-text">{{ s.teamName || "—" }}</td>
           <td class="px-5 py-4 border-b border-border align-middle text-text">
-            <span class="badge" :class="statusBadgeUtils(s.status)">{{ statusLabel(s.status) }}</span>
+            <div class="flex flex-col items-start gap-1">
+              <span class="badge" :class="statusBadgeUtils(s.status)">Pagi: {{ statusLabel(s.status) }}</span>
+              <span class="badge" :class="statusBadgeUtils(s.checkoutStatus)">Checkout: {{ statusLabel(s.checkoutStatus) }}</span>
+            </div>
           </td>
           <td class="px-5 py-4 border-b border-border align-middle text-text answers">
             {{ s.answers.yesterday || "—" }}
@@ -82,6 +90,7 @@
             </div>
           </td>
           <td class="px-5 py-4 border-b border-border align-middle text-text answers">{{ s.answers.today || "—" }}</td>
+          <td class="px-5 py-4 border-b border-border align-middle text-text answers">{{ s.answers.done || "—" }}</td>
           <td class="px-5 py-4 border-b border-border align-middle text-text answers">{{ s.answers.blockers || "—" }}</td>
         </tr>
       </tbody>
@@ -125,7 +134,8 @@ async function load() {
 onMounted(load);
 watch(date, load);
 
-function statusLabel(status: string) {
+function statusLabel(status: string | null) {
+  if (!status) return "Belum dikirim";
   const key = String(status).toLowerCase();
   if (key === "completed") return "Selesai";
   if (key === "pending") return "Menunggu";
@@ -134,7 +144,7 @@ function statusLabel(status: string) {
   return status;
 }
 
-function statusBadgeUtils(status: string) {
+function statusBadgeUtils(status: string | null) {
   const key = String(status).toLowerCase();
   if (key === "completed") return "bg-success/8 text-success border-success/20";
   if (key === "pending" || key === "in_progress") return "bg-warning/8 text-warning border-warning/20";

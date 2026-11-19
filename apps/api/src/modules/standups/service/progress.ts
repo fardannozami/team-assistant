@@ -1,6 +1,6 @@
 import { employees, standupAnswers, standupSessions, standups, teams } from "@repo/database";
 import { and, eq } from "drizzle-orm";
-import { CORE_STANDUP_ELEMENTS, isAdminRole } from "@repo/shared";
+import { MORNING_STANDUP_ELEMENTS, isAdminRole } from "@repo/shared";
 import { listEmployees } from "../../employees/service.js";
 import { describeCounts, notableItems } from "../../github/digest.js";
 import { standupActivity } from "../../github/service.js";
@@ -9,6 +9,7 @@ import { db } from "./delivery.js";
 type SessionSummary = {
   sessionId: string;
   status: string;
+  checkoutStatus: string | null;
   employeeId: string;
   employeeName: string;
   employeePhone: string;
@@ -24,7 +25,7 @@ export async function standupTargets(workspaceId: string) {
   return active.filter((employee) => !isAdminRole(employee.roleName));
 }
 
-/** Who still owes today's standup, and which answers each one is missing. */
+/** Who still owes today's morning standup, and which answers each one is missing. */
 export async function standupProgress(workspaceId: string, date: string) {
   const [targets, sessions] = await Promise.all([
     standupTargets(workspaceId),
@@ -40,7 +41,7 @@ export async function standupProgress(workspaceId: string, date: string) {
   }
   return [...people.values()].map((person) => {
     const session = byEmployee.get(person.id) ?? null;
-    const missing = CORE_STANDUP_ELEMENTS.filter((key) => !session?.answers[key]);
+    const missing = MORNING_STANDUP_ELEMENTS.filter((key) => !session?.answers[key]);
     return { ...person, session, missing };
   });
 }
@@ -50,6 +51,7 @@ export async function listStandupsByDate(workspaceId: string, date: string) {
     .select({
       sessionId: standupSessions.id,
       status: standupSessions.status,
+      checkoutStatus: standupSessions.checkoutStatus,
       employeeId: employees.id,
       employeeName: employees.name,
       employeePhone: employees.phone,
@@ -76,6 +78,7 @@ export async function listStandupsByDate(workspaceId: string, date: string) {
     const entry = grouped.get(row.sessionId) ?? {
       sessionId: row.sessionId,
       status: row.status,
+      checkoutStatus: row.checkoutStatus,
       employeeId: row.employeeId,
       employeeName: row.employeeName,
       employeePhone: row.employeePhone,

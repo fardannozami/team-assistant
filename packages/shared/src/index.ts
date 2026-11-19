@@ -9,6 +9,13 @@ export const CORE_STANDUP_ELEMENTS = [
   "blockers",
 ] as const;
 
+// The morning standup only asks for today's plan: "kemarin" comes from the
+// previous checkout (or GitHub), and blockers are asked at the checkout.
+export const MORNING_STANDUP_ELEMENTS = ["today"] as const;
+
+// Daily checkout, in the standup schedule's timezone on its weekdays.
+export const CHECKOUT_TIME = "16:00";
+
 export const ROLE_NAMES = ["Owner", "Admin", "Manager", "Employee", "PM"] as const;
 export const ADMIN_ROLES = ["Owner", "Admin"] as const;
 

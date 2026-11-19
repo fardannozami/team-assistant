@@ -352,6 +352,8 @@ export interface CalendarException {
 export interface StandupSession {
   sessionId: string;
   status: string;
+  /** Afternoon checkout; null until it is sent. */
+  checkoutStatus: string | null;
   employeeId: string;
   employeeName: string;
   employeePhone: string;

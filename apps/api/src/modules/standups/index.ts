@@ -14,6 +14,7 @@ import {
   sendStandupReminders,
   sendStandupSummary,
   closeStandups,
+  sendCheckoutPrompts,
 } from "./service.js";
 import { standupToday } from "./engine.js";
 
@@ -48,6 +49,11 @@ standupsApi.post("/summary", canManage, async (c) => {
 standupsApi.post("/close", canManage, async (c) => {
   const input = parseWith(remindStandupSchema, await c.req.json().catch(() => ({})));
   return c.json(await closeStandups(getWorkspaceId(c), input));
+});
+
+standupsApi.post("/checkout", canManage, async (c) => {
+  const input = parseWith(triggerStandupSchema, await c.req.json().catch(() => ({})));
+  return c.json(await sendCheckoutPrompts(getWorkspaceId(c), input));
 });
 
 standupsApi.get("/", canView, async (c) => {

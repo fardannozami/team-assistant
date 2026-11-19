@@ -107,7 +107,7 @@ export async function getAnswers(standupId: string) {
 
 export async function upsertAnswer(
   standupId: string,
-  questionKey: StandupElement,
+  questionKey: StandupElement | "done",
   answer: string,
 ) {
   await db

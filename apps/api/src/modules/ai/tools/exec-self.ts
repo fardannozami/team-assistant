@@ -35,7 +35,7 @@ export const SELF_TOOLS: Record<string, ToolHandler> = {
         .slice(0, limit)
         .map(
           (s) =>
-            `- ${s.date}: yesterday="${s.answers.yesterday ?? "-"}", today="${s.answers.today ?? "-"}", blockers="${s.answers.blockers ?? "-"}"`,
+            `- ${s.date}: yesterday="${s.answers.yesterday ?? "-"}", today="${s.answers.today ?? "-"}", done="${s.answers.done ?? "-"}", blockers="${s.answers.blockers ?? "-"}"`,
         )
         .join("\n"),
     };

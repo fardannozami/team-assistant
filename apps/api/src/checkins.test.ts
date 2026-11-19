@@ -101,7 +101,7 @@ describe.skipIf(!url)("check-ins", () => {
     expect(done).toContain("4 🙂");
     // Finished: plain text is no longer ours, the keyword shows the summary.
     expect(await reply("halo")).toBeNull();
-    expect(await reply("CHECKOUT")).toContain("Rilis fitur check-in");
+    expect(await reply("CHECKOUT MINGGUAN")).toContain("Rilis fitur check-in");
 
     // A second run the same day skips people who already have a session.
     expect(await checkins.sendCheckinPrompts(ws.a.id, { kind: "checkout", send, force: true })).toMatchObject({ sent: 0, skipped: 1 });

@@ -24,13 +24,14 @@ const OPEN_STATUSES = ["pending", "in_progress"];
 const SKIP = /^(-+|lewati|lewat|skip|tidak ada|ga ada|gak ada|nggak ada|none)$/i;
 
 // Alone or followed by ":" ("MOOD", "mood: 4"), so answers like "mood tim
-// lagi turun" stay answers.
+// lagi turun" stay answers. Plain CHECKOUT is the daily checkout's.
 const KEYWORDS: { kind: CheckinKind; re: RegExp }[] = [
-  { kind: "checkout", re: /^check[\s-]?out(?:\s*:\s*|\s*$)/i },
+  { kind: "checkout", re: /^check[\s-]?out\s+mingguan(?:\s*:\s*|\s*$)/i },
   { kind: "icebreaker", re: /^(?:mood|ice[\s-]?break(?:ing|er)?)(?:\s*:\s*|\s*$)/i },
 ];
-// Standup keywords keep working while a check-in is open.
-const STANDUP_KEYWORDS = /^(?:(?:ubah|edit|update|ganti|revisi)\s+)?standup\b|^(?:bantuan|help|menu)$/i;
+// Standup and daily checkout keywords keep working while a check-in is open.
+const STANDUP_KEYWORDS =
+  /^(?:(?:ubah|edit|update|ganti|revisi)\s+)?(?:standup\b|check[\s-]?out\b(?!\s+mingguan))|^(?:bantuan|help|menu)$/i;
 
 export const MOOD_SCALE = MOOD_EMOJI.map((e, i) => `${i + 1} ${e}`).join("  ");
 
@@ -105,10 +106,11 @@ export function nextQuestionIndex(questions: CheckinQuestion[], answers: Map<str
 export type CheckinCollector = { id: string; workspaceId: string; isActive: boolean };
 
 /**
- * Check-out / ice breaker replies from employees. CHECKOUT and MOOD always
- * reach the latest session of that kind; plain text only goes to a session
- * prompted today that is newer than any open standup, so a standup prompt
- * sent later takes over the conversation. Returns null when not for us.
+ * Weekly check-out / ice breaker replies from employees. CHECKOUT MINGGUAN
+ * and MOOD always reach the latest session of that kind; plain text only goes
+ * to a session prompted today that is newer than any open morning standup,
+ * and never while the daily checkout is open, so those take over the
+ * conversation. Returns null when not for us.
  */
 export async function handleCheckinMessage(args: {
   employee: CheckinCollector;
@@ -150,8 +152,10 @@ export async function handleCheckinMessage(args: {
   if (open.session.date !== today) return null;
 
   const standup = await getStandupSession(args.employee.id, today);
+  if (standup?.checkoutStatus && OPEN_STATUSES.includes(standup.checkoutStatus)) return null;
   if (
     standup &&
+    !standup.checkoutStatus &&
     OPEN_STATUSES.includes(standup.status) &&
     standup.createdAt > open.session.createdAt
   ) {

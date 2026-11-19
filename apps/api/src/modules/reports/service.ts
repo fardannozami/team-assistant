@@ -16,6 +16,7 @@ export async function generateDailyReport(workspaceId: string, date?: string) {
     .select({
       sessionId: standupSessions.id,
       status: standupSessions.status,
+      checkoutStatus: standupSessions.checkoutStatus,
       employeeId: employees.id,
       employeeName: employees.name,
       standupId: standups.id,
@@ -39,12 +40,13 @@ export async function generateDailyReport(workspaceId: string, date?: string) {
 
   const byEmployee = new Map<
     string,
-    { name: string; status: string; answers: Record<string, string> }
+    { name: string; status: string; checkoutStatus: string | null; answers: Record<string, string> }
   >();
   for (const r of rows) {
     const entry = byEmployee.get(r.employeeId) ?? {
       name: r.employeeName,
       status: r.status,
+      checkoutStatus: r.checkoutStatus,
       answers: {},
     };
     if (r.questionKey && r.answer) entry.answers[r.questionKey] = r.answer;
@@ -86,19 +88,32 @@ export async function generateDailyReport(workspaceId: string, date?: string) {
     .filter((e) => !byEmployee.has(e.id) || byEmployee.get(e.id)!.status !== "completed")
     .map((e) => e.name);
 
-  const blockers = submitted
-    .map((s) => ({ name: s.name, blocker: s.answers.blockers }))
-    .filter((b) => !isNoBlocker(b.blocker));
+  // Checkout: the work done today and its blockers.
+  const checkedOut = [...byEmployee.entries()]
+    .filter(([, v]) => v.checkoutStatus === "completed")
+    .map(([id, v]) => ({ id, name: v.name, done: v.answers.done ?? "-", blockers: v.answers.blockers ?? null }));
+  const notCheckedOut = [...byEmployee.values()]
+    .filter((v) => v.checkoutStatus && v.checkoutStatus !== "completed")
+    .map((v) => v.name);
+
+  const blockers = [...byEmployee.values()]
+    .filter((v) => v.answers.blockers && !isNoBlocker(v.answers.blockers))
+    .map((v) => ({ name: v.name, blocker: v.answers.blockers! }));
+  const indent = (text: string) => text.split("\n").map((l) => `  ${l}`).join("\n");
 
   const lines = [
     `Daily Report - ${d}`,
     `Submitted: ${submitted.length}/${allEmployees.length}`,
     "",
-    "Submitted:",
+    "Rencana hari ini:",
     ...submitted.map((s) => `- ${s.name}: ${s.answers.today ?? "-"}`),
     "",
     "Not submitted:",
     ...(notSubmitted.length ? notSubmitted.map((n) => `- ${n}`) : ["- none"]),
+    "",
+    `Checkout: ${checkedOut.length}/${allEmployees.length}`,
+    ...checkedOut.map((c) => `- ${c.name}:\n${indent(c.done)}`),
+    ...(notCheckedOut.length ? ["Belum checkout:", ...notCheckedOut.map((n) => `- ${n}`)] : []),
     "",
     "Blockers:",
     ...(blockers.length
@@ -125,6 +140,8 @@ export async function generateDailyReport(workspaceId: string, date?: string) {
     notSubmittedCount: notSubmitted.length,
     submitted,
     notSubmitted,
+    checkedOut,
+    notCheckedOut,
     blockers,
     text: lines.join("\n"),
   };

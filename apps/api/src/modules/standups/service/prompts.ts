@@ -2,8 +2,8 @@ import { standupSessions } from "@repo/database";
 import { and, eq } from "drizzle-orm";
 import { getEmployee } from "../../employees/service.js";
 import { HttpError } from "../../../lib/http-error.js";
-import { getStandupSession, openingText, standupToday } from "../engine.js";
-import { githubOpenings } from "../draft.js";
+import { closeStaleCheckouts, getStandupSession, openingText, standupTimezone, standupToday } from "../engine.js";
+import { morningOpenings } from "../draft.js";
 import { db, excludedDay, jidFor, NOT_CONNECTED, notConnected, senderFor, type SendFn } from "./delivery.js";
 import { standupTargets } from "./progress.js";
 
@@ -60,19 +60,22 @@ export async function sendStandupPrompts(workspaceId: string, options: PromptOpt
   }
 
   const targets = await promptTargets(workspaceId, options.employeeId);
+  // A new day: yesterday's unfinished checkouts stop taking replies.
+  await closeStaleCheckouts(workspaceId, date);
 
   let sent = 0;
   let skipped = 0;
   let failed = 0;
-  // GitHub context (and AI drafts) only for who will actually get a prompt.
+  // "Kemarin" (checkout, else GitHub and AI drafts) only for who will actually get a prompt.
   const open = await sessionStatuses(workspaceId, date);
   const toPrompt = targets.filter((t) => {
     const status = open.get(t.id);
     return !status || (options.resend && (status === "pending" || status === "in_progress"));
   });
-  const github = await githubOpenings(workspaceId, date, toPrompt.map((t) => t.id));
+  const tz = await standupTimezone(workspaceId);
+  const openings = await morningOpenings(workspaceId, date, toPrompt.map((t) => t.id), tz);
   const prompt = (employeeId: string, sessionId: string) =>
-    openingText({ id: employeeId, workspaceId }, sessionId, date, github.get(employeeId));
+    openingText({ id: employeeId, workspaceId }, sessionId, date, openings.get(employeeId));
 
   for (const employee of targets) {
     const existing = await getStandupSession(employee.id, date);
