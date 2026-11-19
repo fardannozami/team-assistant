@@ -9,9 +9,14 @@
 
   <div v-if="error" class="mb-5 rounded-xl border border-danger/30 bg-danger/5 px-4 py-3.5 text-[12px] font-extrabold text-danger slide-in" role="alert">{{ error }}</div>
 
-  <div class="mb-5 grid gap-3 sm:grid-cols-[1fr_auto_auto]">
+  <div class="mb-5 grid gap-3 sm:grid-cols-[1fr_auto_auto_auto]">
     <label class="sr-only" for="project-search">Cari project</label>
     <input id="project-search" v-model="search" type="search" placeholder="Cari nama project, platform, atau anggota" :class="inputClass" />
+    <label class="sr-only" for="filter-type">Tipe project</label>
+    <select id="filter-type" v-model="typeFilter" :class="inputClass">
+      <option value="">Semua tipe</option>
+      <option v-for="(label, key) in PROJECT_TYPE_LABEL" :key="key" :value="key">{{ label }}</option>
+    </select>
     <label class="sr-only" for="filter-status">Status project</label>
     <select id="filter-status" v-model="statusFilter" :class="inputClass">
       <option value="">Semua status</option>
@@ -297,6 +302,7 @@ const people = ref<ProjectPerson[]>([]);
 const loading = ref(false);
 const error = ref("");
 const search = ref("");
+const typeFilter = ref<ProjectType | "">("");
 const statusFilter = ref<ProjectStatus | "">("");
 const paymentFilter = ref<PaymentStatus | "">("");
 
@@ -367,6 +373,7 @@ const filtered = computed(() => {
   const q = search.value.trim().toLowerCase();
   return projects.value.filter(
     (p) =>
+      (!typeFilter.value || p.type === typeFilter.value) &&
       (!statusFilter.value || p.status === statusFilter.value) &&
       (!paymentFilter.value || p.paymentStatus === paymentFilter.value) &&
       inDateRange(p) &&
