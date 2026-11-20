@@ -75,7 +75,7 @@
     </section>
 
     <section v-if="perPerson.length" class="mb-6 rounded-2xl border border-border bg-panel p-4 shadow-soft-lg sm:p-6" aria-labelledby="per-person-title">
-      <h3 id="per-person-title" class="text-lg font-extrabold text-text">Rekap fee per orang</h3>
+      <h3 id="per-person-title" class="text-lg font-extrabold text-text">Rekap kontribusi per orang</h3>
       <p class="mt-1 text-sm text-text-muted">Dari project yang tampil di filter, tanpa project batal.</p>
       <div class="table-scroll mt-3">
         <table class="w-full border-collapse text-[13px]">
