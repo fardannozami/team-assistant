@@ -63,14 +63,22 @@
 
   <template v-else-if="projects.length">
     <!-- Totals of what is filtered, cancelled projects left out -->
-    <section class="mb-6 grid gap-3 sm:grid-cols-2" aria-label="Ringkasan">
+    <section class="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Ringkasan">
       <div class="rounded-2xl border border-border bg-panel p-4 shadow-soft">
         <div class="font-display text-[26px] font-extrabold tracking-tight text-text">{{ counted.length }}</div>
         <div class="mt-1 text-[11px] font-extrabold uppercase tracking-wider text-text-dim">Project (tanpa batal)</div>
       </div>
       <div class="rounded-2xl border border-border bg-panel p-4 shadow-soft">
+        <div class="font-display text-[26px] font-extrabold tracking-tight text-text">{{ totals.design }}</div>
+        <div class="mt-1 text-[11px] font-extrabold uppercase tracking-wider text-text-dim">Project design</div>
+      </div>
+      <div class="rounded-2xl border border-border bg-panel p-4 shadow-soft">
+        <div class="font-display text-[26px] font-extrabold tracking-tight text-text">{{ totals.development }}</div>
+        <div class="mt-1 text-[11px] font-extrabold uppercase tracking-wider text-text-dim">Project development</div>
+      </div>
+      <div class="rounded-2xl border border-border bg-panel p-4 shadow-soft">
         <div class="font-display text-[20px] font-extrabold tracking-tight text-success">{{ formatTotals(totals.received) }}</div>
-        <div class="mt-1 text-[11px] font-extrabold uppercase tracking-wider text-text-dim">Fee</div>
+        <div class="mt-1 text-[11px] font-extrabold uppercase tracking-wider text-text-dim">Fee diterima</div>
       </div>
     </section>
 
@@ -492,9 +500,11 @@ const add = (t: Totals, currency: string, n: number) => {
 };
 
 const totals = computed(() => {
+  // Fee diterima: what is left after the platform's cut, the base members split.
   const received: Totals = {};
-  for (const p of counted.value) add(received, p.currency, p.feeReceived);
-  return { received };
+  for (const p of counted.value) add(received, p.currency, p.splitBase);
+  const ofType = (t: ProjectType) => counted.value.filter((p) => p.type === t).length;
+  return { received, design: ofType("design"), development: ofType("development") };
 });
 
 const perPerson = computed(() => {
