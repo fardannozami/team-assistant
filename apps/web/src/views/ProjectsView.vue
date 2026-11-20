@@ -84,6 +84,7 @@
               <th class="border-b border-border px-3 py-2.5 text-left text-[11px] font-extrabold uppercase tracking-wider">Nama</th>
               <th class="border-b border-border px-3 py-2.5 text-right text-[11px] font-extrabold uppercase tracking-wider">Project</th>
               <th class="border-b border-border px-3 py-2.5 text-right text-[11px] font-extrabold uppercase tracking-wider">Total achievement</th>
+              <th v-if="isAdmin" class="border-b border-border px-3 py-2.5 text-right text-[11px] font-extrabold uppercase tracking-wider">Fee</th>
             </tr>
           </thead>
           <tbody>
@@ -91,6 +92,19 @@
               <td class="border-b border-border px-3 py-2.5 text-text">{{ p.name }}</td>
               <td class="border-b border-border px-3 py-2.5 text-right tabular-nums text-text">{{ p.projects }}</td>
               <td class="border-b border-border px-3 py-2.5 text-right font-bold tabular-nums text-text">{{ formatTotals(p.total) }}</td>
+              <td v-if="isAdmin" class="border-b border-border px-3 py-2.5 text-right">
+                <template v-if="feeOf(p.employeeId)">
+                  <button
+                    v-if="feeEligible(feeOf(p.employeeId)!)"
+                    type="button"
+                    class="min-h-9 whitespace-nowrap rounded-xl border border-accent/30 bg-accent/5 px-3 text-xs font-bold text-accent hover:bg-accent/10"
+                    :aria-label="`Buat fee ${p.name}`"
+                    @click="openFee(feeOf(p.employeeId)!)"
+                  >{{ money(feeOf(p.employeeId)!.statement.total, "USD") }} · Buat fee</button>
+                  <span v-else class="text-xs text-warning" title="Total di bawah $500, dibawa ke periode berikutnya">Belum eligible</span>
+                </template>
+                <span v-else class="text-text-dim">—</span>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -155,7 +169,7 @@
 
   <!-- Editor: teleported because the page's reveal transform would pin `fixed` to the page, under the header -->
   <Teleport to="body">
-  <div v-if="form" class="fixed inset-0 z-50 flex items-end justify-center bg-text/30 backdrop-blur-sm fade-in-fast sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="editor-title" @keydown.esc="closeEditor" @keydown.tab="trapTab">
+  <div v-if="form" class="fixed inset-0 z-50 flex items-end justify-center bg-text/30 backdrop-blur-sm fade-in-fast sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="editor-title" @keydown.esc="closeEditor" @keydown.tab="trapTabIn($event, formEl)">
     <form ref="formEl" novalidate :class="{ 'show-invalid': triedSave }" class="max-h-[92vh] w-full max-w-[720px] overflow-y-auto rounded-t-2xl border border-border bg-panel p-4 shadow-soft-lg sm:rounded-2xl sm:p-6" @submit.prevent="save">
       <div class="flex items-center justify-between gap-3">
         <h3 id="editor-title" class="text-lg font-extrabold text-text">{{ editingId ? "Ubah project" : "Tambah project" }}</h3>
@@ -270,14 +284,80 @@
     </form>
   </div>
   </Teleport>
+
+  <!-- Fee: set the percents, then preview the PDF and download or send it -->
+  <Teleport to="body">
+  <div v-if="fee" class="fixed inset-0 z-50 flex items-end justify-center bg-text/30 backdrop-blur-sm fade-in-fast sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="fee-title" @keydown.esc="closeFee" @keydown.tab="trapTabIn($event, feeEl)">
+    <div ref="feeEl" class="flex max-h-[92vh] w-full flex-col overflow-y-auto rounded-t-2xl border border-border bg-panel p-4 shadow-soft-lg sm:rounded-2xl sm:p-6" :class="fee.pdfUrl ? 'max-w-[960px]' : 'max-w-[560px]'">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h3 id="fee-title" class="text-lg font-extrabold text-text">Fee {{ feePeriodText }} - {{ fee.person.employee.name }}</h3>
+          <p class="mt-0.5 text-xs text-text-muted">{{ fee.pdfUrl ? "Preview PDF" : "Langkah 1 dari 2 · Atur persen fee" }}</p>
+        </div>
+        <button type="button" class="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-lg text-text-dim hover:bg-panel-hover" aria-label="Tutup" @click="closeFee">×</button>
+      </div>
+
+      <template v-if="!fee.pdfUrl">
+        <div class="mt-4 space-y-2">
+          <div v-for="g in fee.person.statement.groups" :key="g.group" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border px-4 py-3">
+            <div class="min-w-0">
+              <div class="text-sm font-bold text-text">Fee {{ GROUP_LABEL[g.group] }}</div>
+              <div class="text-xs text-text-muted">
+                Total {{ money(g.base, "USD") }}
+                <template v-if="g.eligible"> · tabel {{ g.tierPercent }}%</template>
+                <template v-else> · belum eligible (min. $500), dibawa ke periode berikutnya</template>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <label v-if="g.eligible" class="relative">
+                <span class="sr-only">Persen {{ GROUP_LABEL[g.group] }}</span>
+                <input
+                  v-model.number="fee.percents[g.group]"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  class="min-h-10 w-24 rounded-xl border border-border bg-panel px-3 pr-7 text-right text-sm tabular-nums focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none"
+                />
+                <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-text-dim">%</span>
+              </label>
+              <span class="w-24 text-right font-bold tabular-nums text-text">{{ g.eligible ? money(feeBonus(g), "USD") : "-" }}</span>
+            </div>
+          </div>
+          <div class="flex items-center justify-between rounded-xl bg-warning/10 px-4 py-3">
+            <span class="text-sm font-extrabold text-text">TOTAL FEE</span>
+            <span class="font-display text-[20px] font-extrabold tabular-nums text-text">{{ money(feeTotal, "USD") }}</span>
+          </div>
+        </div>
+        <div class="mt-6 flex justify-end gap-2">
+          <button type="button" class="min-h-12 rounded-xl px-5 text-sm font-semibold text-text-muted hover:bg-panel-hover" @click="closeFee">Batal</button>
+          <button type="button" class="min-h-12 rounded-xl bg-accent px-5 text-sm font-bold text-white hover:bg-accent-hover disabled:opacity-60" :disabled="fee.busy" @click="previewFee">{{ fee.busy ? "Membuat PDF…" : "Preview PDF" }}</button>
+        </div>
+      </template>
+
+      <template v-else>
+        <iframe :src="fee.pdfUrl" :title="`Preview PDF fee ${fee.person.employee.name}`" class="mt-4 h-[65vh] w-full rounded-xl border border-border bg-panel-hover"></iframe>
+        <div class="mt-4 flex flex-wrap justify-end gap-2">
+          <button type="button" class="mr-auto min-h-12 rounded-xl px-5 text-sm font-semibold text-text-muted hover:bg-panel-hover" :disabled="fee.busy" @click="backToPercents">Kembali</button>
+          <button type="button" class="min-h-12 rounded-xl border border-border px-5 text-sm font-bold text-text hover:bg-panel-hover" @click="downloadFee">Download PDF</button>
+          <button type="button" class="min-h-12 rounded-xl bg-accent px-5 text-sm font-bold text-white hover:bg-accent-hover disabled:opacity-60" :disabled="fee.busy" @click="sendFee">{{ fee.busy ? "Mengirim…" : "Kirim ke WhatsApp" }}</button>
+        </div>
+      </template>
+    </div>
+  </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import {
   ApiError,
+  feesApi,
   projectsApi,
   showToast,
+  type FeeGroup,
+  type FeeGroupTotal,
+  type FeePerson,
   type PaymentStatus,
   type PaymentType,
   type Project,
@@ -288,6 +368,7 @@ import {
   type ProjectType,
 } from "../api";
 import { localIsoDate } from "../dates";
+import { isAdmin } from "../session";
 
 type FormMember = ProjectInput["members"][number];
 
@@ -376,6 +457,7 @@ async function load() {
   } finally {
     loading.value = false;
   }
+  loadFees();
 }
 onMounted(load);
 
@@ -517,10 +599,10 @@ function closeEditor() {
   editorOpener = null;
 }
 
-// Keep Tab inside the dialog: wrap from the last focusable to the first and back.
-function trapTab(event: KeyboardEvent) {
+// Keep Tab inside a dialog: wrap from the last focusable to the first and back.
+function trapTabIn(event: KeyboardEvent, root: HTMLElement | null) {
   const focusable = Array.from(
-    formEl.value?.querySelectorAll<HTMLElement>("a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])") ?? [],
+    root?.querySelectorAll<HTMLElement>("a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])") ?? [],
   );
   const first = focusable[0];
   const last = focusable[focusable.length - 1];
@@ -655,6 +737,137 @@ async function save() {
     showToast(message(err, "Gagal menyimpan project."), "error");
   } finally {
     saving.value = false;
+  }
+}
+
+// ---- Fee (Owner and Admin) ----
+
+const GROUP_LABEL: Record<FeeGroup, string> = {
+  pm: "PM & Sales",
+  maker: "Designer / Developer",
+  lead_design: "Lead Designer",
+  lead_development: "Lead Developer",
+};
+const MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+
+// The fee period follows the date filter; an open end means up to today,
+// an open start the first of that month (older unpaid projects carry over).
+const feeRange = computed(() => {
+  const to = dateTo.value || localIsoDate(new Date());
+  const from = dateFrom.value && dateFrom.value <= to ? dateFrom.value : `${to.slice(0, 8)}01`;
+  return { from, to };
+});
+const feePeriodText = computed(() => {
+  const { from, to } = feeRange.value;
+  const [fy, fm, fd] = from.split("-").map(Number);
+  const [ty, tm, td] = to.split("-").map(Number);
+  if (fy === ty && fm === tm && fd === 1 && td === new Date(ty!, tm!, 0).getDate()) return `${MONTHS[fm! - 1]} ${fy}`;
+  return `${formatDate(from)} – ${formatDate(to)}`;
+});
+
+const feePeople = ref<FeePerson[]>([]);
+let feeSeq = 0;
+async function loadFees() {
+  if (!isAdmin.value) return;
+  const seq = ++feeSeq;
+  try {
+    const overview = await feesApi.overview(feeRange.value.from, feeRange.value.to);
+    if (seq === feeSeq) feePeople.value = overview.people;
+  } catch {
+    // The recap still works without the fee column's numbers.
+    if (seq === feeSeq) feePeople.value = [];
+  }
+}
+watch([feeRange, isAdmin], loadFees);
+
+function feeOf(employeeId: string) {
+  return feePeople.value.find((f) => f.employee.id === employeeId) ?? null;
+}
+const feeEligible = (f: FeePerson) => f.statement.groups.some((g) => g.eligible);
+
+const fee = ref<{ person: FeePerson; percents: Partial<Record<FeeGroup, number>>; pdf: Blob | null; pdfUrl: string; busy: boolean } | null>(null);
+const feeEl = ref<HTMLElement | null>(null);
+let feeOpener: HTMLElement | null = null;
+
+// Percents start at the tier table's.
+function openFee(person: FeePerson) {
+  feeOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const percents: Partial<Record<FeeGroup, number>> = {};
+  for (const g of person.statement.groups) if (g.eligible) percents[g.group] = g.tierPercent;
+  fee.value = { person, percents, pdf: null, pdfUrl: "", busy: false };
+  nextTick(() => feeEl.value?.querySelector<HTMLElement>("input")?.focus());
+}
+function clearPdf() {
+  if (fee.value?.pdfUrl) URL.revokeObjectURL(fee.value.pdfUrl);
+  if (fee.value) Object.assign(fee.value, { pdf: null, pdfUrl: "" });
+}
+function closeFee() {
+  clearPdf();
+  fee.value = null;
+  feeOpener?.focus();
+  feeOpener = null;
+}
+function backToPercents() {
+  clearPdf();
+  nextTick(() => feeEl.value?.querySelector<HTMLElement>("input")?.focus());
+}
+
+function feePercent(g: FeeGroupTotal) {
+  // A cleared input (v-model.number leaves "") falls back to the table.
+  const n = fee.value?.percents[g.group];
+  return typeof n === "number" && Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : g.tierPercent;
+}
+function feeBonus(g: FeeGroupTotal) {
+  return g.eligible ? round2((g.base * feePercent(g)) / 100) : 0;
+}
+const feeTotal = computed(() => round2((fee.value?.person.statement.groups ?? []).reduce((s, g) => s + feeBonus(g), 0)));
+
+// Only percents that differ from the table are sent.
+function feeInput() {
+  const f = fee.value!;
+  const percents: Partial<Record<FeeGroup, number>> = {};
+  for (const g of f.person.statement.groups) {
+    if (g.eligible && feePercent(g) !== g.tierPercent) percents[g.group] = feePercent(g);
+  }
+  return { ...feeRange.value, employeeId: f.person.employee.id, percents };
+}
+
+async function previewFee() {
+  const f = fee.value;
+  if (!f) return;
+  f.busy = true;
+  try {
+    const pdf = await feesApi.pdf(feeInput());
+    if (fee.value !== f) return;
+    f.pdf = pdf;
+    f.pdfUrl = URL.createObjectURL(pdf);
+  } catch (err) {
+    showToast(message(err, "Gagal membuat PDF."), "error");
+  } finally {
+    f.busy = false;
+  }
+}
+
+function downloadFee() {
+  const f = fee.value;
+  if (!f?.pdfUrl) return;
+  const a = document.createElement("a");
+  a.href = f.pdfUrl;
+  a.download = `Fee ${feePeriodText.value} - ${f.person.employee.name}.pdf`;
+  a.click();
+}
+
+async function sendFee() {
+  const f = fee.value;
+  if (!f || !confirm(`Kirim PDF fee ${feePeriodText.value} ke ${f.person.employee.name} (${f.person.employee.phone}) lewat WhatsApp?`)) return;
+  f.busy = true;
+  try {
+    await feesApi.send(feeInput());
+    showToast(`PDF fee terkirim ke ${f.person.employee.name}.`, "success");
+  } catch (err) {
+    showToast(message(err, "Gagal mengirim lewat WhatsApp."), "error");
+  } finally {
+    f.busy = false;
   }
 }
 </script>
