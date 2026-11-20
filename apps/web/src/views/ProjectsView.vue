@@ -340,7 +340,8 @@
         <div class="mt-4 flex flex-wrap justify-end gap-2">
           <button type="button" class="mr-auto min-h-12 rounded-xl px-5 text-sm font-semibold text-text-muted hover:bg-panel-hover" :disabled="fee.busy" @click="backToPercents">Kembali</button>
           <button type="button" class="min-h-12 rounded-xl border border-border px-5 text-sm font-bold text-text hover:bg-panel-hover" @click="downloadFee">Download PDF</button>
-          <button type="button" class="min-h-12 rounded-xl bg-accent px-5 text-sm font-bold text-white hover:bg-accent-hover disabled:opacity-60" :disabled="fee.busy" @click="sendFee">{{ fee.busy ? "Mengirim…" : "Kirim ke WhatsApp" }}</button>
+          <button type="button" class="min-h-12 rounded-xl border border-border px-5 text-sm font-bold text-text hover:bg-panel-hover disabled:opacity-60" :disabled="fee.busy" @click="sendFee">Kirim ke WhatsApp</button>
+          <button type="button" class="min-h-12 rounded-xl bg-accent px-5 text-sm font-bold text-white hover:bg-accent-hover disabled:opacity-60" :disabled="fee.busy" @click="finalizeFee">Finalisasi</button>
         </div>
       </template>
     </div>
@@ -867,6 +868,26 @@ async function sendFee() {
   } catch (err) {
     showToast(message(err, "Gagal mengirim lewat WhatsApp."), "error");
   } finally {
+    f.busy = false;
+  }
+}
+
+// Marks the eligible groups paid: their projects stop counting toward later fees.
+async function finalizeFee() {
+  const f = fee.value;
+  if (!f) return;
+  const lines = f.person.statement.groups
+    .filter((g) => g.eligible)
+    .map((g) => `${GROUP_LABEL[g.group]}: ${feePercent(g)}% × ${money(g.base, "USD")} = ${money(feeBonus(g), "USD")}`);
+  if (!confirm(`Finalisasi fee ${f.person.employee.name}?\n\n${lines.join("\n")}\n\nProject-nya ditandai sudah dibayar dan tidak dihitung lagi.`)) return;
+  f.busy = true;
+  try {
+    await feesApi.finalize(feeInput());
+    showToast(`Fee ${f.person.employee.name} difinalisasi.`, "success");
+    closeFee();
+    await load();
+  } catch (err) {
+    showToast(message(err, "Gagal finalisasi."), "error");
     f.busy = false;
   }
 }
