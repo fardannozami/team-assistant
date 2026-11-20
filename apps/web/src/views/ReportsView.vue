@@ -27,7 +27,7 @@
   <!-- Daily report -->
   <div v-if="reportTab === 'daily'" class="rounded-2xl border border-border bg-panel p-4 shadow-soft-lg sm:p-6 reveal">
     <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-4">Laporan harian</div>
-    <div class="flex items-center gap-3 mb-5 flex-wrap">
+    <div class="flex items-end gap-3 mb-5 flex-wrap">
       <div class="min-w-[220px]">
         <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Tanggal</label>
         <input v-model="dailyDate" type="date"
@@ -35,7 +35,7 @@
         />
       </div>
       <button
-        class="inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+        class="inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl border border-transparent text-[13px] leading-5 font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
         :disabled="loadingDaily"
         @click="loadDaily"
       >
