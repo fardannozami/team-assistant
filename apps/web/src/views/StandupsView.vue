@@ -10,7 +10,7 @@
 
   <div v-if="error" class="mb-5 px-4 py-3.5 rounded-xl border border-danger/30 bg-danger/5 text-danger text-[12px] font-extrabold slide-in">{{ error }}</div>
 
-  <div class="flex items-center gap-3 mb-5 flex-wrap">
+  <div class="flex items-end gap-3 mb-5 flex-wrap">
     <div class="min-w-[220px]">
       <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Tanggal</label>
       <input v-model="date" type="date"
@@ -19,7 +19,7 @@
     </div>
     <button
       :disabled="loading"
-      class="inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+      class="inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl border border-transparent text-[13px] leading-5 font-extrabold tracking-tight bg-accent text-white shadow-accent transition-all duration-200 ease-in hover:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
       @click="load"
     >
       Muat standup
