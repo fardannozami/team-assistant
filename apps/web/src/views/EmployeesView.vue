@@ -18,7 +18,7 @@
 
   <div v-if="error" class="mb-5 px-4 py-3.5 rounded-xl border border-danger/30 bg-danger/5 text-danger text-[12px] font-extrabold slide-in">{{ error }}</div>
 
-  <div class="flex items-center gap-3 mb-5 flex-wrap">
+  <div class="flex items-end gap-3 mb-5 flex-wrap">
     <div class="min-w-[250px]">
       <label class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Cari nama atau nomor</label>
       <input
@@ -31,7 +31,7 @@
     </div>
     <select
       v-model="activeFilter"
-      class="px-4 py-3.5 rounded-xl border border-border text-sm cursor-pointer bg-panel transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none"
+      class="px-4 py-3.5 rounded-xl border border-border text-sm leading-5 cursor-pointer bg-panel transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none"
       @change="loadEmployees"
     >
       <option :value="null">Semua anggota</option>
