@@ -15,3 +15,4 @@ export * from "./security.js";
 export * from "./checkins.js";
 export * from "./projects.js";
 export * from "./fees.js";
+export * from "./briefings.js";

@@ -1,0 +1,1 @@
+ALTER TABLE "agency_profiles" ADD COLUMN "sales_items_per_briefing" integer DEFAULT 10 NOT NULL;

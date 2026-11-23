@@ -43,6 +43,7 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-teamassistant}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-teamassistant}
       REDIS_URL: redis://redis:6379
       INTERNAL_API_URL: http://api:4000
+      AGENTS_URL: http://agents:8100
       PORT: 4000
       NODE_ENV: production
     ports:
@@ -54,6 +55,14 @@ services:
     <<: *app
     image: ${IMAGE_PREFIX}-worker:${IMAGE_TAG:-latest}
     environment: *app-env
+
+  # CrewAI briefings; only the API calls it, so no published port.
+  agents:
+    image: ${IMAGE_PREFIX}-agents:${IMAGE_TAG:-latest}
+    env_file: .env
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
 
   web:
     image: ${IMAGE_PREFIX}-web:${IMAGE_TAG:-latest}

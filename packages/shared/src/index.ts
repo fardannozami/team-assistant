@@ -354,7 +354,54 @@ export const figmaAccountMapSchema = z.object({
   employeeId: z.string().uuid().nullable(),
 });
 
-export const MOOD_EMOJI = ["😫", "😕", "😐", "🙂", "🤩"] as const;
+// ---- Pre-standup briefings (apps/agents) ----
+
+export const BRIEFING_AUDIENCES = ["sales", "design", "dev"] as const;
+export type BriefingAudience = (typeof BRIEFING_AUDIENCES)[number];
+export const BRIEFING_ITEM_STATUSES = ["new", "sent", "claimed", "dismissed", "won"] as const;
+
+/** Which briefing an employee's position gets; null for no briefing. */
+export function briefingAudienceFor(lead: string | null | undefined): BriefingAudience | null {
+  if (lead === "pm_sales") return "sales";
+  if (lead === "design" || lead === "designer") return "design";
+  if (lead === "development" || lead === "developer") return "dev";
+  return null;
+}
+
+export const runBriefingSchema = z.object({
+  audience: z.enum(BRIEFING_AUDIENCES).optional(), // every audience when left out
+  date: standupDateSchema.optional(),
+  resend: z.boolean().optional(), // send today's items again, no new AI run
+  force: z.boolean().optional(), // run again today; links already sent are still skipped
+});
+
+export const updateBriefingItemSchema = z.object({
+  status: z.enum(BRIEFING_ITEM_STATUSES),
+  claimedBy: z.string().uuid().nullish(),
+});
+
+const keywordList = z.array(z.string().trim().min(1).max(60)).max(50);
+
+export const agencyProfileSchema = z.object({
+  isActive: z.boolean(),
+  services: keywordList,
+  keywords: keywordList,
+  excludedKeywords: keywordList,
+  targetCountries: keywordList,
+  minBudgetUsd: z.number().int().min(0).max(10_000_000).nullable(),
+  tendersEnabled: z.boolean(),
+  offsetMinutes: z.number().int().min(0).max(180),
+  itemsPerBriefing: z.number().int().min(1).max(15),
+  salesItemsPerBriefing: z.number().int().min(1).max(20),
+});
+
+export type AgencyProfileInput = z.infer<typeof agencyProfileSchema>;
+
+export const searchKeySchema = z.object({
+  apiKey: z.string().trim().min(10, "API key Tavily wajib diisi").max(200),
+});
+
+export const MOOD_EMOJI =["😫", "😕", "😐", "🙂", "🤩"] as const;
 
 /** 1-5 from replies like "4", "4 capek tapi oke", "🙂". Null when absent. */
 export function parseMoodScore(answer: string): number | null {
