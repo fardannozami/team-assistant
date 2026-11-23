@@ -4,6 +4,7 @@ import {
   calendarSettings,
   checkinConfigs,
   createDbClient,
+  figmaConnections,
   jobExecutions,
   schedules,
   scheduledJobs,
@@ -56,6 +57,7 @@ const OWNED_PREFIXES = [
   "checkin-prompts",
   "checkin-reminders",
   "checkin-close",
+  "figma-sync",
 ];
 
 const NIGHT_JOBS = new Set(["standup-prompts-night", "standup-checkout-night"]);
@@ -75,7 +77,11 @@ const API_PATHS: Record<string, string> = {
   "checkin-prompts": "/checkins/trigger",
   "checkin-reminders": "/checkins/reminders",
   "checkin-close": "/checkins/close",
+  "figma-sync": "/figma/sync",
 };
+
+// Runs every hour, so one claim per hour instead of per day.
+const HOURLY_JOBS = new Set(["figma-sync"]);
 
 /**
  * Job names are `<baseName>:<suffix>[@HHmm]`: the suffix is the schedule id
@@ -241,6 +247,22 @@ async function desiredRepeatables(): Promise<DesiredRepeatable[]> {
     }
   }
 
+  // Figma versions and comments, pulled hourly for workspaces that connected Figma.
+  const figmaWorkspaces = await db
+    .select({ workspaceId: figmaConnections.workspaceId })
+    .from(figmaConnections)
+    .innerJoin(workspaces, eq(figmaConnections.workspaceId, workspaces.id))
+    .where(eq(workspaces.isActive, true));
+  for (const row of figmaWorkspaces) {
+    desired.push({
+      name: `figma-sync:${row.workspaceId}`,
+      pattern: "15 * * * *",
+      tz: "UTC",
+      scheduleId: null,
+      workspaceId: row.workspaceId,
+    });
+  }
+
   // Legacy global `:env` repeatables are no longer desired; they fall under
   // OWNED_PREFIXES, so reconcileSchedules removes them.
   return desired;
@@ -342,7 +364,7 @@ async function resolveJobOwner(
   suffix: string | null,
   data: { scheduleId?: unknown } | undefined,
 ): Promise<{ workspaceId: string; scheduleId: string | null; configId?: string; timezone: string } | null> {
-  if (baseName === "daily-report") {
+  if (baseName === "daily-report" || baseName === "figma-sync") {
     if (!suffix) return null;
     const [ws] = await db
       .select({ id: workspaces.id, timezone: calendarSettings.timezone })
@@ -404,7 +426,9 @@ async function processSchedulerJob(job: Job): Promise<SchedulerJobResult> {
   const date = night ? shiftDate("night", timezone) : dateInTimezone(timezone);
   const idempotencyKey = manual
     ? `${job.name}:manual:${job.id}`
-    : `${job.name}:${date}`;
+    : HOURLY_JOBS.has(baseName)
+      ? `${job.name}:${new Date().toISOString().slice(0, 13)}`
+      : `${job.name}:${date}`;
 
   const [existing] = await db
     .select()

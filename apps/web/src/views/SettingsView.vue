@@ -25,6 +25,7 @@ import HolidaysView from "./HolidaysView.vue";
 import AiView from "./AiView.vue";
 import CheckinsView from "./CheckinsView.vue";
 import GithubView from "./GithubView.vue";
+import FigmaView from "./FigmaView.vue";
 import UsersView from "./UsersView.vue";
 import { isAdmin } from "../session";
 
@@ -36,6 +37,7 @@ const sections = [
   { id: "users", label: "Pengguna", view: UsersView },
   { id: "ai", label: "AI", view: AiView },
   { id: "github", label: "GitHub", view: GithubView },
+  { id: "figma", label: "Figma", view: FigmaView },
   { id: "schedules", label: "Jadwal", view: SchedulesView },
   { id: "checkins", label: "Check-in", view: CheckinsView },
   { id: "holidays", label: "Hari libur", view: HolidaysView },

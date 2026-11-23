@@ -337,6 +337,23 @@ export const githubRepoTrackSchema = z.object({
   isActive: z.boolean(),
 });
 
+export const figmaTokenSchema = z.object({
+  token: z.string().trim().min(10, "Token Figma wajib diisi").max(200),
+});
+
+export const figmaFileSchema = z.object({
+  // A figma.com link to the file, or just its key.
+  url: z.string().trim().min(1, "Link file Figma wajib diisi").max(500),
+});
+
+export const figmaFileTrackSchema = z.object({
+  isActive: z.boolean(),
+});
+
+export const figmaAccountMapSchema = z.object({
+  employeeId: z.string().uuid().nullable(),
+});
+
 export const MOOD_EMOJI = ["😫", "😕", "😐", "🙂", "🤩"] as const;
 
 /** 1-5 from replies like "4", "4 capek tapi oke", "🙂". Null when absent. */

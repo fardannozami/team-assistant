@@ -347,6 +347,48 @@ export interface GithubSummary {
   counts: Record<string, number>;
 }
 
+export interface FigmaFile {
+  id: string;
+  fileKey: string;
+  name: string;
+  editorType: string | null;
+  lastModified: string | null;
+  isActive: boolean;
+  webhooks: number;
+}
+
+export interface FigmaStatus {
+  connected: boolean;
+  account: { id: string; handle: string | null; email: string | null } | null;
+  tokenHint: string | null;
+  lastSyncedAt: string | null;
+  lastSyncError: string | null;
+  webhooksEnabled: boolean;
+  files: FigmaFile[];
+}
+
+export interface FigmaAccount {
+  figmaId: string;
+  handle: string | null;
+  events: number;
+  lastSeen: string | null;
+  employeeId: string | null;
+  employeeName: string | null;
+}
+
+export interface FigmaActivity {
+  id: string;
+  type: string;
+  actorId: string | null;
+  handle: string | null;
+  employeeId: string | null;
+  employeeName: string | null;
+  file: string | null;
+  title: string | null;
+  url: string | null;
+  occurredAt: string;
+}
+
 export interface Holiday {
   id: string;
   date: string;
@@ -645,6 +687,29 @@ export const githubApi = {
     return request<{ activity: GithubActivity[] }>(`/github/activity?${q}`).then((r) => r.activity);
   },
   summary: (days = 7) => request<{ days: number; summary: GithubSummary[] }>(`/github/activity/summary?days=${days}`),
+};
+
+export const figmaApi = {
+  status: () => request<FigmaStatus>("/figma/status"),
+  connect: (token: string) => request<FigmaStatus>("/figma/connection", { method: "PUT", body: JSON.stringify({ token }) }),
+  disconnect: () => request<{ deleted: boolean }>("/figma/connection", { method: "DELETE" }),
+  addFile: (url: string) =>
+    request<{ file: FigmaFile; stored: number; webhookError: string | null }>("/figma/files", {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    }),
+  track: (id: string, isActive: boolean) =>
+    request<FigmaFile>(`/figma/files/${id}`, { method: "PATCH", body: JSON.stringify({ isActive }) }),
+  removeFile: (id: string) => request<{ deleted: boolean }>(`/figma/files/${id}`, { method: "DELETE" }),
+  sync: () =>
+    request<{ files?: number; stored?: number; errors?: string[]; skipped?: boolean }>("/figma/sync", { method: "POST" }),
+  accounts: () => request<{ accounts: FigmaAccount[] }>("/figma/accounts").then((r) => r.accounts),
+  mapAccount: (figmaId: string, employeeId: string | null) =>
+    request<{ figmaId: string; employeeId: string | null }>(`/figma/accounts/${figmaId}`, {
+      method: "PUT",
+      body: JSON.stringify({ employeeId }),
+    }),
+  activity: (limit = 30) => request<{ activity: FigmaActivity[] }>(`/figma/activity?limit=${limit}`).then((r) => r.activity),
 };
 
 export const holidaysApi = {

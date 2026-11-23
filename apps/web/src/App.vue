@@ -83,7 +83,7 @@ const ALL_TABS = [
 // Who sees which tab; the API enforces the same split.
 const PM_TABS = ["projects"];
 const PROJECT_ROLES = ["Owner", "Admin", "PM"];
-const settingsSections = ["whatsapp", "users", "ai", "github", "schedules", "checkins", "holidays"];
+const settingsSections = ["whatsapp", "users", "ai", "github", "figma", "schedules", "checkins", "holidays"];
 const views: Record<string, any> = { home: HomeView, employees: EmployeesView, standups: StandupsView, projects: ProjectsView, reports: ReportsView, guide: GuideView };
 const ONBOARDED_KEY = "ta_onboarded";
 

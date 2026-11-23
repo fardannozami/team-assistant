@@ -166,15 +166,15 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ## M9 — Figma Integration (2–4 days) — P1
 
-- [ ] **T-M9-01** Figma account connection. (FIG-001)
-- [ ] **T-M9-02** Figma webhook endpoint. (FIG-002)
-- [ ] **T-M9-03** Retrieve file info. (FIG-003)
-- [ ] **T-M9-04** Collect file versions. (FIG-004)
-- [ ] **T-M9-05** Collect comments. (FIG-005)
-- [ ] **T-M9-06** Figma identity → employee mapping (only when reliable). (FIG-006)
-- [ ] **T-M9-07** Design activity timeline storage. (FIG-007)
+- [x] **T-M9-01** Figma account connection. (FIG-001) (per-workspace personal access token, encrypted; Settings → Figma)
+- [x] **T-M9-02** Figma webhook endpoint. (FIG-002) (`POST /figma/webhook`, passcode per workspace; registered per file when `PUBLIC_API_URL` is set)
+- [x] **T-M9-03** Retrieve file info. (FIG-003)
+- [x] **T-M9-04** Collect file versions. (FIG-004) (hourly `figma-sync` worker job + webhook)
+- [x] **T-M9-05** Collect comments. (FIG-005)
+- [x] **T-M9-06** Figma identity → employee mapping (only when reliable). (FIG-006) (by Figma user id, mapped by an admin; `FILE_UPDATE` is never attributed)
+- [x] **T-M9-07** Design activity timeline storage. (FIG-007) (`activity_events`, provider `figma`)
 
-**Acceptance:** Figma activity stored; no attribution without reliable identity.
+**Acceptance:** Figma activity stored; no attribution without reliable identity. (Covered by `apps/api/src/figma.test.ts`; real webhook registration needs a paid Figma plan and is not exercised by tests.)
 
 ---
 
@@ -191,7 +191,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] **T-M10-06** Employee management UI.
 - [x] **T-M10-07** Schedule management UI.
 - [x] **T-M10-08** Holiday calendar UI.
-- [~] **T-M10-09** Integrations management UI. (GitHub done: Settings → GitHub; Figma pending M9)
+- [x] **T-M10-09** Integrations management UI. (Settings → GitHub, Settings → Figma)
 - [x] **T-M10-10** Analytics: standup completion rate, response rate, blocker trends, PR/review activity, activity by project, standup history.
 - [x] **T-M10-11** Standup history views.
 - [ ] **T-M10-12** Audit log viewer.
