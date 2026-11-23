@@ -555,7 +555,8 @@ function openEditor(p: Project | null) {
         name: "",
         type: "development",
         startDate: null,
-        endDate: null,
+        // Last day of the current month (day 0 of next month).
+        endDate: localIsoDate(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)),
         status: "ongoing",
         paymentType: "fixed",
         currency: "USD",
