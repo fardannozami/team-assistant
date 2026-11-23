@@ -554,7 +554,7 @@ function openEditor(p: Project | null) {
         platform: "Upwork",
         name: "",
         type: "development",
-        startDate: null,
+        startDate: localIsoDate(),
         // Last day of the current month (day 0 of next month).
         endDate: localIsoDate(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)),
         status: "ongoing",
