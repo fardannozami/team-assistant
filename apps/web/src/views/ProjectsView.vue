@@ -278,7 +278,6 @@
           <button v-if="formMembers(role.id).length > 1" type="button" class="min-h-10 rounded-xl px-3 text-sm font-semibold text-text-muted hover:bg-panel-hover" @click="splitEvenly(role.id)">Bagi rata</button>
         </div>
       </fieldset>
-      <p v-if="form.members.length" class="mt-4 rounded-xl border px-4 py-3 text-sm font-semibold" :class="shareTotal >= 100 ? 'border-border text-text-muted' : 'border-warning/30 bg-warning/5 text-warning'">{{ shareLabel }}</p>
 
       <label class="mt-6 block">
         <span :class="labelClass">Catatan</span>
@@ -666,12 +665,6 @@ const previewFees = computed(() => {
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const sumShares = (members: FormMember[]) => round2(members.reduce((s, m) => s + (Number(m.sharePercent) || 0), 0));
 const shareTotal = computed(() => sumShares(form.value?.members ?? []));
-const shareLabel = computed(() => {
-  const total = shareTotal.value;
-  if (total === 100) return "Total pembagian: 100% dari fee diterima.";
-  if (total > 100) return `Total pembagian ${total}%, lebih ${round2(total - 100)}% dari fee diterima.`;
-  return `Total pembagian ${total}%, sisa ${round2(100 - total)}% fee diterima belum dibagi.`;
-});
 function formMembers(role: ProjectMemberRole) {
   return form.value?.members.filter((m) => m.role === role) ?? [];
 }
