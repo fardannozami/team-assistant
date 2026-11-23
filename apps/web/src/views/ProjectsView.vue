@@ -9,23 +9,13 @@
 
   <div v-if="error" class="mb-5 rounded-xl border border-danger/30 bg-danger/5 px-4 py-3.5 text-[12px] font-extrabold text-danger slide-in" role="alert">{{ error }}</div>
 
-  <div class="mb-5 grid gap-3 sm:grid-cols-[1fr_auto_auto_auto]">
+  <div class="mb-5 grid gap-3 sm:grid-cols-[1fr_auto]">
     <label class="sr-only" for="project-search">Cari project</label>
     <input id="project-search" v-model="search" type="search" placeholder="Cari nama project, platform, atau anggota" :class="inputClass" />
     <label class="sr-only" for="filter-type">Tipe project</label>
     <select id="filter-type" v-model="typeFilter" :class="inputClass">
       <option value="">Semua tipe</option>
       <option v-for="(label, key) in PROJECT_TYPE_LABEL" :key="key" :value="key">{{ label }}</option>
-    </select>
-    <label class="sr-only" for="filter-status">Status project</label>
-    <select id="filter-status" v-model="statusFilter" :class="inputClass">
-      <option value="">Semua status</option>
-      <option v-for="(label, key) in STATUS_LABEL" :key="key" :value="key">{{ label }}</option>
-    </select>
-    <label class="sr-only" for="filter-payment">Status payment</label>
-    <select id="filter-payment" v-model="paymentFilter" :class="inputClass">
-      <option value="">Semua payment</option>
-      <option v-for="(label, key) in PAYMENT_STATUS_LABEL" :key="key" :value="key">{{ label }}</option>
     </select>
   </div>
 
@@ -129,10 +119,6 @@
             <h3 class="mt-0.5 font-bold text-text">{{ p.name }}</h3>
             <p class="mt-0.5 text-xs text-text-muted">{{ dateRange(p) }}</p>
           </div>
-          <div class="flex flex-wrap gap-1.5">
-            <span class="badge" :class="STATUS_BADGE[p.status]">{{ STATUS_LABEL[p.status] }}</span>
-            <span class="badge" :class="PAYMENT_BADGE[p.paymentStatus]">{{ PAYMENT_STATUS_LABEL[p.paymentStatus] }}</span>
-          </div>
         </div>
 
         <dl class="mt-3 grid grid-cols-2 gap-3 border-t border-border pt-3 text-sm sm:grid-cols-3">
@@ -213,18 +199,6 @@
         <label class="block">
           <span :class="labelClass">End date</span>
           <input v-model="form.endDate" type="date" :min="form.startDate || undefined" :class="inputClass" class="w-full" />
-        </label>
-        <label class="block">
-          <span :class="labelClass">Status project</span>
-          <select v-model="form.status" :class="inputClass" class="w-full">
-            <option v-for="(label, key) in STATUS_LABEL" :key="key" :value="key">{{ label }}</option>
-          </select>
-        </label>
-        <label class="block">
-          <span :class="labelClass">Status payment</span>
-          <select v-model="form.paymentStatus" :class="inputClass" class="w-full">
-            <option v-for="(label, key) in PAYMENT_STATUS_LABEL" :key="key" :value="key">{{ label }}</option>
-          </select>
         </label>
       </div>
 
@@ -366,13 +340,11 @@ import {
   type FeeGroup,
   type FeeGroupTotal,
   type FeePerson,
-  type PaymentStatus,
   type PaymentType,
   type Project,
   type ProjectInput,
   type ProjectMemberRole,
   type ProjectPerson,
-  type ProjectStatus,
   type ProjectType,
 } from "../api";
 import { localIsoDate } from "../dates";
@@ -381,19 +353,7 @@ import { isAdmin } from "../session";
 type FormMember = ProjectInput["members"][number];
 
 const PROJECT_TYPE_LABEL: Record<ProjectType, string> = { development: "Development", design: "Design" };
-const STATUS_LABEL: Record<ProjectStatus, string> = { ongoing: "Ongoing", completed: "Completed", cancelled: "Batal" };
 const PAYMENT_TYPE_LABEL: Record<PaymentType, string> = { fixed: "Fixed", hourly: "Hourly" };
-const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = { pending: "Pending", accepted: "Accepted", paid: "Dibayar ke tim" };
-const STATUS_BADGE: Record<ProjectStatus, string> = {
-  ongoing: "bg-warning/8 text-warning border-warning/20",
-  completed: "bg-success/8 text-success border-success/20",
-  cancelled: "bg-text-muted/10 text-text-dim border border-border",
-};
-const PAYMENT_BADGE: Record<PaymentStatus, string> = {
-  pending: "bg-text-muted/10 text-text-dim border border-border",
-  accepted: "bg-accent/8 text-accent border-accent/20",
-  paid: "bg-success/8 text-success border-success/20",
-};
 const MEMBER_ROLES: { id: ProjectMemberRole; label: string }[] = [
   { id: "pm_sales", label: "PM & Sales" },
   { id: "designer", label: "Designer" },
@@ -409,8 +369,6 @@ const loading = ref(false);
 const error = ref("");
 const search = ref("");
 const typeFilter = ref<ProjectType | "">("");
-const statusFilter = ref<ProjectStatus | "">("");
-const paymentFilter = ref<PaymentStatus | "">("");
 // "paid": every member's bonus finalized; "unpaid": someone's is still open.
 const bonusFilter = ref<"" | "paid" | "unpaid">("");
 const bonusPaid = (p: Project) => p.members.length > 0 && p.members.every((m) => m.bonusPaidAt);
@@ -484,8 +442,6 @@ const filtered = computed(() => {
   return projects.value.filter(
     (p) =>
       (!typeFilter.value || p.type === typeFilter.value) &&
-      (!statusFilter.value || p.status === statusFilter.value) &&
-      (!paymentFilter.value || p.paymentStatus === paymentFilter.value) &&
       (!bonusFilter.value || (bonusFilter.value === "paid") === bonusPaid(p)) &&
       inDateRange(p) &&
       (!q || [p.name, p.platform, ...p.members.map((m) => m.employeeName)].some((s) => s.toLowerCase().includes(q))),
