@@ -28,8 +28,3 @@ export const employees = pgTable("employees", {
   index("employees_workspace_idx").on(t.workspaceId),
 ]);
 
-export const teamMembers = pgTable("team_members", {
-  teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
-  employeeId: uuid("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
-  joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow().notNull(),
-});

@@ -1,5 +1,4 @@
-import { whatsappMessages } from "@repo/database";
-import { bots, db, logger } from "./state.js";
+import { bots, logger } from "./state.js";
 
 // Replies "type" for a while before sending so the bot feels less instant.
 const TYPING_MIN_MS = 1_000;
@@ -44,32 +43,10 @@ export async function sendDocument(
     fileName: file.fileName,
     caption: file.caption,
   });
-  await db
-    .insert(whatsappMessages)
-    .values({
-      workspaceId,
-      messageId: `out-${Date.now()}-${Math.random()}`,
-      fromPhone: "bot",
-      toPhone: jid.replace(/@s\.whatsapp\.net$/, ""),
-      direction: "outbound",
-      body: `[${file.fileName}]${file.caption ? ` ${file.caption}` : ""}`,
-    })
-    .onConflictDoNothing({ target: [whatsappMessages.workspaceId, whatsappMessages.messageId] });
 }
 
 export async function sendText(workspaceId: string, jid: string, text: string) {
   const socket = bots.get(workspaceId)?.sock;
   if (!socket) throw new Error("WhatsApp not connected");
   await socket.sendMessage(jid, { text });
-  await db
-    .insert(whatsappMessages)
-    .values({
-      workspaceId,
-      messageId: `out-${Date.now()}-${Math.random()}`,
-      fromPhone: "bot",
-      toPhone: jid.replace(/@s\.whatsapp\.net$/, ""),
-      direction: "outbound",
-      body: text,
-    })
-    .onConflictDoNothing({ target: [whatsappMessages.workspaceId, whatsappMessages.messageId] });
 }

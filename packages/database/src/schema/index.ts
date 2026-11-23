@@ -10,8 +10,6 @@ export * from "./holidays.js";
 export * from "./integrations.js";
 export * from "./activity.js";
 export * from "./github.js";
-export * from "./figma.js";
-export * from "./reporting.js";
 export * from "./security.js";
 export * from "./checkins.js";
 export * from "./projects.js";

@@ -1,11 +1,10 @@
 import { isLidUser, isPnUser, type WAMessage } from "@whiskeysockets/baileys";
-import { whatsappMessages } from "@repo/database";
 import { getEmployeeByPhone, getRoleName } from "../../auth/index.js";
 import { handleStandupMessage } from "../../standups/engine.js";
 import { handleCheckinMessage } from "../../checkins/engine.js";
 import { handleAdminMessage } from "../admin.js";
 import { replyText } from "./send.js";
-import { db, logger, markProcessed, type BotState, type Socket } from "./state.js";
+import { logger, markProcessed, type BotState, type Socket } from "./state.js";
 
 type Employee = NonNullable<Awaited<ReturnType<typeof getEmployeeByPhone>>>;
 
@@ -80,19 +79,6 @@ export async function handleIncomingMessage(state: BotState, socket: Socket, msg
     "";
 
   try {
-    // persist incoming
-    await db
-      .insert(whatsappMessages)
-      .values({
-        workspaceId,
-        messageId: id,
-        fromPhone: phone,
-        direction: "inbound",
-        body,
-        raw: msg as any,
-      })
-      .onConflictDoNothing({ target: [whatsappMessages.workspaceId, whatsappMessages.messageId] });
-
     const found = await getEmployeeByPhone(workspaceId, phone);
     // Deactivated employees are treated like unregistered numbers.
     const employee = found?.isActive ? found : null;

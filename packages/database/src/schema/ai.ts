@@ -10,15 +10,6 @@ export const agentConfigs = pgTable("agent_configs", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [unique("agent_configs_workspace_key_uq").on(t.workspaceId, t.key)]);
 
-export const agentMemories = pgTable("agent_memories", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  workspaceId: workspaceRef(),
-  employeeId: uuid("employee_id").references(() => employees.id),
-  scope: text("scope").notNull(),
-  content: text("content").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
-
 export const aiUsageLogs = pgTable("ai_usage_logs", {
   id: uuid("id").defaultRandom().primaryKey(),
   workspaceId: workspaceRef(),

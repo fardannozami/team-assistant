@@ -1,5 +1,4 @@
 import type { AgentEmployee } from "./context.js";
-import { storeConfirmedActionMemory } from "./persistence.js";
 import { executeTool, type ToolContext } from "./tools.js";
 
 const PENDING_TTL_MS = 10 * 60 * 1000;
@@ -84,16 +83,7 @@ export async function runPendingConfirmation(
   if (isYes(body)) {
     pendingActions.delete(key);
     const result = await executeTool(entry.tool, entry.args, toolContext(ctx));
-    if (result.ok) {
-      await storeConfirmedActionMemory(
-        ctx.workspaceId,
-        ctx.employee.id,
-        entry.tool,
-        entry.args,
-        result.data ?? "Done.",
-      );
-      return result.data ?? "Done.";
-    }
+    if (result.ok) return result.data ?? "Done.";
     return `Could not complete that action: ${result.error}`;
   }
 

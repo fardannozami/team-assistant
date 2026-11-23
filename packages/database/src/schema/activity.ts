@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, jsonb, date, unique, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, jsonb, unique, index } from "drizzle-orm/pg-core";
 import { employees } from "./employees.js";
 import { workspaceRef } from "./workspaces.js";
 
@@ -28,10 +28,3 @@ export const activityEvents = pgTable(
   ],
 );
 
-export const dailyActivitySummaries = pgTable("daily_activity_summaries", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  employeeId: uuid("employee_id").references(() => employees.id),
-  date: date("date").notNull(),
-  summary: jsonb("summary"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});

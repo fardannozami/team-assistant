@@ -1,5 +1,5 @@
 import pino from "pino";
-import { createDbClient, aiUsageLogs, agentMemories } from "@repo/database";
+import { createDbClient, aiUsageLogs } from "@repo/database";
 import { appendConversationMessage } from "./conversation.js";
 
 export const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
@@ -57,29 +57,4 @@ export async function persistExchange(
     assistantMessage,
     channel,
   );
-}
-
-/**
- * Records a durable, user-confirmed action as a conversation memory.
- * Kept minimal: only mutating actions that were actually executed.
- */
-export async function storeConfirmedActionMemory(
-  workspaceId: string,
-  employeeId: string,
-  tool: string,
-  args: Record<string, unknown>,
-  result: string,
-) {
-  const summary =
-    `${tool} confirmed: ${result.replace(/\s+/g, " ").trim()}`.slice(0, 200);
-  try {
-    await db.insert(agentMemories).values({
-      workspaceId,
-      employeeId,
-      scope: "conversation",
-      content: summary,
-    });
-  } catch (error) {
-    logger.warn({ err: error }, "Failed to store agent memory");
-  }
 }
