@@ -4,7 +4,7 @@ import { audit } from "../auth/index.js";
 import { HttpError } from "../../lib/http-error.js";
 import { decryptSecret, encryptSecret } from "../../lib/secrets.js";
 
-// Bring-your-own Tavily key: the sales crew's web search (public Upwork, LinkedIn and
+// Bring-your-own Tavily key: the sales crew's web search (public LinkedIn and
 // Freelancer.com posts, RFPs). Without one, sales still runs on the free job boards and tenders.
 
 const db = createDbClient(

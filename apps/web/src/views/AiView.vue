@@ -123,8 +123,8 @@
     <section v-if="search" class="mt-9">
       <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-3">Pencarian leads (Tavily)</div>
       <p class="text-text-muted text-sm mb-4">
-        Briefing sales mencari lowongan publik di Upwork, LinkedIn, Freelancer.com, dan RFP lewat Tavily. Tanpa key, briefing tetap jalan dari job board dan tender saja.
-        Ada 1.000 pencarian gratis per bulan; satu briefing memakai sekitar 4.
+        Briefing sales mencari lowongan publik di LinkedIn, Freelancer.com, dan RFP lewat Tavily. Tanpa key, briefing tetap jalan dari job board dan tender saja.
+        Ada 1.000 pencarian gratis per bulan; satu briefing memakai sekitar 3.
         <a :href="search.keyUrl" target="_blank" rel="noopener" class="font-semibold text-accent hover:underline">Buat API key Tavily ›</a>
       </p>
       <div class="flex flex-wrap items-center gap-3 px-4 py-4 mb-4 rounded-xl border border-border bg-panel-hover">

@@ -82,7 +82,7 @@ def test_project_candidates_monthly_upsell_link():
 
 def test_search_queries_cover_platforms():
     sources = [s for _, s, _ in search_queries(["Figma"])]
-    assert sources == ["Upwork (search)", "LinkedIn (search)", "Freelancer.com (search)", "RFP (search)"]
+    assert sources == ["LinkedIn (search)", "Freelancer.com (search)", "RFP (search)"]
 
 
 def test_balance_round_robins_sources_and_caps_kinds():
@@ -147,8 +147,17 @@ def test_parse_tavily_drops_articles():
     from agents.tools.leads import parse_tavily
 
     body = {"results": [
-        {"title": "WordPress Developer Needed for One-Page Site - Upwork", "url": "https://upwork.com/1", "content": "x"},
+        {"title": "WordPress Developer Needed for One-Page Site", "url": "https://freelancer.com/1", "content": "x"},
         {"title": "WordPress RFP Template You Can Copy", "url": "https://blog/1"},
         {"title": "How to hire a Framer expert", "url": "https://blog/2"},
     ]}
-    assert [c.url for c in parse_tavily(body, "Upwork (search)")] == ["https://upwork.com/1"]
+    assert [c.url for c in parse_tavily(body, "Freelancer.com (search)")] == ["https://freelancer.com/1"]
+
+
+def test_upwork_is_blocked_from_any_source():
+    from agents.tools.leads import blocked
+
+    assert blocked("https://www.upwork.com/freelance-jobs/apply/x")
+    assert blocked("https://upwork.com/jobs/1")
+    assert not blocked("https://www.freelancer.com/projects/1")
+    assert not blocked("https://notupwork.com/x")

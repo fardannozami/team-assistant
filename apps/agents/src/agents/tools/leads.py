@@ -1,13 +1,15 @@
 """Sales sources: public job boards, tenders, funding news and an optional search API.
 
-Upwork's RSS is gone and LinkedIn/Fiverr forbid scraping, so those only come in through a
+LinkedIn and Fiverr forbid scraping, so LinkedIn and Freelancer.com only come in through a
 search API (Tavily) with the workspace's own key: links and snippets of public pages, nothing more.
+Upwork is left out on purpose (BLOCKED_DOMAINS), whichever source finds it.
 """
 
 import asyncio
 import logging
 import re
 from datetime import UTC, date, datetime, timedelta
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -29,6 +31,15 @@ FUNDING_FEEDS = [
 ]
 # Web design, graphic design, software development and IT services.
 TED_CPV = "72413000 79822500 72212224 72200000 72212000 79342000"
+
+# Platforms the agency does not take leads from, whichever source links to them.
+BLOCKED_DOMAINS = ("upwork.com",)
+
+
+def blocked(url: str) -> bool:
+    host = urlsplit(url).hostname or ""
+    return any(host == d or host.endswith(f".{d}") for d in BLOCKED_DOMAINS)
+
 
 # Used when the agency profile has no keywords yet.
 DEFAULT_KEYWORDS = ["UI/UX design", "web development", "mobile app", "Figma", "landing page", "website redesign"]
@@ -275,7 +286,13 @@ async def _tavily(client: httpx.AsyncClient, key: str, query: str, source: str, 
         response = await client.post(
             "https://api.tavily.com/search",
             headers={"authorization": f"Bearer {key}"},
-            json={"query": query, "max_results": 8, "time_range": "week", "include_domains": domains},
+            json={
+                "query": query,
+                "max_results": 8,
+                "time_range": "week",
+                "include_domains": domains,
+                "exclude_domains": list(BLOCKED_DOMAINS),
+            },
         )
         response.raise_for_status()
         return parse_tavily(response.json(), source)
@@ -288,7 +305,6 @@ def search_queries(keywords: list[str]) -> list[tuple[str, str, list[str]]]:
     """(query, source label, domains) per platform; public pages only."""
     terms = " OR ".join(f'"{k}"' for k in keywords[:4])
     return [
-        (f"{terms} job", "Upwork (search)", ["upwork.com"]),
         (f"looking for agency OR freelancer {terms}", "LinkedIn (search)", ["linkedin.com"]),
         (f"{terms} project", "Freelancer.com (search)", ["freelancer.com"]),
         (f"RFP OR \"request for proposal\" {terms}", "RFP (search)", []),
@@ -379,6 +395,6 @@ async def sales_candidates(profile: dict, projects: list[dict], search_key: str 
     excluded = [k.lower() for k in profile.get("excludedKeywords") or []]
     candidates = [
         c for batch in results for c in batch
-        if not any(k in f"{c.title} {c.snippet}".lower() for k in excluded)
+        if not blocked(c.url) and not any(k in f"{c.title} {c.snippet}".lower() for k in excluded)
     ]
     return mark_focus(candidates, keywords) + project_candidates(projects, today)
