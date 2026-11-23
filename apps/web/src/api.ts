@@ -860,6 +860,7 @@ export interface ProjectPerson {
   id: string;
   name: string;
   isActive: boolean;
+  lead: EmployeeLead | null;
 }
 
 export const projectsApi = {

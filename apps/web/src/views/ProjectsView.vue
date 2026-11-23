@@ -229,7 +229,7 @@
         <p v-if="totalFeeTooHigh" class="mt-1 text-sm font-semibold text-danger">Fee diterima lebih besar dari fee.</p>
       </fieldset>
 
-      <fieldset v-for="role in MEMBER_ROLES" :key="role.id" class="mt-6">
+      <fieldset v-for="role in formRoles" :key="role.id" class="mt-6">
         <legend class="text-sm font-extrabold text-text">{{ role.label }}</legend>
         <ul class="mt-2 space-y-2">
           <li v-for="(m, i) in formMembers(role.id)" :key="i" class="grid grid-cols-[1fr_88px_auto] items-center gap-2 sm:grid-cols-[1fr_96px_120px_auto]">
@@ -344,6 +344,7 @@ import {
   type Project,
   type ProjectInput,
   type ProjectMemberRole,
+  type EmployeeLead,
   type ProjectPerson,
   type ProjectType,
 } from "../api";
@@ -359,6 +360,16 @@ const MEMBER_ROLES: { id: ProjectMemberRole; label: string }[] = [
   { id: "designer", label: "Designer" },
   { id: "developer", label: "Developer" },
 ];
+// Which member roles a project type has, and which positions (Posisi anggota) fill each.
+const TYPE_ROLES: Record<ProjectType, ProjectMemberRole[]> = {
+  development: ["pm_sales", "developer"],
+  design: ["pm_sales", "designer"],
+};
+const ROLE_POSITIONS: Record<ProjectMemberRole, EmployeeLead[]> = {
+  pm_sales: ["pm_sales"],
+  developer: ["developer", "development"],
+  designer: ["designer", "design"],
+};
 const inputClass =
   "min-h-12 rounded-xl border border-border bg-panel px-4 text-base placeholder-text-dim focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none";
 const labelClass = "mb-1.5 block text-[11px] font-extrabold uppercase tracking-wider text-text-dim";
@@ -639,10 +650,20 @@ function splitEvenly(role: ProjectMemberRole) {
   const each = Math.floor((available / own.length) * 100) / 100;
   own.forEach((m, i) => (m.sharePercent = i === own.length - 1 ? round2(available - each * (own.length - 1)) : each));
 }
-// Active people, plus whoever is already picked (they may have been deactivated since).
+// The type's roles, plus any other role that still has members (older
+// projects, or a type switched mid-edit) so they can be seen and removed.
+const formRoles = computed(() =>
+  MEMBER_ROLES.filter((r) => form.value && (TYPE_ROLES[form.value.type].includes(r.id) || formMembers(r.id).length)),
+);
+// Active people in that role's position, plus whoever is already picked
+// (they may have been deactivated or moved since).
 function peopleFor(m: FormMember) {
   const taken = new Set(formMembers(m.role).filter((x) => x !== m).map((x) => x.employeeId));
-  return people.value.filter((p) => (p.isActive || p.id === m.employeeId) && !taken.has(p.id));
+  return people.value.filter(
+    (p) =>
+      p.id === m.employeeId ||
+      (p.isActive && !!p.lead && ROLE_POSITIONS[m.role].includes(p.lead) && !taken.has(p.id)),
+  );
 }
 
 // The browser's own "Please fill out this field" doesn't say which field (and

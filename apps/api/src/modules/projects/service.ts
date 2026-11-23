@@ -47,7 +47,7 @@ export function splitFees(base: number, members: { sharePercent: number }[]) {
 /** Employees a project can list, inactive ones marked so old projects still show them. */
 export async function listProjectPeople(workspaceId: string) {
   return db
-    .select({ id: employees.id, name: employees.name, isActive: employees.isActive })
+    .select({ id: employees.id, name: employees.name, isActive: employees.isActive, lead: employees.lead })
     .from(employees)
     .where(eq(employees.workspaceId, workspaceId))
     .orderBy(asc(employees.name));
