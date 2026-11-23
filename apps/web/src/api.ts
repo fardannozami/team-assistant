@@ -176,7 +176,7 @@ export interface Employee {
 }
 
 export type EmployeeShift = "day" | "night";
-export type EmployeeLead = "design" | "development";
+export type EmployeeLead = "design" | "development" | "developer" | "designer" | "pm_sales";
 
 export interface EmployeeUpdate {
   name?: string;

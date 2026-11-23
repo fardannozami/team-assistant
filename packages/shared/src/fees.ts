@@ -5,7 +5,8 @@
 export const FEE_GROUPS = ["pm", "maker", "lead_design", "lead_development"] as const;
 export type FeeGroup = (typeof FEE_GROUPS)[number];
 
-export const EMPLOYEE_LEADS = ["design", "development"] as const;
+// An employee's position; only the two leads earn the lead bonus.
+export const EMPLOYEE_LEADS = ["design", "development", "developer", "designer", "pm_sales"] as const;
 export type EmployeeLead = (typeof EMPLOYEE_LEADS)[number];
 
 export const FEE_GROUP_LABEL: Record<FeeGroup, string> = {

@@ -213,7 +213,7 @@ const GROUP_LABEL: Record<FeeGroup, string> = {
   lead_design: "Lead Designer",
   lead_development: "Lead Developer",
 };
-const LEAD_LABEL: Record<EmployeeLead, string> = { design: "Lead Design", development: "Lead Development" };
+const LEAD_LABEL: Record<EmployeeLead, string> = { design: "Lead Design", development: "Lead Development", developer: "Developer", designer: "Designer", pm_sales: "PM & Sales" };
 const MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 const inputClass =
   "min-h-12 rounded-xl border border-border bg-panel px-4 text-base placeholder-text-dim focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none";

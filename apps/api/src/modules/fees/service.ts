@@ -44,6 +44,8 @@ async function paidKeys(workspaceId: string) {
 
 type Range = { from: string; to: string };
 
+const isLead = (lead: string | null) => lead === "design" || lead === "development";
+
 /**
  * Everyone's statement for the period: who has unpaid contributions (this
  * period or carried over) or leads a project type.
@@ -66,7 +68,7 @@ export async function feeOverview(workspaceId: string, range: Range) {
         paid: paid.get(employee.id),
       }),
     }))
-    .filter((s) => s.statement.rows.length || (s.employee.lead && s.employee.isActive));
+    .filter((s) => s.statement.rows.length || (isLead(s.employee.lead) && s.employee.isActive));
   return { ...range, startDate: settings.startDate, people: statements };
 }
 

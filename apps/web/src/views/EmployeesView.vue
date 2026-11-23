@@ -63,7 +63,7 @@
         <input v-if="draft.teamId === NEW_TEAM" v-model="draft.newTeamName" type="text" required placeholder="Nama tim baru" class="min-h-11 w-full rounded-xl border border-border bg-panel px-3 text-sm" />
         <label class="flex min-h-11 items-center gap-2 text-sm font-semibold text-text"><input v-model="draft.admin" type="checkbox" class="h-4 w-4 accent-accent" /> Admin</label>
         <select v-model="draft.shift" aria-label="Shift" class="min-h-11 w-full rounded-xl border border-border bg-panel px-3 text-sm"><option v-for="(label, key) in SHIFT_LABEL" :key="key" :value="key">Shift {{ label.toLowerCase() }}</option></select>
-        <select v-model="draft.lead" aria-label="Lead" class="min-h-11 w-full rounded-xl border border-border bg-panel px-3 text-sm"><option :value="null">Bukan lead</option><option v-for="(label, key) in LEAD_LABEL" :key="key" :value="key">{{ label }}</option></select>
+        <select v-model="draft.lead" aria-label="Posisi" class="min-h-11 w-full rounded-xl border border-border bg-panel px-3 text-sm"><option :value="null">Tanpa posisi</option><option v-for="(label, key) in LEAD_LABEL" :key="key" :value="key">{{ label }}</option></select>
         <div class="flex gap-2">
           <button type="button" class="min-h-11 flex-1 rounded-xl border border-border px-3 text-sm font-bold" @click="editingId = null">Batal</button>
           <button type="submit" :disabled="savingEditId === e.id" class="min-h-11 flex-1 rounded-xl bg-accent px-3 text-sm font-bold text-white disabled:opacity-60">{{ savingEditId === e.id ? '…' : 'Simpan' }}</button>
@@ -88,7 +88,7 @@
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Telepon</th>
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[16%]">Peran</th>
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Shift</th>
-          <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Lead</th>
+          <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Posisi</th>
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[16%]">Status</th>
           <th v-if="isAdmin" class="text-right px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Aksi</th>
         </tr>
@@ -111,7 +111,7 @@
             <template v-else>{{ SHIFT_LABEL[e.shift] }}</template>
           </td>
           <td class="px-5 py-4 border-b border-border align-middle text-text">
-            <select v-if="editingId === e.id" v-model="draft.lead" aria-label="Lead" class="px-3 py-2 rounded-xl border border-border text-[13px] bg-panel transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none pr-7 cursor-pointer w-full min-w-[130px]">
+            <select v-if="editingId === e.id" v-model="draft.lead" aria-label="Posisi" class="px-3 py-2 rounded-xl border border-border text-[13px] bg-panel transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none pr-7 cursor-pointer w-full min-w-[130px]">
               <option :value="null">—</option>
               <option v-for="(label, key) in LEAD_LABEL" :key="key" :value="key">{{ label }}</option>
             </select>
@@ -195,12 +195,12 @@
           <p class="mt-1.5 text-xs text-text-muted">{{ SHIFT_HINT[empShift] }}</p>
         </div>
         <div>
-          <label for="emp-lead" class="mb-1.5 block text-sm font-semibold text-text">Lead</label>
+          <label for="emp-lead" class="mb-1.5 block text-sm font-semibold text-text">Posisi</label>
           <select id="emp-lead" v-model="empLead" class="min-h-12 w-full rounded-xl border border-border bg-panel px-4 text-base focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20">
-            <option :value="null">Bukan lead</option>
+            <option :value="null">Tanpa posisi</option>
             <option v-for="(label, key) in LEAD_LABEL" :key="key" :value="key">{{ label }}</option>
           </select>
-          <p class="mt-1.5 text-xs text-text-muted">Lead mendapat bonus dari total semua project dengan tipe tersebut.</p>
+          <p class="mt-1.5 text-xs text-text-muted">Lead Design dan Lead Development mendapat bonus dari total semua project dengan tipe tersebut.</p>
         </div>
         <div class="rounded-xl bg-panel-hover p-4 text-sm text-text-muted">{{ empName }} · {{ empPhone }}<span v-if="empGithub.trim()"> · GitHub @{{ empGithub.trim().replace(/^@/, '') }}</span> · Shift {{ SHIFT_LABEL[empShift].toLowerCase() }}<span v-if="empLead"> · {{ LEAD_LABEL[empLead] }}</span></div>
       </template>
@@ -285,7 +285,7 @@ const empPhone = ref("");
 const empGithub = ref("");
 const empShift = ref<EmployeeShift>("day");
 const empLead = ref<EmployeeLead | null>(null);
-const LEAD_LABEL: Record<EmployeeLead, string> = { design: "Lead Design", development: "Lead Development" };
+const LEAD_LABEL: Record<EmployeeLead, string> = { design: "Lead Design", development: "Lead Development", developer: "Developer", designer: "Designer", pm_sales: "PM & Sales" };
 
 const SHIFT_LABEL: Record<EmployeeShift, string> = { day: "Siang", night: "Malam" };
 const SHIFT_HINT: Record<EmployeeShift, string> = {
