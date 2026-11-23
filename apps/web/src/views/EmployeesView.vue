@@ -61,7 +61,7 @@
         <input v-model="draft.name" type="text" required placeholder="Nama" class="min-h-11 w-full rounded-xl border border-border bg-panel px-3 text-sm" />
         <select v-model="draft.teamId" class="min-h-11 w-full rounded-xl border border-border bg-panel px-3 text-sm"><option :value="null">Tanpa tim</option><option v-for="t in teams" :key="t.id" :value="t.id">{{ t.name }}</option><option :value="NEW_TEAM">+ Tim baru…</option></select>
         <input v-if="draft.teamId === NEW_TEAM" v-model="draft.newTeamName" type="text" required placeholder="Nama tim baru" class="min-h-11 w-full rounded-xl border border-border bg-panel px-3 text-sm" />
-        <select v-model="draft.roleId" class="min-h-11 w-full rounded-xl border border-border bg-panel px-3 text-sm"><option :value="null">Tanpa peran</option><option v-for="r in roles" :key="r.id" :value="r.id">{{ r.name }}</option></select>
+        <label class="flex min-h-11 items-center gap-2 text-sm font-semibold text-text"><input v-model="draft.admin" type="checkbox" class="h-4 w-4 accent-accent" /> Admin</label>
         <select v-model="draft.shift" aria-label="Shift" class="min-h-11 w-full rounded-xl border border-border bg-panel px-3 text-sm"><option v-for="(label, key) in SHIFT_LABEL" :key="key" :value="key">Shift {{ label.toLowerCase() }}</option></select>
         <select v-model="draft.lead" aria-label="Lead" class="min-h-11 w-full rounded-xl border border-border bg-panel px-3 text-sm"><option :value="null">Bukan lead</option><option v-for="(label, key) in LEAD_LABEL" :key="key" :value="key">{{ label }}</option></select>
         <div class="flex gap-2">
@@ -101,10 +101,7 @@
           </td>
           <td class="px-5 py-4 border-b border-border align-middle text-text font-mono text-[13px] text-text-dim">{{ e.phone }}</td>
           <td class="px-5 py-4 border-b border-border align-middle">
-            <select v-if="editingId === e.id" v-model="draft.roleId" class="px-3 py-2 rounded-xl border border-border text-[13px] bg-panel transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none pr-7 cursor-pointer w-full min-w-[120px]">
-              <option :value="null">Tanpa peran</option>
-              <option v-for="r in roles" :key="r.id" :value="r.id">{{ r.name }}</option>
-            </select>
+            <label v-if="editingId === e.id" class="flex items-center gap-2 text-[13px] font-semibold text-text"><input v-model="draft.admin" type="checkbox" class="h-4 w-4 accent-accent" /> Admin</label>
             <span v-else class="badge" :class="roleBadgeUtils(e.roleName)">{{ e.roleName || "—" }}</span>
           </td>
           <td class="px-5 py-4 border-b border-border align-middle text-text">
@@ -191,13 +188,6 @@
       </template>
       <template v-else>
         <div>
-          <label class="mb-1.5 block text-sm font-semibold text-text">Peran</label>
-          <select v-model="empRoleId" class="min-h-12 w-full rounded-xl border border-border bg-panel px-4 text-base focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20" @input="createError = ''">
-            <option v-if="!defaultRoleId()" :value="null">Peran bawaan</option>
-            <option v-for="r in roles" :key="r.id" :value="r.id">{{ r.name }}</option>
-          </select>
-        </div>
-        <div>
           <label for="emp-shift" class="mb-1.5 block text-sm font-semibold text-text">Shift</label>
           <select id="emp-shift" v-model="empShift" class="min-h-12 w-full rounded-xl border border-border bg-panel px-4 text-base focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20">
             <option v-for="(label, key) in SHIFT_LABEL" :key="key" :value="key">{{ label }}</option>
@@ -212,7 +202,7 @@
           </select>
           <p class="mt-1.5 text-xs text-text-muted">Lead mendapat bonus dari total semua project dengan tipe tersebut.</p>
         </div>
-        <div class="rounded-xl bg-panel-hover p-4 text-sm text-text-muted">{{ empName }} · {{ empPhone }}<span v-if="empGithub.trim()"> · GitHub @{{ empGithub.trim().replace(/^@/, '') }}</span><span v-if="empRoleId"> · {{ roles.find((role) => role.id === empRoleId)?.name }}</span> · Shift {{ SHIFT_LABEL[empShift].toLowerCase() }}<span v-if="empLead"> · {{ LEAD_LABEL[empLead] }}</span></div>
+        <div class="rounded-xl bg-panel-hover p-4 text-sm text-text-muted">{{ empName }} · {{ empPhone }}<span v-if="empGithub.trim()"> · GitHub @{{ empGithub.trim().replace(/^@/, '') }}</span> · Shift {{ SHIFT_LABEL[empShift].toLowerCase() }}<span v-if="empLead"> · {{ LEAD_LABEL[empLead] }}</span></div>
       </template>
       <p v-if="createError" class="text-sm font-semibold text-danger" role="alert">{{ createError }}</p>
       <div class="flex gap-2 pt-1">
@@ -292,7 +282,6 @@ const showAddForm = ref(false);
 const addStep = ref(1);
 const empName = ref("");
 const empPhone = ref("");
-const empRoleId = ref<string | null>(null);
 const empGithub = ref("");
 const empShift = ref<EmployeeShift>("day");
 const empLead = ref<EmployeeLead | null>(null);
@@ -317,7 +306,7 @@ const deletingId = ref<string | null>(null);
 // Sentinel select value: create a team from draft.newTeamName on save.
 const NEW_TEAM = "__new__";
 const editingId = ref<string | null>(null);
-const draft = ref({ name: "", teamId: null as string | null, roleId: null as string | null, shift: "day" as EmployeeShift, lead: null as EmployeeLead | null, newTeamName: "" });
+const draft = ref({ name: "", teamId: null as string | null, roleId: null as string | null, admin: false, shift: "day" as EmployeeShift, lead: null as EmployeeLead | null, newTeamName: "" });
 const savingEditId = ref<string | null>(null);
 
 // Only the latest request may write the list, so a slow response for an
@@ -356,8 +345,6 @@ async function loadRoles() {
   try {
     // PM is a dashboard-only role, never a WhatsApp member's.
     roles.value = (await rolesApi.list()).filter((r) => r.name !== "PM");
-    // The add form may have opened before the roles arrived.
-    empRoleId.value ??= defaultRoleId();
   } catch {
     roles.value = [];
   }
@@ -394,12 +381,10 @@ async function toggleActive(e: Employee) {
   }
 }
 
-// Every new member starts from a blank form: a role left over from the last
-// one (say Admin) would otherwise be given to the next person unnoticed.
+// Every new member starts from a blank form.
 function resetAddForm() {
   empName.value = "";
   empPhone.value = "";
-  empRoleId.value = defaultRoleId();
   empGithub.value = "";
   empShift.value = "day";
   empLead.value = null;
@@ -424,7 +409,8 @@ async function createEmployee() {
     await employeesApi.create({
       name: empName.value.trim(),
       phone: empPhone.value.trim(),
-      roleId: empRoleId.value,
+      // Always Employee; admin is granted later from the edit form.
+      roleId: defaultRoleId(),
       githubLogin: empGithub.value.trim() || null,
       shift: empShift.value,
       lead: empLead.value,
@@ -487,6 +473,7 @@ function startEdit(employee: Employee) {
     name: employee.name,
     teamId: employee.teamId,
     roleId: employee.roleId,
+    admin: isAdminRole(employee.roleName),
     shift: employee.shift,
     lead: employee.lead,
     newTeamName: "",
@@ -517,7 +504,7 @@ async function saveEdit(id: string) {
       draft.value.newTeamName = "";
       await loadTeams();
     }
-    await employeesApi.update(id, { name, teamId, roleId: draft.value.roleId, shift: draft.value.shift, lead: draft.value.lead });
+    await employeesApi.update(id, { name, teamId, roleId: draftRoleId(), shift: draft.value.shift, lead: draft.value.lead });
     showToast("Anggota berhasil diperbarui.", "success");
     editingId.value = null;
     await loadEmployees();
@@ -526,6 +513,17 @@ async function saveEdit(id: string) {
   } finally {
     savingEditId.value = null;
   }
+}
+
+const isAdminRole = (name: string | null) => name === "Owner" || name === "Admin";
+
+// The admin switch only changes the role when flipped, so an Owner or
+// Manager left as is keeps their role. Off means Employee.
+function draftRoleId() {
+  const { roleId, admin } = draft.value;
+  const current = roles.value.find((r) => r.id === roleId)?.name ?? null;
+  if (admin === isAdminRole(current)) return roleId;
+  return admin ? (roles.value.find((r) => r.name === "Admin")?.id ?? roleId) : defaultRoleId();
 }
 
 function roleBadgeUtils(name: string | null) {
