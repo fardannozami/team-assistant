@@ -98,7 +98,7 @@
             <label v-if="editingId === e.id" class="mt-2 flex items-center gap-2 text-[13px] font-semibold text-text"><input v-model="draft.admin" type="checkbox" class="h-4 w-4 accent-accent" /> Admin</label>
             <span v-else class="inline-flex flex-wrap items-center gap-2">{{ e.name }} <span v-if="isAdminRole(e.roleName)" class="badge" :class="roleBadgeUtils(e.roleName)">{{ e.roleName }}</span></span>
           </td>
-          <td class="px-5 py-4 border-b border-border align-middle text-text font-mono text-[13px] text-text-dim">{{ e.phone }}</td>
+          <td class="px-5 py-4 border-b border-border align-middle font-mono text-[13px] text-text-dim">{{ e.phone }}</td>
           <td class="px-5 py-4 border-b border-border align-middle text-text">
             <select v-if="editingId === e.id" v-model="draft.shift" aria-label="Shift" class="px-3 py-2 rounded-xl border border-border text-[13px] bg-panel transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none pr-7 cursor-pointer w-full min-w-[100px]">
               <option v-for="(label, key) in SHIFT_LABEL" :key="key" :value="key">{{ label }}</option>
@@ -272,7 +272,7 @@ const loading = ref(false);
 const error = ref("");
 
 const searchQuery = ref("");
-const activeFilter = ref<string | boolean | null>(null);
+const activeFilter = ref<boolean | null>(null);
 
 const showAddForm = ref(false);
 const addStep = ref(1);
