@@ -6,6 +6,7 @@ import { parseWith } from "../../lib/validate.js";
 import { getActorId, getWorkspaceId } from "../../lib/tenant.js";
 import { getWhatsAppStatus, sendDocument } from "../whatsapp/service.js";
 import { periodLabel, statementPdf } from "./pdf.js";
+import { rupiah, usdToIdr } from "./rate.js";
 import {
   feeOverview,
   finalizeStatement,
@@ -38,7 +39,7 @@ const fileName = (name: string, from: string, to: string) => `Fee ${periodLabel(
 feesApi.post("/statement/pdf", canManage, async (c) => {
   const input = parseWith(feeStatementInputSchema, await c.req.json());
   const { employee, statement } = await statementFor(getWorkspaceId(c), input);
-  const pdf = await statementPdf({ name: employee.name, from: input.from, to: input.to, statement });
+  const pdf = await statementPdf({ name: employee.name, from: input.from, to: input.to, statement, rate: await usdToIdr() });
   return new Response(new Uint8Array(pdf), {
     headers: {
       "content-type": "application/pdf",
@@ -52,8 +53,11 @@ feesApi.post("/statement/send", canManage, async (c) => {
   const input = parseWith(feeStatementInputSchema, await c.req.json());
   if (!getWhatsAppStatus(ws).connected) throw new HttpError(409, "WhatsApp belum terhubung.");
   const { employee, statement } = await statementFor(ws, input);
-  const pdf = await statementPdf({ name: employee.name, from: input.from, to: input.to, statement });
-  const total = `$${statement.total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const rate = await usdToIdr();
+  const pdf = await statementPdf({ name: employee.name, from: input.from, to: input.to, statement, rate });
+  const total =
+    `$${statement.total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` +
+    (rate ? ` (${rupiah(statement.total * rate.idr)})` : "");
   await sendDocument(ws, `${employee.phone}@s.whatsapp.net`, {
     buffer: pdf,
     mimetype: "application/pdf",

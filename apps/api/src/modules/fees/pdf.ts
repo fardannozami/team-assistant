@@ -4,6 +4,7 @@
  */
 import PDFDocument from "pdfkit";
 import { BONUS_MIN, FEE_GROUP_LABEL, type FeeStatement } from "@repo/shared";
+import { rupiah, type UsdRate } from "./rate.js";
 
 const MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 
@@ -35,8 +36,14 @@ const GREEN = "#36664F";
 const STRIPE = "#F3F4F6";
 const HIGHLIGHT = "#FFFF00";
 
-export function statementPdf(args: { name: string; from: string; to: string; statement: FeeStatement }): Promise<Buffer> {
-  const { name, statement } = args;
+export function statementPdf(args: {
+  name: string;
+  from: string;
+  to: string;
+  statement: FeeStatement;
+  rate?: UsdRate | null;
+}): Promise<Buffer> {
+  const { name, statement, rate } = args;
   const doc = new PDFDocument({ size: "A4", layout: "landscape", margin: 36 });
   const chunks: Buffer[] = [];
   doc.on("data", (c: Buffer) => chunks.push(c));
@@ -135,6 +142,12 @@ export function statementPdf(args: { name: string; from: string; to: string; sta
     totalLine(label, g.eligible ? money(g.bonus) : "-", { note });
   }
   totalLine("TOTAL FEE", money(statement.total), { fill: HIGHLIGHT });
+  if (rate) {
+    totalLine("TOTAL FEE (Rp)", rupiah(statement.total * rate.idr), {
+      fill: HIGHLIGHT,
+      note: `Kurs 1 USD = ${rupiah(rate.idr)} per ${shortDate(rate.updatedAt.toISOString().slice(0, 10))}`,
+    });
+  }
 
   if (statement.rows.some((r) => r.carried)) {
     y += 8;
