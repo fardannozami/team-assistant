@@ -52,9 +52,9 @@
   </div>
 
   <div class="mb-7 space-y-3 md:hidden">
-    <article v-for="e in employees" :key="e.id" class="rounded-2xl border border-border bg-panel p-4 shadow-soft">
+    <article v-for="e in employees" :key="e.id" class="rounded-2xl border p-4 shadow-soft" :class="!e.lead ? 'border-warning border-l-4 bg-warning/15' : isAdminRole(e.roleName) ? 'border-accent/30 bg-accent/5' : 'border-border bg-panel'">
       <div class="flex items-start justify-between gap-3">
-        <div class="min-w-0"><h3 class="flex flex-wrap items-center gap-2 font-bold text-text">{{ e.name }} <span v-if="isAdminRole(e.roleName)" class="badge" :class="roleBadgeUtils(e.roleName)">{{ e.roleName }}</span></h3><p class="mt-0.5 break-all font-mono text-xs text-text-dim">{{ e.phone }}</p><p class="mt-1 text-xs text-text-muted">{{ e.teamName || 'Tanpa tim' }} · Shift {{ SHIFT_LABEL[e.shift].toLowerCase() }}<span v-if="e.lead"> · {{ LEAD_LABEL[e.lead] }}</span></p></div>
+        <div class="min-w-0"><h3 class="flex flex-wrap items-center gap-2 font-bold text-text">{{ e.name }} <span v-if="isAdminRole(e.roleName)" class="badge" :class="roleBadgeUtils(e.roleName)">{{ e.roleName }}</span></h3><p class="mt-0.5 break-all font-mono text-xs text-text-dim">{{ e.phone }}</p><p class="mt-1 text-xs text-text-muted">{{ e.teamName || 'Tanpa tim' }} · Shift {{ SHIFT_LABEL[e.shift].toLowerCase() }}<span v-if="e.lead"> · {{ LEAD_LABEL[e.lead] }}</span><span v-else> · <span class="font-semibold text-warning">Belum ada posisi</span></span></p></div>
         <span class="badge shrink-0" :class="e.isActive ? 'bg-success/8 text-success border-success/20' : 'bg-text-muted/10 text-text-dim border border-border'">{{ e.isActive ? 'Aktif' : 'Nonaktif' }}</span>
       </div>
       <form v-if="editingId === e.id" class="mt-3 space-y-2 border-t border-border pt-3" @submit.prevent="saveEdit(e.id)">
@@ -92,7 +92,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="e in employees" :key="e.id" class="hover:bg-panel-hover transition-colors duration-200 ease-in">
+        <tr v-for="e in employees" :key="e.id" class="transition-colors duration-200 ease-in" :class="!e.lead ? 'bg-warning/15 shadow-[inset_4px_0_0_#c4942e] hover:bg-warning/25' : isAdminRole(e.roleName) ? 'bg-accent/5 hover:bg-accent/10' : 'hover:bg-panel-hover'">
           <td class="px-5 py-4 border-b border-border align-middle text-text">
             <input v-if="editingId === e.id" v-model="draft.name" type="text" required class="px-3 py-2 rounded-xl border border-border text-[13px] bg-panel transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none w-full min-w-[140px]" />
             <label v-if="editingId === e.id" class="mt-2 flex items-center gap-2 text-[13px] font-semibold text-text"><input v-model="draft.admin" type="checkbox" class="h-4 w-4 accent-accent" /> Admin</label>
@@ -110,7 +110,8 @@
               <option :value="null">—</option>
               <option v-for="(label, key) in LEAD_LABEL" :key="key" :value="key">{{ label }}</option>
             </select>
-            <template v-else>{{ e.lead ? LEAD_LABEL[e.lead] : "—" }}</template>
+            <template v-else-if="e.lead">{{ LEAD_LABEL[e.lead] }}</template>
+            <span v-else class="badge bg-warning/8 text-warning border-warning/20" title="Tanpa posisi, tidak muncul di pilihan anggota project">Belum ada posisi</span>
           </td>
           <td class="px-5 py-4 border-b border-border align-middle">
             <span class="badge" :class="e.isActive ? 'bg-success/8 text-success border-success/20' : 'bg-text-muted/10 text-text-dim border border-border'">{{ e.isActive ? "Aktif" : "Nonaktif" }}</span>
