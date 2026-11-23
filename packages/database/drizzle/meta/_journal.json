@@ -120,6 +120,27 @@
       "when": 1795414830388,
       "tag": "0016_figma",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1795418976130,
+      "tag": "0017_briefings",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795422028067,
+      "tag": "0018_briefing_sales_items",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1795422955051,
+      "tag": "0019_briefing_search_key",
+      "breakpoints": true
     }
   ]
 }
