@@ -83,10 +83,13 @@
             </div>
           </td>
           <td class="px-5 py-4 border-b border-border align-middle text-text answers">
-            {{ s.answers.yesterday || "—" }}
-            <div v-if="s.github" class="mt-2 pt-2 border-t border-border">
-              <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1">GitHub sejak {{ s.githubSince }}</div>
-              <GithubActivity :activity="s.github" />
+            <!-- Capped so long commit titles truncate instead of widening the column. -->
+            <div class="max-w-[260px] break-words">
+              {{ s.answers.yesterday || "—" }}
+              <div v-if="s.github" class="mt-2 pt-2 border-t border-border">
+                <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1">GitHub sejak {{ s.githubSince }}</div>
+                <GithubActivity :activity="s.github" />
+              </div>
             </div>
           </td>
           <td class="px-5 py-4 border-b border-border align-middle text-text answers">{{ s.answers.today || "—" }}</td>
