@@ -54,7 +54,7 @@
   <div class="mb-7 space-y-3 md:hidden">
     <article v-for="e in employees" :key="e.id" class="rounded-2xl border border-border bg-panel p-4 shadow-soft">
       <div class="flex items-start justify-between gap-3">
-        <div class="min-w-0"><h3 class="font-bold text-text">{{ e.name }}</h3><p class="mt-0.5 break-all font-mono text-xs text-text-dim">{{ e.phone }}</p><p class="mt-1 text-xs text-text-muted">{{ e.teamName || 'Tanpa tim' }} · Shift {{ SHIFT_LABEL[e.shift].toLowerCase() }}<span v-if="e.lead"> · {{ LEAD_LABEL[e.lead] }}</span></p></div>
+        <div class="min-w-0"><h3 class="flex flex-wrap items-center gap-2 font-bold text-text">{{ e.name }} <span v-if="isAdminRole(e.roleName)" class="badge" :class="roleBadgeUtils(e.roleName)">{{ e.roleName }}</span></h3><p class="mt-0.5 break-all font-mono text-xs text-text-dim">{{ e.phone }}</p><p class="mt-1 text-xs text-text-muted">{{ e.teamName || 'Tanpa tim' }} · Shift {{ SHIFT_LABEL[e.shift].toLowerCase() }}<span v-if="e.lead"> · {{ LEAD_LABEL[e.lead] }}</span></p></div>
         <span class="badge shrink-0" :class="e.isActive ? 'bg-success/8 text-success border-success/20' : 'bg-text-muted/10 text-text-dim border border-border'">{{ e.isActive ? 'Aktif' : 'Nonaktif' }}</span>
       </div>
       <form v-if="editingId === e.id" class="mt-3 space-y-2 border-t border-border pt-3" @submit.prevent="saveEdit(e.id)">
@@ -69,9 +69,8 @@
           <button type="submit" :disabled="savingEditId === e.id" class="min-h-11 flex-1 rounded-xl bg-accent px-3 text-sm font-bold text-white disabled:opacity-60">{{ savingEditId === e.id ? '…' : 'Simpan' }}</button>
         </div>
       </form>
-      <div v-else class="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3">
-        <span class="badge" :class="roleBadgeUtils(e.roleName)">{{ e.roleName || 'Tanpa peran' }}</span>
-        <div v-if="isAdmin" class="flex gap-2">
+      <div v-else-if="isAdmin" class="mt-3 flex items-center justify-end gap-3 border-t border-border pt-3">
+        <div class="flex gap-2">
           <button class="min-h-11 rounded-xl border border-border px-3 text-xs font-bold text-text" :disabled="savingId === e.id" @click="toggleActive(e)">{{ savingId === e.id ? '…' : e.isActive ? 'Nonaktifkan' : 'Aktifkan' }}</button>
           <button class="min-h-11 rounded-xl border border-border px-3 text-xs font-bold text-text" @click="startEdit(e)">Ubah</button>
           <button class="min-h-11 rounded-xl border border-danger/30 px-3 text-xs font-bold text-danger disabled:opacity-60" :disabled="deletingId === e.id" @click="removeEmployee(e)">{{ deletingId === e.id ? '…' : 'Hapus' }}</button>
@@ -86,7 +85,6 @@
         <tr class="text-text-dim">
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Nama</th>
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Telepon</th>
-          <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[16%]">Peran</th>
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Shift</th>
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border">Posisi</th>
           <th class="text-left px-5 py-4 text-[11px] font-extrabold tracking-wider uppercase border-b border-border w-[16%]">Status</th>
@@ -97,13 +95,10 @@
         <tr v-for="e in employees" :key="e.id" class="hover:bg-panel-hover transition-colors duration-200 ease-in">
           <td class="px-5 py-4 border-b border-border align-middle text-text">
             <input v-if="editingId === e.id" v-model="draft.name" type="text" required class="px-3 py-2 rounded-xl border border-border text-[13px] bg-panel transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none w-full min-w-[140px]" />
-            <template v-else>{{ e.name }}</template>
+            <label v-if="editingId === e.id" class="mt-2 flex items-center gap-2 text-[13px] font-semibold text-text"><input v-model="draft.admin" type="checkbox" class="h-4 w-4 accent-accent" /> Admin</label>
+            <span v-else class="inline-flex flex-wrap items-center gap-2">{{ e.name }} <span v-if="isAdminRole(e.roleName)" class="badge" :class="roleBadgeUtils(e.roleName)">{{ e.roleName }}</span></span>
           </td>
           <td class="px-5 py-4 border-b border-border align-middle text-text font-mono text-[13px] text-text-dim">{{ e.phone }}</td>
-          <td class="px-5 py-4 border-b border-border align-middle">
-            <label v-if="editingId === e.id" class="flex items-center gap-2 text-[13px] font-semibold text-text"><input v-model="draft.admin" type="checkbox" class="h-4 w-4 accent-accent" /> Admin</label>
-            <span v-else class="badge" :class="roleBadgeUtils(e.roleName)">{{ e.roleName || "—" }}</span>
-          </td>
           <td class="px-5 py-4 border-b border-border align-middle text-text">
             <select v-if="editingId === e.id" v-model="draft.shift" aria-label="Shift" class="px-3 py-2 rounded-xl border border-border text-[13px] bg-panel transition-all duration-200 ease-in focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none pr-7 cursor-pointer w-full min-w-[100px]">
               <option v-for="(label, key) in SHIFT_LABEL" :key="key" :value="key">{{ label }}</option>
