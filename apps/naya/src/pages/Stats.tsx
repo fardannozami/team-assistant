@@ -54,6 +54,7 @@ export function Stats({ dashboard, pending = false, onNavigate }: { dashboard: D
           <div><dt>Gateway berjalan</dt><dd>{runtime.profiles.availability === 'available' ? `${runtime.profiles.data.filter((profile) => profile.gateway === 'Running').length} dari ${runtime.profiles.data.length}` : 'Tidak tersedia'}</dd></div>
           <div><dt>Model terpakai</dt><dd>{runtime.profiles.availability === 'available' ? [...new Set(runtime.profiles.data.map((profile) => profile.model).filter((model) => model !== 'Not configured'))].join(', ') || '—' : 'Tidak tersedia'}</dd></div>
           <div><dt>OpenCode</dt><dd>{runtime.openCode.availability === 'available' ? runtime.openCode.data : 'Tidak terpasang'}</dd></div>
+          <div><dt>Claude Code</dt><dd>{runtime.claudeCode?.availability === 'available' ? runtime.claudeCode.data : 'Tidak terpasang'}</dd></div>
         </dl>
       </article>
 
@@ -66,6 +67,6 @@ export function Stats({ dashboard, pending = false, onNavigate }: { dashboard: D
         </dl>
       </article>
     </section>
-    <p className="card-note">Dibaca langsung dari Hermes dan OpenCode, di-cache server selama 10 detik, dan diperbarui otomatis.</p>
+    <p className="card-note">Dibaca langsung dari Hermes, OpenCode, dan Claude Code, di-cache server selama 10 detik, dan diperbarui otomatis.</p>
   </div>
 }

@@ -1,4 +1,4 @@
-// Agents are whatever Hermes profiles the machine reports (plus OpenCode), so nothing here is
+// Agents are whatever Hermes profiles the machine reports (plus OpenCode and Claude Code), so nothing here is
 // tied to particular names: each agent's look is derived from its id.
 
 export interface AgentLook { hair: string; skin: string; shirt: string; pants: string }

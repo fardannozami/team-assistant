@@ -62,7 +62,7 @@ describe('Hermes profile list', () => {
   it('reads display-name ids, long names and unset models by column', () => {
     expect(parseProfiles(profileList)).toEqual([
       { name: 'default', model: 'anthropic/claude-sonnet-4', gateway: 'Running' },
-      { name: 'coder', model: 'openai/gpt-5.5', gateway: 'Stopped' },
+      { name: 'coder', model: 'openai/gpt-5.5', gateway: 'Stopped', displayName: 'Code Helper' },
       { name: 'scratch', model: 'Not configured', gateway: 'Stopped' },
     ])
   })

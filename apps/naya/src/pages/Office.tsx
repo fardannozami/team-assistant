@@ -115,7 +115,7 @@ export function OfficeDetail({ station, onClose }: { station: OfficeStation; onC
       <div role="tabpanel" aria-label={DETAIL_LABEL[tab]} className="detail-body">
         {tab === 'Overview' && <>
           {station.activity && <p className="detail-activity">{station.activity}</p>}
-          <dl className="office-detail-grid"><div><dt>Jenis agent</dt><dd>{station.role}</dd></div>{station.role !== 'OpenCode' && <AgentTokens agent={station.id}/>}<div><dt>Ruangan</dt><dd>{roomLabel(station.room)} / {station.roomPosition}</dd></div><div><dt>Tugas saat ini</dt><dd>{station.currentTask}</dd></div><div><dt>Aktivitas terakhir</dt><dd>{station.recentActivity}</dd></div><div><dt>Sumber data</dt><dd>{station.provenance}</dd></div><div><dt>Kebaruan data</dt><dd>{station.freshness}</dd></div></dl></>}
+          <dl className="office-detail-grid"><div><dt>Jenis agent</dt><dd>{station.role}</dd></div>{station.role !== 'OpenCode' && station.role !== 'Claude Code' && <AgentTokens agent={station.id}/>}<div><dt>Ruangan</dt><dd>{roomLabel(station.room)} / {station.roomPosition}</dd></div><div><dt>Tugas saat ini</dt><dd>{station.currentTask}</dd></div><div><dt>Aktivitas terakhir</dt><dd>{station.recentActivity}</dd></div><div><dt>Sumber data</dt><dd>{station.provenance}</dd></div><div><dt>Kebaruan data</dt><dd>{station.freshness}</dd></div></dl></>}
         {tab === 'Chat' && canChat && <AgentChat agent={station.id}/>}
       </div>
     </section>

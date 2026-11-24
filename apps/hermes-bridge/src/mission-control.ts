@@ -2,6 +2,7 @@
 // read-only collectors of the Hermes CLI, plus a generation-safe cache and states Naya declares.
 import { execFile as execFileCallback } from 'node:child_process'
 import { promisify } from 'node:util'
+import { collectClaudeSessions, type ClaudeSessions } from './claude-code.js'
 
 const execFile = promisify(execFileCallback)
 const CACHE_MS = 10_000
@@ -14,7 +15,7 @@ export type Availability = 'available' | 'unavailable'
 export type GatewayState = 'Running' | 'Stopped' | 'Unknown'
 
 /** A Hermes profile; every profile is one agent. `gateway` comes from the profile list. */
-export interface Profile { name: string; model: string; gateway: GatewayState }
+export interface Profile { name: string; model: string; gateway: GatewayState; /** Naya: the display name set with `hermes profile rename default …`. */ displayName?: string }
 export interface Source<T> {
   availability: Availability
   data: T
@@ -23,6 +24,8 @@ export interface Source<T> {
 export interface RuntimeSnapshot {
   profiles: Source<Profile[]>
   openCode: Source<string>
+  /** Naya: Claude Code (`claude --version`), an office agent when installed. */
+  claudeCode?: Source<string>
   fetchedAt: string
 }
 export interface Task { title: string; status: string; id?: string; assignee?: string; priority?: number; board?: string; /** Belongs to a locked agent (profile lock): the title is withheld. */ private?: boolean }
@@ -60,12 +63,12 @@ export interface OfficeStation {
   freshness: string
 }
 export type ActivityKind = 'chat' | 'cron' | 'tools' | 'thinking'
-export interface AgentActivity { profile: string; availability: Availability; active: boolean; kind?: ActivityKind; label?: string; lastSeen?: string; mentionsOpenCode: boolean }
+export interface AgentActivity { profile: string; availability: Availability; active: boolean; kind?: ActivityKind; label?: string; lastSeen?: string; mentionsOpenCode: boolean; /** Naya: the log shows this agent driving Claude Code (`claude -p`). */ mentionsClaudeCode?: boolean }
 export interface AgentActivitySnapshot { agents: AgentActivity[]; fetchedAt: string }
 export interface OfficeSnapshot { stations: OfficeStation[]; summary: OfficeSummary; fetchedAt: string }
 export interface OfficeSummary { declared: number; active: number; idle: number; offline: number; unknown: number; gatewaysReachable: number; gatewaysDeclared: number }
 export interface ExplicitOfficeState { station: OfficeStation['name']; state: 'Working' | 'Reviewing' | 'Collaborating'; expiresAt: string }
-export interface OfficeBuildOptions { now?: string | number; explicitStates?: ExplicitOfficeState[]; agentActivity?: AgentActivitySnapshot }
+export interface OfficeBuildOptions { now?: string | number; explicitStates?: ExplicitOfficeState[]; agentActivity?: AgentActivitySnapshot; claudeSessions?: ClaudeSessions }
 export interface UsageInsights {
   days: number
   sessions: number
@@ -152,7 +155,7 @@ function toInt(value: string | undefined): number {
 
 const PROFILE_ROW = /^(.+?)\s+(\S+)\s+(running|stopped)(?:\s|$)/i
 
-interface ProfileRow { name: string; model: string; gateway: GatewayState }
+interface ProfileRow { name: string; model: string; gateway: GatewayState; displayName?: string }
 
 function profileRows(output: string): ProfileRow[] {
   const all = lines(output)
@@ -166,10 +169,11 @@ function profileRows(output: string): ProfileRow[] {
     if (!match) return []
     // A display name renders as "Display Name (id)"; the id is the stable profile name.
     const displayed = match[1].trim()
-    const name = displayed.match(/\(([\w.-]+)\)$/)?.[1] ?? displayed
+    const id = displayed.match(/^(.+?)\s+\(([\w.-]+)\)$/)
+    const name = id?.[2] ?? displayed
     const model = match[2] === '—' ? 'Not configured' : match[2]
     const gateway: GatewayState = withGateway ? (withGateway[3].toLowerCase() === 'running' ? 'Running' : 'Stopped') : 'Unknown'
-    return [{ name, model, gateway }]
+    return [{ name, model, gateway, ...(id ? { displayName: id[1] } : {}) }]
   })
 }
 
@@ -510,11 +514,18 @@ async function read<T>(run: Run, file: string, args: string[], parse: (output: s
 export const PROFILE_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/
 
 export async function collectSnapshot(run: Run = systemRun): Promise<RuntimeSnapshot> {
-  const [profiles, openCode] = await Promise.all([
+  const [profiles, openCode, claudeCode] = await Promise.all([
     read(run, 'hermes', ['profile', 'list'], parseProfiles, []),
     read(run, 'opencode', ['--version'], (value) => value.trim().split('\n').pop()?.trim() || 'Unknown', 'Unknown'),
+    read(run, 'claude', ['--version'], parseClaudeVersion, 'Unknown'),
   ])
-  return { profiles, openCode, fetchedAt: new Date().toISOString() }
+  return { profiles, openCode, claudeCode, fetchedAt: new Date().toISOString() }
+}
+
+/** `2.1.303 (Claude Code)` → `Claude Code 2.1.303`. */
+export function parseClaudeVersion(output: string): string {
+  const version = output.match(/\b(\d+\.\d+\.\d+)\b/)?.[1]
+  return version ? `Claude Code ${version}` : 'Unknown'
 }
 
 /** Board slugs passed to `hermes kanban --board`: Hermes' own slug rule, never an option. */
@@ -780,6 +791,7 @@ export function parseRecentActivity(logOutput: string, sessionOutput?: string): 
   const found = new Set<ActivityKind | 'gateway'>()
   let lastSeen: string | undefined
   let mentionsOpenCode = false
+  let mentionsClaudeCode = false
   for (const line of lines(logOutput)) {
     const record = line.match(LOG_RECORD)
     if (!record) continue
@@ -788,6 +800,7 @@ export function parseRecentActivity(logOutput: string, sessionOutput?: string): 
     found.add(kind)
     if (kind !== 'gateway') lastSeen = record[1]
     if (/\bopencode\b/i.test(record[3])) mentionsOpenCode = true
+    if (CLAUDE_CODE_MENTION.test(record[3])) mentionsClaudeCode = true
   }
   // Gateway lines alone can be polling noise; with agent-loop lines they are a chat reply.
   if (found.has('gateway') && (found.has('thinking') || found.has('tools'))) found.add('chat')
@@ -797,8 +810,11 @@ export function parseRecentActivity(logOutput: string, sessionOutput?: string): 
   }
   if (sessionActive && found.size === 0) found.add('chat')
   const kind = (['cron', 'chat', 'tools', 'thinking'] as const).find((item) => found.has(item))
-  return { active: kind !== undefined, ...(kind ? { kind, label: ACTIVITY_LABELS[kind] } : {}), ...(lastSeen ? { lastSeen } : {}), mentionsOpenCode }
+  return { active: kind !== undefined, ...(kind ? { kind, label: ACTIVITY_LABELS[kind] } : {}), ...(lastSeen ? { lastSeen } : {}), mentionsOpenCode, ...(mentionsClaudeCode ? { mentionsClaudeCode } : {}) }
 }
+
+/** `claude -p …`, `claude code`, `claude-code` in an agent's log line. */
+const CLAUDE_CODE_MENTION = /\bclaude(?:\s+(?:-p|--print)\b|[\s-]code\b)/i
 
 /** Runs `task` over `items` with at most `limit` in flight, keeping the input order. */
 async function mapLimit<T, R>(items: readonly T[], limit: number, task: (item: T) => Promise<R>): Promise<R[]> {
@@ -826,12 +842,13 @@ export async function collectAgentActivity(profiles: readonly string[], run: Run
 // Office
 
 /** One office station per agent: every Hermes profile, plus OpenCode when it is installed. */
-interface AgentSpec { id: string; role: string; profile?: string; gateway?: GatewayState; aliases: string[] }
+interface AgentSpec { id: string; role: string; profile?: string; gateway?: GatewayState; aliases: string[]; displayName?: string }
 
 export function agentRoster(runtime: RuntimeSnapshot): AgentSpec[] {
   const profiles = runtime.profiles.availability === 'available' ? runtime.profiles.data : []
-  const agents: AgentSpec[] = profiles.filter((profile) => PROFILE_NAME.test(profile.name)).map((profile) => ({ id: profile.name, role: 'Hermes profile', profile: profile.name, gateway: profile.gateway, aliases: [profile.name.toLowerCase()] }))
+  const agents: AgentSpec[] = profiles.filter((profile) => PROFILE_NAME.test(profile.name)).map((profile) => ({ id: profile.name, role: 'Hermes profile', profile: profile.name, gateway: profile.gateway, aliases: [profile.name.toLowerCase()], ...(profile.displayName ? { displayName: profile.displayName } : {}) }))
   if (runtime.openCode.availability === 'available' && !agents.some((agent) => agent.id === 'opencode')) agents.push({ id: 'opencode', role: 'OpenCode', aliases: ['opencode', 'open-code'] })
+  if (runtime.claudeCode?.availability === 'available' && !agents.some((agent) => agent.id === CLAUDE_CODE_ID)) agents.push({ id: CLAUDE_CODE_ID, role: 'Claude Code', aliases: [CLAUDE_CODE_ID, 'claude'] })
   return agents
 }
 
@@ -894,7 +911,21 @@ export function buildOfficeSummary(stations: OfficeStation[], runtime: RuntimeSn
   }
 }
 
-function liveState(agent: AgentSpec, snapshot: AgentActivitySnapshot | undefined): { state: OfficeState; probe?: AgentActivity; known: boolean } {
+export const CLAUDE_CODE_ID = 'claude-code'
+
+/** Claude Code works when a session of it changed in the last minutes, or an agent's log shows it driving `claude -p`. */
+function claudeCodeState(snapshot: AgentActivitySnapshot | undefined, sessions: ClaudeSessions | undefined): { state: OfficeState; probe?: AgentActivity; known: boolean } {
+  if (sessions?.active) {
+    const label = `Bekerja${sessions.project ? ` di ${sessions.project}` : ''}${sessions.activeSessions > 1 ? ` (${sessions.activeSessions} sesi)` : ''}`
+    return { state: 'Working', probe: { profile: CLAUDE_CODE_ID, availability: 'available', active: true, kind: 'tools', label, lastSeen: sessions.lastSeen, mentionsOpenCode: false }, known: true }
+  }
+  const driver = snapshot?.agents.find((agent) => agent.mentionsClaudeCode)
+  if (driver) return { state: 'Working', probe: { ...driver, label: `Ngoding atas perintah ${driver.profile}` }, known: true }
+  return { state: 'Unknown', known: sessions?.availability === 'available' && (!snapshot || snapshot.agents.every((agent) => agent.availability === 'available')) }
+}
+
+function liveState(agent: AgentSpec, snapshot: AgentActivitySnapshot | undefined, claudeSessions?: ClaudeSessions): { state: OfficeState; probe?: AgentActivity; known: boolean } {
+  if (agent.id === CLAUDE_CODE_ID && !agent.profile) return claudeCodeState(snapshot, claudeSessions)
   if (!snapshot) return { state: 'Unknown', known: true }
   if (!agent.profile) {
     // OpenCode has no Hermes profile; it counts as working when an agent's recent log shows it being driven.
@@ -919,7 +950,7 @@ export function buildOfficeSnapshot(runtime: RuntimeSnapshot, board: TaskBoardSn
     const task = freshBoard ? attributedTask(board.tasks.data, agent.aliases) : undefined
     const overlay = explicitState(agent, explicitStates, now)
     const taskWorkState = taskState(task)
-    const live = liveState(agent, agentActivity)
+    const live = liveState(agent, agentActivity, options.claudeSessions)
     const collaboration = freshActivity ? collaborationState(activity.sessions.data, agent.aliases) : 'Unknown'
     const stopped = gateway === 'Stopped'
     const liveKnown = options.agentActivity ? agentActivity !== undefined && live.known : true
@@ -937,12 +968,12 @@ export function buildOfficeSnapshot(runtime: RuntimeSnapshot, board: TaskBoardSn
     const recentActivity = live.probe
       ? live.probe.active ? `${live.probe.label ?? 'Active'}${live.probe.lastSeen ? ` (last log ${live.probe.lastSeen})` : ''}` : `No activity in the last ${ACTIVITY_WINDOW}`
       : activity.sessions.availability === 'unavailable' ? 'Not Available' : collaboration === 'Collaborating' ? 'Attributed active collaboration session' : 'No attributed recent activity'
-    const runtimeProvenance = agent.profile ? `Gateway ${gateway ?? 'Unknown'} (hermes profile list)` : 'OpenCode version availability is not a state signal'
+    const runtimeProvenance = agent.profile ? `Gateway ${gateway ?? 'Unknown'} (hermes profile list)` : agent.id === CLAUDE_CODE_ID ? `${runtime.claudeCode?.data ?? 'Claude Code'}; session files changed in the last 3 minutes (metadata only)` : 'OpenCode version availability is not a state signal'
     const managedIdle = state === 'Idle' ? '; Naya managed-idle placement policy (not agent-reported presence)' : ''
     const liveProvenance = options.agentActivity ? `; live activity (${agent.profile ? `hermes -p ${agent.profile} logs/sessions` : 'agent logs mentioning OpenCode'}, last ${ACTIVITY_WINDOW}): ${!agentActivity || !live.known ? 'unavailable' : live.state !== 'Unknown' ? live.probe?.kind ?? 'active' : 'none'}` : ''
     return {
       id: agent.id,
-      name: agent.id,
+      name: agent.id === CLAUDE_CODE_ID ? 'Claude Code' : agent.displayName ?? agent.id,
       role: agent.role,
       ...roomForState(state, index),
       seat: index + 1,
@@ -1018,6 +1049,7 @@ export function getUsage(days: number, now = Date.now()): Promise<UsageSnapshot>
   return (usageSources.get(days as typeof USAGE_PERIODS[number]) ?? usageSources.get(INSIGHT_DAYS)!)(now)
 }
 const logsSource = cachedSource(() => collectLogs(), 5_000)
+const claudeSessionsSource = cachedSource(() => collectClaudeSessions(), 15_000)
 const agentActivitySource = cachedSource(async () => {
   const runtime = await getSnapshot()
   return collectAgentActivity(runtime.profiles.availability === 'available' ? runtime.profiles.data.map((profile) => profile.name) : [])
@@ -1054,12 +1086,12 @@ export function declareState(station: string, state: ExplicitOfficeState['state'
 }
 
 export async function getOffice(now = Date.now()): Promise<OfficeSnapshot> {
-  const [runtime, board, activity, agentActivity] = await Promise.all([getSnapshot(now), getTaskBoard(now), getActivity(now), agentActivitySource(now)])
-  return buildOfficeSnapshot(runtime, board, activity, { agentActivity, explicitStates })
+  const [runtime, board, activity, agentActivity, claudeSessions] = await Promise.all([getSnapshot(now), getTaskBoard(now), getActivity(now), agentActivitySource(now), claudeSessionsSource(now)])
+  return buildOfficeSnapshot(runtime, board, activity, { agentActivity, explicitStates, claudeSessions })
 }
 
 export async function getDashboard(now = Date.now()): Promise<DashboardSnapshot> {
-  const [runtime, board, calendar, activity, knowledge, channels, agentActivity] = await Promise.all([getSnapshot(now), getTaskBoard(now), getCalendar(now), getActivity(now), getKnowledge(now), getChannels(now), agentActivitySource(now)])
-  const office = buildOfficeSnapshot(runtime, board, activity, { agentActivity, explicitStates })
+  const [runtime, board, calendar, activity, knowledge, channels, agentActivity, claudeSessions] = await Promise.all([getSnapshot(now), getTaskBoard(now), getCalendar(now), getActivity(now), getKnowledge(now), getChannels(now), agentActivitySource(now), claudeSessionsSource(now)])
+  const office = buildOfficeSnapshot(runtime, board, activity, { agentActivity, explicitStates, claudeSessions })
   return buildDashboard({ runtime, board, calendar, activity, knowledge, channels, office, commands: commandHealth() })
 }

@@ -5,6 +5,8 @@ export interface RuntimeSnapshot {
   /** Every Hermes profile is an agent; `gateway` comes from `hermes profile list`. */
   profiles: Source<{ name: string; model: string; gateway: GatewayState }[]>
   openCode: Source<string>
+  /** Claude Code (`claude --version`), an office agent when installed. */
+  claudeCode?: Source<string>
   fetchedAt: string
 }
 export interface Task { title: string; status: string; id?: string; assignee?: string; priority?: number; board?: string; private?: boolean }

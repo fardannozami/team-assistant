@@ -12,11 +12,13 @@ export function Agents({ runtime, pending = false }: { runtime: RuntimeSnapshot 
   if (!runtime || runtime.profiles.availability === 'unavailable') return <><PageTitle eyebrow="TIM" title="Agent"/><EmptyState title="Tidak tersedia">Daftar profil Hermes tidak bisa dibaca. Apakah <code>hermes</code> ada di PATH server?</EmptyState></>
   const states = new Map(office.status === 'ready' ? office.data.stations.map((station) => [station.id, station]) : [])
   const openCode = runtime.openCode.availability === 'available' ? runtime.openCode.data : undefined
+  const claudeCode = runtime.claudeCode?.availability === 'available' ? runtime.claudeCode.data : undefined
   const cards = [
     ...runtime.profiles.data.map((profile) => ({ id: profile.name, kind: 'Profil Hermes', model: profile.model, gateway: profile.gateway })),
     ...(openCode ? [{ id: 'opencode', kind: 'OpenCode (tool CLI)', model: openCode, gateway: undefined }] : []),
+    ...(claudeCode ? [{ id: 'claude-code', kind: 'Claude Code (tool CLI)', model: claudeCode, gateway: undefined }] : []),
   ]
-  return <><PageTitle eyebrow="TIM" title="Agent">Setiap profil Hermes di mesin ini (dari <code>hermes profile list</code>) adalah agent{openCode ? ', ditambah OpenCode' : ''}. Tidak ada yang diatur manual: profil baru otomatis muncul di sini dan di kantor.</PageTitle>
+  return <><PageTitle eyebrow="TIM" title="Agent">Setiap profil Hermes di mesin ini (dari <code>hermes profile list</code>) adalah agent{[openCode && 'OpenCode', claudeCode && 'Claude Code'].filter(Boolean).length ? `, ditambah ${[openCode && 'OpenCode', claudeCode && 'Claude Code'].filter(Boolean).join(' dan ')}` : ''}. Tidak ada yang diatur manual: profil baru otomatis muncul di sini dan di kantor.</PageTitle>
     <section className="agent-grid">{cards.map((card) => {
       const station = states.get(card.id)
       return <article className="agent-card" key={card.id}>

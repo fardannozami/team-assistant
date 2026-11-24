@@ -34,6 +34,14 @@ Every action is checked against the person's daily role and written to `audit_lo
 | comment | everyone |
 | chat | per agent |
 
+## Claude Code in the office
+
+When `claude --version` works where the bridge runs, Claude Code gets its own desk.
+- **Working:** while one of its sessions changed in the last 3 minutes. The desk shows the project folder name.
+- **Working "atas perintah <profile>":** when a Hermes agent's log shows it running `claude -p`.
+- **Data read:** only session-file times and the newest session's working-folder name. Transcripts are never read.
+- **Where it appears:** in development (Hermes on your machine) it shows up right away. In production, the Hermes image does not include Claude Code yet, so there is no desk.
+
 ## Isolation
 
 - The `hermes` container is only on the Docker network `agents`.
