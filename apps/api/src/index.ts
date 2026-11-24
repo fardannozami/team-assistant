@@ -18,6 +18,8 @@ import { briefingsApi } from "./modules/briefings/index.js";
 import { usersApi } from "./modules/users/index.js";
 import { projectsApi } from "./modules/projects/index.js";
 import { feesApi } from "./modules/fees/index.js";
+import { nayaApi } from "./modules/naya/index.js";
+import { mcpApi } from "./modules/mcp/index.js";
 import { startAllWhatsApp, stopAllWhatsApp } from "./modules/whatsapp/service.js";
 import { HttpError } from "./lib/http-error.js";
 import { isBadInputError } from "./lib/db.js";
@@ -75,6 +77,8 @@ app.route("/briefings", briefingsApi);
 app.route("/users", usersApi);
 app.route("/projects", projectsApi);
 app.route("/fees", feesApi);
+app.route("/naya", nayaApi);
+app.route("/mcp", mcpApi);
 
 export { app };
 

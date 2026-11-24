@@ -498,7 +498,10 @@ export const authApi = {
   logout: () => setToken(null),
 
   providers: () =>
-    request<{ google: boolean }>("/auth/providers").catch(() => ({ google: false })),
+    request<{ google: boolean; nayaUrl: string | null }>("/auth/providers").catch(() => ({ google: false, nayaUrl: null })),
+
+  /** A one-time link that signs the current user in to Naya. */
+  nayaLink: () => request<{ url: string }>("/auth/sso/code", { method: "POST" }),
 
   googleLoginUrl: `${API_BASE}/auth/google`,
 
@@ -886,6 +889,33 @@ export const briefingsApi = {
     request<SearchKeyStatus>("/briefings/search-key", {
       method: "DELETE",
     }),
+};
+
+export interface AgentToken {
+  id: string;
+  name: string;
+  tokenHint: string;
+  scopes: string[];
+  lastUsedAt: string | null;
+  createdAt: string;
+}
+
+// Tokens Hermes agents (Naya's AI team) use to read daily data over MCP.
+export const nayaApi = {
+  tokens: () => request<AgentToken[]>("/naya/tokens"),
+
+  createToken: (name: string) =>
+    request<{ id: string; token: string }>("/naya/tokens", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+
+  revokeToken: (id: string) =>
+    request<{ ok: true }>(`/naya/tokens/${id}`, {
+      method: "DELETE",
+    }),
+
+  mcpUrl: `${API_BASE}/mcp`,
 };
 
 export type ProjectType = "development" | "design";

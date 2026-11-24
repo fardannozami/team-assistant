@@ -401,6 +401,20 @@ export const searchKeySchema = z.object({
   apiKey: z.string().trim().min(10, "API key Tavily wajib diisi").max(200),
 });
 
+/** Scopes of Naya agent tokens (Hermes agents calling /mcp). */
+export const API_TOKEN_SCOPES = ["mcp:read"] as const;
+export type ApiTokenScope = (typeof API_TOKEN_SCOPES)[number];
+
+export const createApiTokenSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Nama agent wajib diisi")
+    .max(60)
+    .regex(/^[\w .-]+$/, "Nama hanya huruf, angka, spasi, titik, minus dan garis bawah"),
+  scopes: z.array(z.enum(API_TOKEN_SCOPES)).min(1).default(["mcp:read"]),
+});
+
 export const MOOD_EMOJI =["😫", "😕", "😐", "🙂", "🤩"] as const;
 
 /** 1-5 from replies like "4", "4 capek tapi oke", "🙂". Null when absent. */

@@ -170,6 +170,61 @@
       </form>
     </section>
 
+    <!-- Naya: tokens for Hermes agents reading daily over MCP -->
+    <section v-if="agentTokens" class="mt-9">
+      <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-3">Agent Naya (MCP)</div>
+      <p class="text-text-muted text-sm mb-4">
+        Agent Hermes di Naya bisa membaca proyek, anggota, standup, laporan, anggota yang sedang kosong, dan leads briefing. Aksesnya hanya baca, tanpa fee dan nomor HP.
+        Buat satu token per agent, lalu pasang di <span class="font-mono text-text">config.yaml</span> profil Hermes-nya.
+      </p>
+      <div class="px-4 py-3 mb-4 rounded-xl border border-border bg-panel-hover text-sm">
+        <span class="text-text-muted">URL MCP:</span> <span class="font-mono text-text break-all">{{ nayaApi.mcpUrl }}</span>
+      </div>
+      <div v-if="newToken" class="mb-4 px-4 py-4 rounded-xl border border-success/30 bg-success/5 slide-in">
+        <p class="text-sm font-bold text-text mb-2">Token untuk "{{ newToken.name }}". Salin sekarang, token ini tidak ditampilkan lagi.</p>
+        <div class="flex flex-wrap items-center gap-2">
+          <code class="flex-1 min-w-0 break-all rounded-lg border border-border bg-panel px-3 py-2 font-mono text-xs text-text">{{ newToken.token }}</code>
+          <button type="button" class="px-3 py-2 rounded-lg text-xs font-extrabold border border-border hover:bg-panel-hover" @click="copyToken">Salin</button>
+        </div>
+      </div>
+      <form class="flex flex-wrap items-end gap-2 mb-4" @submit.prevent="createAgentToken">
+        <div class="flex-1 min-w-[200px]">
+          <label for="agent-token-name" class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Nama agent</label>
+          <input id="agent-token-name" v-model="agentName" type="text" maxlength="60" placeholder="mis. sales" required :class="inputClass" />
+        </div>
+        <button
+          type="submit"
+          :disabled="savingToken"
+          class="px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white transition hover:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {{ savingToken ? "Membuat…" : "Buat token" }}
+        </button>
+      </form>
+      <p v-if="agentTokens.length === 0" class="text-sm text-text-muted">Belum ada token agent.</p>
+      <div v-else class="overflow-x-auto rounded-xl border border-border">
+        <table class="w-full text-sm">
+          <thead class="bg-panel-hover text-left text-[11px] font-extrabold uppercase tracking-wider text-text-dim">
+            <tr>
+              <th class="px-4 py-2.5">Agent</th>
+              <th class="px-4 py-2.5">Token</th>
+              <th class="px-4 py-2.5">Terakhir dipakai</th>
+              <th class="px-4 py-2.5"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="t in agentTokens" :key="t.id" class="border-t border-border">
+              <td class="px-4 py-2.5 text-text">{{ t.name }}</td>
+              <td class="px-4 py-2.5 font-mono text-text-muted">…{{ t.tokenHint }}</td>
+              <td class="px-4 py-2.5 text-text-muted">{{ t.lastUsedAt ? formatDateTime(t.lastUsedAt) : "Belum pernah" }}</td>
+              <td class="px-4 py-2.5 text-right">
+                <button type="button" :disabled="savingToken" class="text-xs font-extrabold text-danger hover:underline disabled:opacity-60" @click="revokeAgentToken(t)">Cabut</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- Akses & batas -->
     <section v-if="policy" class="mt-9">
       <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-3">Akses & batas</div>
@@ -239,7 +294,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { aiApi, ApiError, briefingsApi, showToast, type AiPolicy, type AiProvider, type AiSettings, type AiUsage, type SearchKeyStatus } from "../api";
+import { aiApi, ApiError, briefingsApi, nayaApi, showToast, type AgentToken, type AiPolicy, type AiProvider, type AiSettings, type AiUsage, type SearchKeyStatus } from "../api";
 
 const providerOptions: { id: AiProvider; label: string; help: string; keyUrl?: string }[] = [
   { id: "gemini", label: "Google Gemini", help: "Ada kuota gratis harian. Buat key di Google AI Studio.", keyUrl: "https://aistudio.google.com/apikey" },
@@ -268,6 +323,11 @@ const search = ref<SearchKeyStatus | null>(null);
 const searchKey = ref("");
 const searchWarning = ref("");
 const savingSearch = ref(false);
+
+const agentTokens = ref<AgentToken[] | null>(null);
+const agentName = ref("");
+const newToken = ref<{ name: string; token: string } | null>(null);
+const savingToken = ref(false);
 
 const policy = ref<AiPolicy | null>(null);
 const usage = ref<AiUsage | null>(null);
@@ -327,8 +387,9 @@ async function savePolicy() {
 async function load() {
   loading.value = true;
   try {
-    const [s, p, k] = await Promise.all([aiApi.settings(), aiApi.policy(), briefingsApi.searchKey()]);
+    const [s, p, k, t] = await Promise.all([aiApi.settings(), aiApi.policy(), briefingsApi.searchKey(), nayaApi.tokens()]);
     search.value = k;
+    agentTokens.value = t;
     fillPolicy(p.policy);
     usage.value = p.usage;
     fillForm(s);
@@ -388,6 +449,50 @@ async function removeSearch() {
     error.value = err instanceof ApiError ? err.message : "API key Tavily gagal dihapus.";
   } finally {
     savingSearch.value = false;
+  }
+}
+
+function formatDateTime(iso: string) {
+  return new Date(iso).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
+}
+
+async function createAgentToken() {
+  error.value = "";
+  savingToken.value = true;
+  try {
+    const name = agentName.value.trim();
+    const { token } = await nayaApi.createToken(name);
+    newToken.value = { name, token };
+    agentName.value = "";
+    agentTokens.value = await nayaApi.tokens();
+  } catch (err) {
+    error.value = err instanceof ApiError ? err.message : "Token agent gagal dibuat.";
+  } finally {
+    savingToken.value = false;
+  }
+}
+
+async function copyToken() {
+  if (!newToken.value) return;
+  try {
+    await navigator.clipboard.writeText(newToken.value.token);
+    showToast("Token disalin.", "success");
+  } catch {
+    showToast("Gagal menyalin. Pilih teksnya lalu salin manual.", "error");
+  }
+}
+
+async function revokeAgentToken(t: AgentToken) {
+  if (!confirm(`Cabut token agent "${t.name}"? Agent itu tidak bisa membaca data daily lagi.`)) return;
+  savingToken.value = true;
+  try {
+    await nayaApi.revokeToken(t.id);
+    agentTokens.value = await nayaApi.tokens();
+    showToast("Token dicabut.", "success");
+  } catch (err) {
+    error.value = err instanceof ApiError ? err.message : "Token gagal dicabut.";
+  } finally {
+    savingToken.value = false;
   }
 }
 
