@@ -30,8 +30,17 @@ const REVIEW: Record<ReviewMode, { label: string; field: string; required: boole
   reject: { label: '✕ Tolak', field: 'Alasan penolakan (wajib)', required: true, submit: 'Tolak', done: 'Ditolak. Alasan Anda tercatat untuk agent.' },
 }
 
-/** Approve, request changes, reject (with the required note) and comment, as the signed-in person. */
-function ReviewPanel({ task, status, onDone }: { task: Task; status: string; onDone: () => void }) {
+/** Why a blocked task is blocked: a person rejected it, or a worker error / missing input holds it. */
+type BlockedBy = 'rejected' | 'held'
+
+/** From the task's comments: Naya's rejections are recorded as "BLOCKED: [Ditolak oleh …]". */
+function blockedBy(comments: { body: string }[]): BlockedBy {
+  const last = [...comments].reverse().find((comment) => comment.body.startsWith('BLOCKED:'))
+  return last?.body.includes('[Ditolak oleh') ? 'rejected' : 'held'
+}
+
+/** Approve, request changes, reject (with the required note), retry a blocked task and comment, as the signed-in person. */
+function ReviewPanel({ task, status, blocked, onDone }: { task: Task; status: string; blocked?: BlockedBy; onDone: () => void }) {
   const me = useMe()
   const [mode, setMode] = useState<ReviewMode | undefined>()
   const [note, setNote] = useState('')
@@ -62,9 +71,15 @@ function ReviewPanel({ task, status, onDone }: { task: Task; status: string; onD
     if (await send('comment', { note: comment }, 'Komentar terkirim.')) setComment('')
   }
   const canReview = me.can.review && !['done', 'archived', 'blocked'].includes(status)
+  const canRetry = me.can.review && status === 'blocked'
+  const retry = () => void send('retry', {}, 'Tugas dikembalikan ke antrean. Agent akan mengerjakannya lagi.')
   const modes = (Object.keys(REVIEW) as ReviewMode[]).filter((item) => item === 'reject' || status === 'review')
   return <section className="task-section" aria-label="Tindakan">
     <p className="eyebrow">TINDAKAN</p>
+    {status === 'blocked' && <p className="file-notice">{blocked === 'rejected'
+      ? 'Ditolak oleh anggota tim (alasannya di komentar). "Coba lagi" mengembalikan tugas ke agent untuk dikerjakan ulang.'
+      : 'Tertahan: agent gagal (lihat Kegagalan terakhir, mis. API key model ditolak) atau menunggu masukan. Perbaiki penyebabnya, lalu "Coba lagi".'}</p>}
+    {canRetry && <div className="review-actions"><button type="button" className="primary-button" disabled={busy} onClick={retry}>↻ Coba lagi</button></div>}
     {canReview && <div className="review-actions">{modes.map((item) => <button type="button" key={item} className={item === 'approve' ? 'primary-button' : `secondary-button${item === 'reject' ? ' bad' : ''}`} aria-pressed={mode === item} disabled={busy} onClick={() => { setMode(mode === item ? undefined : item); setMessage(undefined) }}>{REVIEW[item].label}</button>)}</div>}
     {mode && <form className="review-form" onSubmit={submitReview}>
       <label className="field-label" htmlFor="review-note">{REVIEW[mode].field}</label>
@@ -136,10 +151,10 @@ export function TaskDetailDialog({ task, onClose, onOpenTask, onChanged }: { tas
   return <Dialog labelledBy="task-detail-title" onClose={onClose} closeLabel={`Tutup detail ${task.title}`} className="task-detail">
     <p className="eyebrow">TUGAS KANBAN{task.board ? ` · BOARD ${task.board.toUpperCase()}` : ''}{task.id ? ` · ${task.id}` : ''}</p>
     <h2 id="task-detail-title">{detail?.title ?? task.title}</h2>
-    <div className="task-meta"><span className={`badge ${statusTone(status)}`}>{statusLabel(status)}</span><span className={`chip ${task.assignee ? '' : 'chip-muted'}`}>{detail?.assignee ?? task.assignee ?? 'belum ditugaskan'}</span>{(detail?.priority ?? task.priority) ? <span className="chip chip-priority">P{detail?.priority ?? task.priority}</span> : null}</div>
+    <div className="task-meta"><span className={`badge ${statusTone(status)}`}>{status === 'blocked' && detail ? (blockedBy(detail.comments) === 'rejected' ? 'Ditolak' : 'Tertahan') : statusLabel(status)}</span><span className={`chip ${task.assignee ? '' : 'chip-muted'}`}>{detail?.assignee ?? task.assignee ?? 'belum ditugaskan'}</span>{(detail?.priority ?? task.priority) ? <span className="chip chip-priority">P{detail?.priority ?? task.priority}</span> : null}</div>
     {state.status === 'pending' && task.id && <p className="muted">Memuat detail tugas…</p>}
     {failed && <p className="file-notice">{task.id ? 'Detail lengkap belum bisa dibaca (hermes kanban show gagal). Menampilkan ringkasan dari papan.' : 'Tugas ini tidak punya id, jadi hanya ringkasan papan yang tersedia.'}</p>}
-    <ReviewPanel task={task} status={status} onDone={() => { setVersion((value) => value + 1); onChanged?.() }}/>
+    <ReviewPanel task={task} status={status} blocked={detail ? blockedBy(detail.comments) : undefined} onDone={() => { setVersion((value) => value + 1); onChanged?.() }}/>
     {detail && <>
       <dl className="office-detail-grid task-grid">
         <Field label="Dibuat" value={detail.createdAt ? `${formatDateTime(detail.createdAt)}${detail.createdBy ? ` oleh ${detail.createdBy}` : ''}` : undefined}/>

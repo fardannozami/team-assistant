@@ -93,7 +93,7 @@ export function createBridge(options: BridgeOptions): Hono {
       invalidateTasks()
     }
   })
-  for (const action of ['approve', 'changes', 'reject', 'comment'] as ReviewAction[]) {
+  for (const action of ['approve', 'changes', 'reject', 'comment', 'retry'] as ReviewAction[]) {
     app.post(`/tasks/:id/${action}`, async (c) => {
       const input = await body(c)
       const id = taskId(c.req.param('id'))

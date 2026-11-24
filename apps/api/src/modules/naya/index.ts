@@ -82,7 +82,7 @@ nayaApi.post("/tasks", anyone, async (c) => {
   return c.json(created, 201);
 });
 
-for (const action of ["approve", "changes", "reject", "comment"] as const) {
+for (const action of ["approve", "changes", "reject", "comment", "retry"] as const) {
   nayaApi.post(`/tasks/:id/${action}`, anyone, async (c) => {
     allow(c, action === "comment" ? "comment" : "review");
     const input = parseWith(nayaReviewSchema, await c.req.json().catch(() => ({})));

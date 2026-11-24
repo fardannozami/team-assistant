@@ -90,3 +90,17 @@ describe('reviews', () => {
     expect((error as WriteError).message).toBe('Hermes menolak: cannot block t_1')
   })
 })
+
+describe('retry', () => {
+  it('unblocks a held task, with an optional note first', async () => {
+    const { calls, run } = recorder()
+    await review('retry', 't_1', 'blocked', '', undefined, actor, run)
+    await review('retry', 't_2', 'blocked', 'API key sudah diganti', 'sales', actor, run)
+    expect(calls.map((call) => call.args)).toEqual([
+      ['kanban', 'unblock', 't_1'],
+      ['kanban', '--board', 'sales', 'comment', 't_2', '[Dicoba lagi oleh Fardan (PM)] API key sudah diganti', '--author', 'Fardan (PM)'],
+      ['kanban', '--board', 'sales', 'unblock', 't_2'],
+    ])
+    await expect(review('retry', 't_3', 'running', '', undefined, actor, run)).rejects.toMatchObject({ status: 409 })
+  })
+})

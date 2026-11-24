@@ -10,6 +10,7 @@ import { BOARD_SLUG, PROFILE_NAME, TASK_ID, redactLogLine, systemRun, type Run }
 //   Feedback     reopen-review --reason "…" (back to ready; the worker sees the note as a comment)
 //   Rejected     block --kind needs_input "[Ditolak oleh …] …" (a review task is reopened first,
 //                since Hermes cannot block a task in review)
+//   Retry        unblock (a task held by a worker error or waiting for input goes back to work)
 // Every argument is passed to execFile (no shell); ids are validated, free text is bounded.
 
 export const WRITE_TIMEOUT_MS = 20_000
@@ -97,7 +98,7 @@ export async function createInstruction(input: InstructionInput, actor: Actor, r
   return { id, ...(board ? { board } : {}) }
 }
 
-export type ReviewAction = 'approve' | 'changes' | 'reject' | 'comment'
+export type ReviewAction = 'approve' | 'changes' | 'reject' | 'comment' | 'retry'
 
 /** One review action on a task in the given status (from the cached board). */
 export async function review(action: ReviewAction, id: string, status: string, note: unknown, board: string | undefined, actor: Actor, run: Run = systemRun): Promise<void> {
@@ -120,6 +121,14 @@ export async function review(action: ReviewAction, id: string, status: string, n
       const reason = text(note, 'Alasan penolakan', MAX_TEXT, true)!
       if (status === 'review') await write(run, board, ['reopen-review', id], `reopen-review ${id}`)
       await write(run, board, ['block', id, '--kind', 'needs_input', `[Ditolak oleh ${who}] ${reason}`], `block ${id}`)
+      return
+    }
+    case 'retry': {
+      // A blocked task (a worker error, or waiting for input) goes back to work; a note is optional.
+      if (status !== 'blocked') throw new WriteError('Hanya tugas yang tertahan yang bisa dicoba lagi.', 409)
+      const extra = text(note, 'Catatan', MAX_TEXT, false)
+      if (extra) await write(run, board, ['comment', id, `[Dicoba lagi oleh ${who}] ${extra}`, '--author', who], `comment ${id}`)
+      await write(run, board, ['unblock', id], `unblock ${id}`)
       return
     }
     case 'comment': {
