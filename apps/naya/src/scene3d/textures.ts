@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import digdayaLogo from '../assets/digdaya-logo.svg?raw'
 
 // Procedural canvas textures, so the 3D office ships without image or model files.
 // Each texture is created once and cached.
@@ -155,40 +156,49 @@ export function arcadeScreen() {
 }
 
 
+/** The logo's viewBox. */
+const LOGO_WIDTH = 163
+const LOGO_HEIGHT = 44
+
 /** Digdaya's blue, as in the blueprint. */
 export const DIGDAYA_BLUE = '#1f4fd8'
 
 /**
- * A sign face: the Digdaya mark (a "D" in a rounded square) and the wordmark, with an optional
- * line below. `dark` swaps to white on blue (signs that light up at night stay readable).
+ * A sign face with Digdaya's logo (src/assets/digdaya-logo.svg, drawn in `currentColor`) and an
+ * optional line below. `dark` is white on blue, for signs that light up at night. The logo is an
+ * image, so it is drawn when it has loaded and the texture refreshes then.
  */
 export function digdayaSign(subtitle = '', dark = false) {
-  return canvasTexture(`digdaya-${subtitle}-${dark}`, 1024, 256, (ctx) => {
-    const fg = dark ? '#ffffff' : DIGDAYA_BLUE
+  const key = `digdaya-${subtitle}-${dark}`
+  const fresh = !cache.has(key)
+  const fg = dark ? '#ffffff' : DIGDAYA_BLUE
+  const texture = canvasTexture(key, 1024, 256, (ctx) => {
     ctx.fillStyle = dark ? DIGDAYA_BLUE : '#f7f5ef'
     ctx.fillRect(0, 0, 1024, 256)
-    // The mark
-    ctx.fillStyle = dark ? '#ffffff' : DIGDAYA_BLUE
-    ctx.beginPath()
-    ctx.roundRect(48, 48, 160, 160, 36)
-    ctx.fill()
-    ctx.fillStyle = dark ? DIGDAYA_BLUE : '#ffffff'
-    ctx.font = '800 120px system-ui, "Segoe UI", sans-serif'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText('D', 128, 134)
-    // The wordmark
-    ctx.fillStyle = fg
-    ctx.textAlign = 'left'
-    ctx.font = `800 ${subtitle ? 112 : 136}px system-ui, "Segoe UI", sans-serif`
-    ctx.fillText('DIGDAYA', 250, subtitle ? 104 : 132)
     if (subtitle) {
-      ctx.font = '600 44px system-ui, "Segoe UI", sans-serif'
+      ctx.fillStyle = fg
       ctx.globalAlpha = 0.85
-      ctx.fillText(subtitle, 254, 196)
+      ctx.font = '600 40px system-ui, "Segoe UI", sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(subtitle, 512, 214, 960)
       ctx.globalAlpha = 1
     }
   })
+  if (fresh && typeof Image !== 'undefined') {
+    const image = new Image()
+    image.onload = () => {
+      const ctx = (texture.image as HTMLCanvasElement).getContext('2d')
+      if (!ctx) return
+      // The logo is 163×44: as large as fits above the subtitle, centred.
+      const height = subtitle ? 140 : 190
+      const width = (height * LOGO_WIDTH) / LOGO_HEIGHT
+      ctx.drawImage(image, (1024 - width) / 2, subtitle ? 28 : (256 - height) / 2, width, height)
+      texture.needsUpdate = true
+    }
+    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(digdayaLogo.replaceAll('currentColor', fg))}`
+  }
+  return texture
 }
 
 /** A plain text plate, e.g. "POS SATPAM" or the doormat's "SELAMAT DATANG". */
