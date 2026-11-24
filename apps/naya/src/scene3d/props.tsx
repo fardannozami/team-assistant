@@ -3,7 +3,7 @@ import { useMemo, useRef, type ReactNode } from 'react'
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import type { Vec3 } from '../office3d-layout.ts'
-import { arcadeScreen, merahPutih, screenTexture, signTexture } from './textures.ts'
+import { arcadeScreen, DIGDAYA_BLUE, digdayaSign, merahPutih, screenTexture, signTexture, textPlate } from './textures.ts'
 
 // Low-poly props built from primitives. Rounded edges and PBR materials keep them from
 // looking flat; everything is procedural, so no model files are shipped.
@@ -620,5 +620,153 @@ export function BathroomFittings({ position }: { position: Vec3 }) {
     <Cyl position={[0.75, 0.86, -1.6]} radius={0.09} height={0.12} color="#e63946"/>
     <RBox position={[-0.3, 0.2, -1.8]} size={[0.42, 0.4, 0.55]} radius={0.12} color="#f6f7f5" roughness={0.25}/>
     <RBox position={[-0.3, 0.6, -2.05]} size={[0.42, 0.45, 0.16]} radius={0.04} color="#f6f7f5" roughness={0.25}/>
+  </Group>
+}
+
+// ---------------------------------------------------------------------------
+// Front of the office: signs, entrance, the satpam's post, fence and parking
+
+/** A flat textured face (signs, plates); lit from within in the evening when `glow` is set. */
+function Face({ position, size, map, glow = false, rotation }: { position: Vec3; size: [number, number]; map: THREE.Texture; glow?: boolean; rotation?: Vec3 }) {
+  return <mesh position={position} rotation={rotation}>
+    <planeGeometry args={size}/>
+    <meshStandardMaterial map={map} roughness={0.6} emissive="#ffffff" emissiveMap={glow ? map : undefined} emissiveIntensity={glow ? 0.9 : 0}/>
+  </mesh>
+}
+
+/** The Digdaya name board, facing +z. */
+export function DigdayaSign({ position, width = 2.4, subtitle = '', night = false, rotation = 0 }: { position: Vec3; width?: number; subtitle?: string; night?: boolean; rotation?: number }) {
+  const height = width / 4
+  const map = useMemo(() => digdayaSign(subtitle, night), [subtitle, night])
+  return <Group position={position} rotation={rotation}>
+    <RBox position={[0, 0, -0.04]} size={[width + 0.1, height + 0.1, 0.08]} radius={0.02} color="#2b2f36" metalness={0.4}/>
+    <Face position={[0, 0, 0.005]} size={[width, height]} map={map} glow={night}/>
+  </Group>
+}
+
+/** A free-standing pylon by the gate with the company's full name. */
+export function SignPylon({ position, night = false }: { position: Vec3; night?: boolean }) {
+  return <Group position={position}>
+    <RBox position={[0, 0.12, 0]} size={[2.3, 0.24, 0.6]} radius={0.03} color="#8f8a80" roughness={0.95}/>
+    <RBox position={[-0.95, 1.05, 0]} size={[0.16, 1.9, 0.16]} radius={0.02} color="#2b2f36" metalness={0.4}/>
+    <RBox position={[0.95, 1.05, 0]} size={[0.16, 1.9, 0.16]} radius={0.02} color="#2b2f36" metalness={0.4}/>
+    <DigdayaSign position={[0, 1.45, 0.1]} width={2.1} subtitle="PT Digdaya Inovasi Gemilang" night={night}/>
+    <Plant position={[-0.6, 0.24, 0.2]} size={0.55}/>
+    <Plant position={[0.6, 0.24, 0.2]} size={0.55}/>
+  </Group>
+}
+
+/** A flat canopy over the entrance on two slim columns, with the name board on its front edge. */
+export function EntranceCanopy({ position, width = 2.8, depth = 1.1, night = false }: { position: Vec3; width?: number; depth?: number; night?: boolean }) {
+  return <Group position={position}>
+    <RBox position={[0, 2.5, depth / 2]} size={[width, 0.1, depth]} radius={0.02} color="#e9e4da"/>
+    <RBox position={[0, 2.44, depth / 2]} size={[width - 0.1, 0.03, depth - 0.1]} radius={0.01} color="#ffffff" emissive="#fff3d6" emissiveIntensity={night ? 1.4 : 0.1}/>
+    {[-width / 2 + 0.1, width / 2 - 0.1].map((x) => <Cyl key={x} position={[x, 1.25, depth - 0.1]} radius={0.05} height={2.5} color="#2b2f36" metalness={0.5}/>)}
+    <DigdayaSign position={[0, 2.82, depth - 0.05]} width={2.2} night={night}/>
+    {night && <pointLight position={[0, 2.2, depth / 2]} color="#ffe6b8" intensity={5} distance={5} decay={2}/>}
+  </Group>
+}
+
+/** Glass sliding doors (open) in a dark frame, with a welcome mat in front. */
+export function EntranceDoors({ position, width = 1.8 }: { position: Vec3; width?: number }) {
+  const mat = useMemo(() => textPlate('SELAMAT DATANG', '#3b3f45', '#e8e2d4', 512, 128), [])
+  return <Group position={position}>
+    {[-width / 2, width / 2].map((x) => <RBox key={x} position={[x, 1.15, 0]} size={[0.08, 2.3, 0.14]} radius={0.01} color="#2b2f36" metalness={0.5}/>)}
+    <RBox position={[0, 2.3, 0]} size={[width + 0.08, 0.1, 0.16]} radius={0.01} color="#2b2f36" metalness={0.5}/>
+    {/* The two leaves slid aside, overlapping the fixed side panes */}
+    {[-1, 1].map((side) => <RBox key={side} position={[side * (width / 2 - 0.25), 1.12, 0.06]} size={[0.5, 2.2, 0.03]} radius={0.005} color="#cfe8ee" opacity={0.3} roughness={0.05} shadow={false}/>)}
+    {[-1, 1].map((side) => <RBox key={`h${side}`} position={[side * 0.42, 1.05, 0.09]} size={[0.03, 0.4, 0.03]} radius={0.01} color="#c9ccd0" metalness={0.8}/>)}
+    <mesh position={[0, 0.012, 0.65]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      <planeGeometry args={[1.3, 0.55]}/>
+      <meshStandardMaterial map={mat} roughness={0.95}/>
+    </mesh>
+  </Group>
+}
+
+/** The satpam: white shirt, navy trousers, black cap and belt, a badge on the chest. */
+export function Satpam({ position, rotation = 0 }: { position: Vec3; rotation?: number }) {
+  const navy = '#1f2a44'
+  return <Group position={position} rotation={rotation}>
+    <RBox position={[-0.11, 0.35, 0]} size={[0.17, 0.66, 0.2]} radius={0.05} color={navy}/>
+    <RBox position={[0.11, 0.35, 0]} size={[0.17, 0.66, 0.2]} radius={0.05} color={navy}/>
+    <RBox position={[-0.11, 0.05, 0.03]} size={[0.18, 0.1, 0.27]} radius={0.03} color="#111316"/>
+    <RBox position={[0.11, 0.05, 0.03]} size={[0.18, 0.1, 0.27]} radius={0.03} color="#111316"/>
+    <RBox position={[0, 0.98, 0]} size={[0.48, 0.6, 0.3]} radius={0.07} color="#f2f2ee" roughness={0.85}/>
+    <RBox position={[0, 0.7, 0]} size={[0.5, 0.07, 0.32]} radius={0.02} color="#111316"/>
+    <RBox position={[0, 0.7, 0.165]} size={[0.1, 0.06, 0.01]} radius={0.005} color="#d4af37" metalness={0.8}/>
+    {/* Badge and shoulder boards */}
+    <RBox position={[-0.12, 1.12, 0.155]} size={[0.09, 0.11, 0.01]} radius={0.01} color="#d4af37" metalness={0.7}/>
+    <RBox position={[0.13, 1.1, 0.155]} size={[0.12, 0.03, 0.01]} radius={0.005} color={navy}/>
+    {[-0.2, 0.2].map((x) => <RBox key={x} position={[x, 1.27, 0]} size={[0.12, 0.03, 0.28]} radius={0.01} color={navy}/>)}
+    {/* Arms: one at the side, one with the hand at the cap (hormat) */}
+    <RBox position={[-0.31, 0.95, 0.02]} size={[0.12, 0.52, 0.14]} radius={0.04} color="#f2f2ee"/>
+    <RBox position={[0.3, 1.32, 0.12]} size={[0.12, 0.42, 0.14]} radius={0.04} rotation={[-0.5, 0, 0.9]} color="#f2f2ee"/>
+    <RBox position={[0.17, 1.6, 0.17]} size={[0.1, 0.1, 0.1]} radius={0.03} color="#c98e5a"/>
+    <RBox position={[0, 1.5, 0]} size={[0.4, 0.4, 0.37]} radius={0.08} color="#c98e5a" roughness={0.7}/>
+    <RBox position={[-0.09, 1.52, 0.186]} size={[0.06, 0.07, 0.01]} radius={0.004} color="#17201e" shadow={false}/>
+    <RBox position={[0.09, 1.52, 0.186]} size={[0.06, 0.07, 0.01]} radius={0.004} color="#17201e" shadow={false}/>
+    {/* Cap with a gold emblem */}
+    <RBox position={[0, 1.74, 0]} size={[0.42, 0.13, 0.4]} radius={0.05} color="#111316"/>
+    <RBox position={[0, 1.69, 0.25]} size={[0.36, 0.03, 0.16]} radius={0.01} color="#111316"/>
+    <RBox position={[0, 1.76, 0.205]} size={[0.08, 0.07, 0.01]} radius={0.01} color="#d4af37" metalness={0.8}/>
+  </Group>
+}
+
+/** Pos satpam: a small booth with a window, a desk, its sign and a lamp. Faces +z. */
+export function GuardPost({ position, rotation = 0, night = false }: { position: Vec3; rotation?: number; night?: boolean }) {
+  const sign = useMemo(() => textPlate('POS SATPAM', DIGDAYA_BLUE, '#ffffff', 512, 112), [])
+  const wall = '#e6dfd2'
+  return <Group position={position} rotation={rotation}>
+    <RBox position={[0, 0.05, 0]} size={[1.8, 0.1, 1.6]} radius={0.02} color="#8f8a80"/>
+    <RBox position={[0, 1.15, -0.7]} size={[1.6, 2.1, 0.12]} radius={0.02} color={wall}/>
+    <RBox position={[-0.74, 1.15, 0]} size={[0.12, 2.1, 1.4]} radius={0.02} color={wall}/>
+    <RBox position={[0.74, 1.15, 0.25]} size={[0.12, 2.1, 0.9]} radius={0.02} color={wall}/>
+    {/* Front: a low wall with a wide window above */}
+    <RBox position={[-0.12, 0.55, 0.7]} size={[1.36, 0.9, 0.12]} radius={0.02} color={wall}/>
+    <RBox position={[-0.12, 1.45, 0.7]} size={[1.3, 0.9, 0.04]} radius={0.01} color="#9fd3ea" opacity={0.35} roughness={0.05} shadow={false}/>
+    <RBox position={[-0.12, 1.92, 0.7]} size={[1.36, 0.1, 0.12]} radius={0.02} color={wall}/>
+    <RBox position={[0, 2.25, 0.05]} size={[2, 0.12, 1.9]} radius={0.03} color="#7a3b2e"/>
+    <Face position={[0, 2.08, 0.77]} size={[1.2, 0.26]} map={sign} glow={night}/>
+    <RBox position={[-0.12, 1.0, 0.45]} size={[1.2, 0.06, 0.4]} radius={0.02} color="#6b4a32"/>
+    <RBox position={[-0.3, 1.1, 0.42]} size={[0.3, 0.12, 0.22]} radius={0.02} color="#2f3a44"/>
+    <OfficeChair position={[-0.15, 0, 0]} rotation={Math.PI}/>
+    <RBox position={[0.55, 2.0, 0.8]} size={[0.16, 0.12, 0.12]} radius={0.03} color="#f5e6b8" emissive="#ffd98a" emissiveIntensity={night ? 2.2 : 0.15}/>
+    {night && <pointLight position={[0.4, 1.8, 1.2]} color="#ffd08a" intensity={4} distance={4} decay={2}/>}
+  </Group>
+}
+
+/** A low fence of posts and rails along x, from `fromX` to `toX` at `z`. */
+export function Fence({ fromX, toX, z, height = 1 }: { fromX: number; toX: number; z: number; height?: number }) {
+  const length = toX - fromX
+  const posts = Math.max(2, Math.round(length / 1.6) + 1)
+  return <group>
+    <RBox position={[(fromX + toX) / 2, 0.15, z]} size={[length, 0.3, 0.22]} radius={0.02} color="#d8d1c3" roughness={0.95}/>
+    {Array.from({ length: posts }, (_, index) => fromX + (length * index) / (posts - 1)).map((x) => <RBox key={x} position={[x, height / 2, z]} size={[0.16, height, 0.16]} radius={0.02} color="#d8d1c3"/>)}
+    {[0.55, height - 0.08].map((y) => <RBox key={y} position={[(fromX + toX) / 2, y, z]} size={[length, 0.05, 0.05]} radius={0.01} color="#2b2f36" metalness={0.5}/>)}
+    {Array.from({ length: Math.floor(length / 0.18) }, (_, index) => fromX + 0.09 + index * 0.18).map((x) => <RBox key={`b${x}`} position={[x, (0.3 + height - 0.08) / 2, z]} size={[0.025, height - 0.38, 0.025]} radius={0.005} color="#2b2f36" metalness={0.5} shadow={false}/>)}
+  </group>
+}
+
+/** Portal parkir: the boom barrier at the gate, raised. Pivot at `position`, the arm along -x. */
+export function BoomGate({ position, length = 2.4, raised = true }: { position: Vec3; length?: number; raised?: boolean }) {
+  const angle = raised ? 1.25 : 0
+  return <Group position={position}>
+    <RBox position={[0, 0.5, 0]} size={[0.3, 1, 0.3]} radius={0.03} color="#f2c230"/>
+    <RBox position={[0, 1.0, 0]} size={[0.34, 0.08, 0.34]} radius={0.02} color="#2b2f36"/>
+    <group position={[0, 0.9, 0.2]} rotation={[0, 0, -angle]}>
+      {Array.from({ length: 6 }, (_, index) => <RBox key={index} position={[-(index + 0.5) * (length / 6), 0, 0]} size={[length / 6, 0.07, 0.05]} radius={0.01} color={index % 2 ? '#d62828' : '#f2f2ee'}/>)}
+    </group>
+  </Group>
+}
+
+/** A scooter (motor matic), parked. Faces +x. */
+export function Scooter({ position, rotation = 0, color }: { position: Vec3; rotation?: number; color: string }) {
+  return <Group position={position} rotation={rotation}>
+    {[-0.48, 0.48].map((x) => <Cyl key={x} position={[x, 0.22, 0]} radius={0.2} height={0.09} rotation={[Math.PI / 2, 0, 0]} color="#1b1d20" roughness={0.9}/>)}
+    <RBox position={[0, 0.38, 0]} size={[0.9, 0.18, 0.26]} radius={0.06} color={color}/>
+    <RBox position={[-0.2, 0.56, 0]} size={[0.5, 0.16, 0.3]} radius={0.06} color="#202326"/>
+    <RBox position={[0.36, 0.6, 0]} size={[0.16, 0.5, 0.3]} radius={0.06} color={color}/>
+    <RBox position={[0.44, 0.92, 0]} size={[0.06, 0.06, 0.6]} radius={0.02} color="#2b2f36" metalness={0.5}/>
+    <RBox position={[0.47, 0.72, 0]} size={[0.04, 0.12, 0.18]} radius={0.02} color="#f5f0dc" emissive="#ffe9a8" emissiveIntensity={0.3}/>
   </Group>
 }

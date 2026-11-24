@@ -154,3 +154,52 @@ export function arcadeScreen() {
   })
 }
 
+
+/** Digdaya's blue, as in the blueprint. */
+export const DIGDAYA_BLUE = '#1f4fd8'
+
+/**
+ * A sign face: the Digdaya mark (a "D" in a rounded square) and the wordmark, with an optional
+ * line below. `dark` swaps to white on blue (signs that light up at night stay readable).
+ */
+export function digdayaSign(subtitle = '', dark = false) {
+  return canvasTexture(`digdaya-${subtitle}-${dark}`, 1024, 256, (ctx) => {
+    const fg = dark ? '#ffffff' : DIGDAYA_BLUE
+    ctx.fillStyle = dark ? DIGDAYA_BLUE : '#f7f5ef'
+    ctx.fillRect(0, 0, 1024, 256)
+    // The mark
+    ctx.fillStyle = dark ? '#ffffff' : DIGDAYA_BLUE
+    ctx.beginPath()
+    ctx.roundRect(48, 48, 160, 160, 36)
+    ctx.fill()
+    ctx.fillStyle = dark ? DIGDAYA_BLUE : '#ffffff'
+    ctx.font = '800 120px system-ui, "Segoe UI", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('D', 128, 134)
+    // The wordmark
+    ctx.fillStyle = fg
+    ctx.textAlign = 'left'
+    ctx.font = `800 ${subtitle ? 112 : 136}px system-ui, "Segoe UI", sans-serif`
+    ctx.fillText('DIGDAYA', 250, subtitle ? 104 : 132)
+    if (subtitle) {
+      ctx.font = '600 44px system-ui, "Segoe UI", sans-serif'
+      ctx.globalAlpha = 0.85
+      ctx.fillText(subtitle, 254, 196)
+      ctx.globalAlpha = 1
+    }
+  })
+}
+
+/** A plain text plate, e.g. "POS SATPAM" or the doormat's "SELAMAT DATANG". */
+export function textPlate(text: string, background: string, color: string, width = 512, height = 128) {
+  return canvasTexture(`plate-${text}-${background}-${color}-${width}x${height}`, width, height, (ctx) => {
+    ctx.fillStyle = background
+    ctx.fillRect(0, 0, width, height)
+    ctx.fillStyle = color
+    ctx.font = `800 ${Math.round(height * 0.5)}px system-ui, "Segoe UI", sans-serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(text, width / 2, height / 2 + 2, width - 24)
+  })
+}

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { ARCADES, BALCONY, BALCONY_DOOR, BALCONY_TABLE, BATHROOM, BEANBAGS, CARROM, COFFEE_TABLE, ENTRANCE_X, FLAG, FLOOR_HEIGHT, type Floor as FloorNumber, GAME_DOOR, GAME_ROOM, GAME_TV, HAMMOCK, LESEHAN_TABLE, LOUNGE_PARTITION_END_Z, MEETING_DOOR_X, PARTITION_X, PING_PONG, SOFA, STAIRS, STALL_ROTATION, type OfficeLayout, TV, type Vec3 } from '../office3d-layout.ts'
-import { AcOutdoorUnit, AirConditioner, ArcadeCabinet, Armchair, BathroomFittings, Beanbag, Bed, Bookshelf, CarromTable, ClothesLine, CoffeeTable, FlagPole, FloorCushion, Fridge, GalonDispenser, Gerobak, Hammock, KopiSepeda, LongTable, LowTable, Nightstand, OfficeChair, OfficeLight, PantryCounter, PingPongTable, Plant, Railing, RattanChair, RBox, SideTable, Sofa, Staircase, StreetLamp, StringLights, Television, Tree, Vendor, WallClock, Wardrobe, WaterTank, Whiteboard } from './props.tsx'
+import { AcOutdoorUnit, AirConditioner, ArcadeCabinet, Armchair, BathroomFittings, Beanbag, Bed, Bookshelf, BoomGate, CarromTable, ClothesLine, CoffeeTable, DigdayaSign, EntranceCanopy, EntranceDoors, Fence, FlagPole, FloorCushion, Fridge, GalonDispenser, Gerobak, GuardPost, Hammock, KopiSepeda, LongTable, LowTable, Nightstand, OfficeChair, OfficeLight, PantryCounter, PingPongTable, Plant, Railing, RattanChair, RBox, Satpam, Scooter, SideTable, SignPylon, Sofa, Staircase, StreetLamp, StringLights, Television, Tree, Vendor, WallClock, Wardrobe, WaterTank, Whiteboard } from './props.tsx'
 import { asphalt, carpet, grass, pavingStones, tileFloor, woodFloor } from './textures.ts'
 
 // The building (floors, walls, windows, furniture) and its surroundings (yard, sidewalk,
@@ -92,6 +92,9 @@ function Building({ night, layout }: { night: boolean; layout: OfficeLayout }) {
     <Glass x={PARTITION_X} fromZ={minZ} toZ={LOUNGE_PARTITION_END_Z} bottom={0.9}/>
     <Wall from={[minX, maxZ]} to={[4.9, maxZ]} height={0.55}/>
     <Wall from={[6.7, maxZ]} to={[maxX, maxZ]} height={0.55}/>
+    {/* The front door: glass sliding doors under a canopy with the Digdaya name */}
+    <EntranceDoors position={[ENTRANCE_X, 0, maxZ]}/>
+    <EntranceCanopy position={[ENTRANCE_X, 0, maxZ]} depth={0.85} night={night}/>
     {/* Meeting room: glass-topped half walls with a door by the aisle, and a planter row by the lounge */}
     <MeetingRoom layout={layout} night={night}/>
     {[1.3, 2.3, 3.3].map((z) => <Plant key={z} position={[0.9, 0, z]} size={0.8}/>)}
@@ -189,8 +192,9 @@ function BuildingShell({ night, layout }: { night: boolean; layout: OfficeLayout
     <Wall from={[minX, maxZ]} to={[4.9, maxZ]}/>
     <Wall from={[6.7, maxZ]} to={[maxX, maxZ]}/>
     {/* Glass entrance doors and shop windows facing the street */}
-    <GlassZ z={maxZ} fromX={4.9} toX={6.7} bottom={0} top={2.3}/>
+    <EntranceDoors position={[ENTRANCE_X, 0, maxZ]}/>
     <RBox position={[ENTRANCE_X, 2.45, maxZ]} size={[1.9, 0.3, 0.3]} radius={0.02} color={WALL_TOP}/>
+    <DigdayaSign position={[ENTRANCE_X, FLOOR_HEIGHT - 0.5, BALCONY.maxZ + 0.04]} width={2.6} night={night}/>
     {[-7, -3.6, -0.2, 2.6, 8.1].filter((x) => x > minX + 1).map((x) => <Window key={x} position={[x, 1.45, maxZ + 0.14]} night={night}/>)}
     {[-3, 0.6, 3].map((z) => <group key={z} rotation={[0, -Math.PI / 2, 0]} position={[minX - 0.14, 1.45, z]}><Window position={[0, 0, 0]} width={1.6} night={night}/></group>)}
     {/* Game room: full walls and a flat roof with the water tank */}
@@ -283,6 +287,10 @@ function UpperFloor({ night, layout }: { night: boolean; layout: OfficeLayout })
   </group>
 }
 
+/** The front fence runs along the road; the gate lines up with the entrance path. */
+const FENCE_Z = 9.75
+const GATE = { fromX: 4.3, toX: 7.5 }
+
 function Outdoors({ night, layout }: { night: boolean; layout: OfficeLayout }) {
   // How far the building grew to the left for a larger crew; the grounds grow with it.
   const shift = layout.building.minX + 9.5
@@ -294,10 +302,20 @@ function Outdoors({ night, layout }: { night: boolean; layout: OfficeLayout }) {
     <Floor position={[shift / 2, -0.02, 2]} size={[60 - shift, 44]} map={lawn} roughness={1}/>
     <Floor position={[shift / 2, -0.005, 7.1]} size={[34 - shift, 5]} map={sidewalk} roughness={0.9}/>
     <Floor position={[shift / 2, -0.01, 12.1]} size={[60 - shift, 5]} map={road} roughness={0.95}/>
-    {/* Path from the entrance to the sidewalk */}
+    {/* Path from the entrance through the forecourt to the gate */}
     <Floor position={[5.8, 0, 4.7]} size={[1.8, 1]} map={sidewalk}/>
+    <Floor position={[5.9, 0.004, 9.7]} size={[GATE.toX - GATE.fromX, 0.6]} map={road} roughness={0.95}/>
     {/* Merah Putih by the entrance */}
     <FlagPole position={FLAG}/>
+    {/* The front fence along the road, with the gate (portal raised), the pos satpam and the name pylon */}
+    <Fence fromX={shift - 17} toX={GATE.fromX} z={FENCE_Z}/>
+    <Fence fromX={GATE.toX} toX={17} z={FENCE_Z}/>
+    <BoomGate position={[GATE.toX - 0.1, 0, FENCE_Z - 0.35]} length={GATE.toX - GATE.fromX - 0.3}/>
+    <GuardPost position={[9.1, 0, 8.55]} night={night}/>
+    <Satpam position={[7.2, 0, 8.9]} rotation={-0.25}/>
+    <SignPylon position={[2.4, 0, 8.9]} night={night}/>
+    {/* Motor parking on the forecourt */}
+    {[['#c0392b', 10.7], ['#1f4fd8', 11.5], ['#2b2f36', 12.3], ['#f2f2ee', 13.1]].map(([color, x]) => <Scooter key={x as number} position={[x as number, 0, 6.9]} rotation={Math.PI / 2} color={color as string}/>)}
     {/* The gang (alley) left of the building, with the street food out of the main view */}
     <Floor position={[layout.gangCenterX, -0.008, -0.4]} size={[3.6, 10]} map={gang} roughness={0.9}/>
     <group position={layout.baksoCart} rotation={[0, STALL_ROTATION, 0]}>
