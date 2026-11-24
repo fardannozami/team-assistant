@@ -139,7 +139,7 @@
                     class="rounded-full px-1.5 text-[10px] font-bold"
                     :class="m.bonusPaidAt ? 'bg-success/10 text-success' : 'bg-text-muted/10 text-text-dim'"
                     :title="m.bonusPaidAt ? `Bonus difinalisasi ${formatDate(m.bonusPaidAt.slice(0, 10))}` : 'Bonus belum dibayar'"
-                  >{{ m.bonusPaidAt ? "Bonus ✓" : "Bonus belum" }}</span>
+                  >{{ m.bonusPaidAt ? "Paid ✓" : "Bonus belum" }}</span>
                 </span>
               </li>
             </ul>
