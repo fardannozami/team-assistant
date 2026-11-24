@@ -6,6 +6,7 @@ import { createApiTokenSchema } from "@repo/shared";
 import { newSecret, safeEqual, sha256Hex } from "./modules/auth/sso.js";
 import { handleRpc, type McpTool } from "./modules/mcp/protocol.js";
 import { MCP_TOOLS } from "./modules/mcp/tools.js";
+import { isNayaKeyword } from "./modules/naya/login.js";
 
 describe("sso secrets", () => {
   test("codes are prefixed, url-safe and unique; only their hash is kept", () => {
@@ -21,6 +22,15 @@ describe("sso secrets", () => {
     expect(safeEqual("abc", "abc")).toBe(true);
     expect(safeEqual("abc", "abd")).toBe(false);
     expect(safeEqual("abc", "abcd")).toBe(false);
+  });
+});
+
+describe("whatsapp sign-in link", () => {
+  test("only the bare keyword asks for a link", () => {
+    expect(isNayaKeyword("NAYA")).toBe(true);
+    expect(isNayaKeyword("  naya ")).toBe(true);
+    expect(isNayaKeyword("naya tolong carikan leads")).toBe(false);
+    expect(isNayaKeyword("")).toBe(false);
   });
 });
 
