@@ -118,26 +118,38 @@ Every action is checked against the person's daily role and written to `audit_lo
 
 ## Local development
 
-```bash
-bun run dev                               # api, web, worker (and naya on :3001)
-docker compose --profile agents up hermes docker-socket-proxy
-```
+**With Hermes installed on your machine** (the usual case): `bun run dev` starts everything.
+- `api`, `web` (:3000), `worker` and `agents` as before.
+- `naya` (:3001).
+- `hermes-bridge` (127.0.0.1:8700). It reads your own `hermes` CLI and `~/.hermes`.
 
-`.env` for the API outside Docker:
+No Docker is needed for Hermes. `.env`:
 ```bash
 NAYA_WEB_URL=http://localhost:3001
 HERMES_BRIDGE_URL=http://localhost:8700
-HERMES_API_URL=http://localhost:8642
-BRIDGE_TOKEN=dev-bridge-token-change-me
-DOCKER_PROXY_URL=http://localhost:2375
+HERMES_API_URL=http://localhost:8642      # chat: your Hermes API server
+BRIDGE_TOKEN=<any 16+ characters>
+DOCKER_PROXY_URL=http://localhost:2375     # only for the ops tools (see below)
 ```
 
-Set up the dev Hermes as in steps 4–7, with `docker compose exec hermes …`.
-
-Without Docker, the bridge can also read a Hermes installed on your machine:
+Chat: in `~/.hermes/.env` set the following, then restart the gateway (`hermes gateway restart`):
 ```bash
-cd apps/hermes-bridge && bun run dev
+API_SERVER_ENABLED=true
+API_SERVER_KEY=<a key>
 ```
+Then register the profile (e.g. `default`) in daily › Pengaturan › AI › *Agent Naya* with that key, and allow your role to chat.
+
+Ops tools: these are optional in development. Run the Docker proxy alone:
+```bash
+docker compose --profile agents up docker-socket-proxy
+```
+
+**Hermes in Docker instead:**
+```bash
+docker compose --profile agents up hermes docker-socket-proxy
+```
+- Its ports 8700 and 8642 clash with a host Hermes, so stop one of them first.
+- Set it up as in steps 4–7 above, with `docker compose exec hermes …`.
 
 Tests:
 - `bun test` in `apps/api` and in `apps/hermes-bridge` (the Hermes CLI is faked).

@@ -5,6 +5,7 @@
 # with the same HERMES_HOME as the gateway, so it reads and writes the same kanban.db.
 export HOME=/opt/data
 export HERMES_HOME=/opt/data
+export BRIDGE_HOST="${BRIDGE_HOST:-0.0.0.0}"
 cd /opt/data
 [ "$(id -u)" = 0 ] || exec /usr/local/bin/hermes-bridge
 exec s6-setuidgid hermes /usr/local/bin/hermes-bridge
