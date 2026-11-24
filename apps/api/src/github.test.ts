@@ -9,7 +9,7 @@ import { createHmac } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { normalizeEvent } from "./modules/github/events.js";
 import { verifyWebhookSignature } from "./modules/github/app.js";
-import { activityHint, describeCounts, previousWorkday, recentCommits, standupWindow } from "./modules/github/digest.js";
+import { activityHint, describeCounts, previousWorkday, recentCommits, reportWindow, standupWindow } from "./modules/github/digest.js";
 
 const SECRET = "test-webhook-secret";
 const sign = (body: string) => `sha256=${createHmac("sha256", SECRET).update(body).digest("hex")}`;
@@ -73,6 +73,17 @@ describe("github normalization", () => {
       since: new Date("2026-11-12T17:00:00Z"),
       until: new Date("2026-11-15T17:00:00Z"),
     });
+  });
+
+  test("the daily report also covers the report day itself, up to now", () => {
+    // Read on Tuesday 24 Nov at 16:30 WIB: Monday and Tuesday so far.
+    expect(reportWindow("2026-11-24", new Date("2026-11-24T09:30:00Z"))).toEqual({
+      from: "2026-11-23",
+      since: new Date("2026-11-22T17:00:00Z"),
+      until: new Date("2026-11-24T09:30:00Z"),
+    });
+    // A past day's report ends at that day's midnight.
+    expect(reportWindow("2026-11-16", new Date("2026-11-20T00:00:00Z")).until).toEqual(new Date("2026-11-16T17:00:00Z"));
   });
 
   test("standup hint names notable work and counts the rest", () => {
