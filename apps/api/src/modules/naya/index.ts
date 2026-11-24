@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { createApiTokenSchema } from "@repo/shared";
 import { audit, requireRole } from "../auth/index.js";
 import { createApiToken, listApiTokens, revokeApiToken } from "../auth/tokens.js";
+import { revokeNayaSessions } from "../auth/sso.js";
 import { parseWith } from "../../lib/validate.js";
 import { getActorId, getWorkspaceId } from "../../lib/tenant.js";
 
@@ -29,5 +30,16 @@ nayaApi.delete("/tokens/:id", canManage, async (c) => {
     return c.json({ error: "Not found" }, 404);
   }
   await audit(workspaceId, getActorId(c), "naya.token.revoke", "api_token", id);
+  return c.json({ ok: true });
+});
+
+// Lost phone: an admin signs a person out of Naya on every device.
+nayaApi.post("/sessions/:userId/revoke", canManage, async (c) => {
+  const userId = c.req.param("userId");
+  const workspaceId = getWorkspaceId(c);
+  if (!/^[0-9a-f-]{36}$/i.test(userId) || !(await revokeNayaSessions(userId, workspaceId))) {
+    return c.json({ error: "Not found" }, 404);
+  }
+  await audit(workspaceId, getActorId(c), "naya.sessions.revoke", "users", userId);
   return c.json({ ok: true });
 });

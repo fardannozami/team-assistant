@@ -1,6 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createDbClient, roles, ssoCodes, users, workspaces } from "@repo/database";
-import { and, eq, gt, isNull, lt } from "drizzle-orm";
+import { and, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import { secretEnv } from "../../lib/env.js";
 
 // Single sign-on for Naya (naya.digdaya.co): a signed-in daily user gets a
@@ -13,6 +13,8 @@ const db = createDbClient(
 
 export const SSO_CLIENT = "naya";
 export const SSO_CODE_TTL_MS = 60_000;
+/** Links sent over WhatsApp ("NAYA") wait longer for the person to tap them. */
+export const SSO_LINK_TTL_MS = 10 * 60_000;
 
 export const nayaUrl = () => (process.env.NAYA_URL ?? "").replace(/\/+$/, "") || null;
 const ssoSecret = () => secretEnv("NAYA_SSO_SECRET", "dev-naya-sso-secret");
@@ -42,14 +44,14 @@ export function callbackUrl(code: string): string {
   return `${nayaUrl()}/auth/callback?code=${encodeURIComponent(code)}`;
 }
 
-export async function createSsoCode(userId: string): Promise<string> {
+export async function createSsoCode(userId: string, ttlMs = SSO_CODE_TTL_MS): Promise<string> {
   await db.delete(ssoCodes).where(lt(ssoCodes.expiresAt, new Date(Date.now() - 60 * 60_000)));
   const code = newSecret("ta_sso");
   await db.insert(ssoCodes).values({
     codeHash: sha256Hex(code),
     userId,
     client: SSO_CLIENT,
-    expiresAt: new Date(Date.now() + SSO_CODE_TTL_MS),
+    expiresAt: new Date(Date.now() + ttlMs),
   });
   return code;
 }
@@ -58,6 +60,8 @@ export type SsoIdentity = {
   user: { id: string; name: string; email: string };
   role: string | null;
   workspace: { id: string; name: string };
+  /** Naya refuses sessions issued under an older version ("sign out of every device"). */
+  sessionVersion: number;
 };
 
 /** The active user, with their workspace and current role, or null. */
@@ -68,6 +72,7 @@ export async function ssoIdentity(userId: string): Promise<SsoIdentity | null> {
       name: users.name,
       email: users.email,
       role: roles.name,
+      sessionVersion: users.nayaSessionVersion,
       workspaceId: workspaces.id,
       workspaceName: workspaces.name,
     })
@@ -81,10 +86,21 @@ export async function ssoIdentity(userId: string): Promise<SsoIdentity | null> {
     user: { id: row.id, name: row.name, email: row.email },
     role: row.role ?? null,
     workspace: { id: row.workspaceId, name: row.workspaceName },
+    sessionVersion: row.sessionVersion,
   };
 }
 
-/** Uses up a code: valid once, within its minute. */
+/** Ends every Naya session of the user (all devices). Returns false for unknown users. */
+export async function revokeNayaSessions(userId: string, workspaceId?: string): Promise<boolean> {
+  const rows = await db
+    .update(users)
+    .set({ nayaSessionVersion: sql`${users.nayaSessionVersion} + 1` })
+    .where(workspaceId ? and(eq(users.id, userId), eq(users.workspaceId, workspaceId)) : eq(users.id, userId))
+    .returning({ id: users.id });
+  return rows.length > 0;
+}
+
+/** Uses up a code: valid once, before it expires. */
 export async function exchangeSsoCode(code: string): Promise<SsoIdentity | null> {
   if (!code.startsWith("ta_sso_")) return null;
   const [used] = await db

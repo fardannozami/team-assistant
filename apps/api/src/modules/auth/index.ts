@@ -13,6 +13,7 @@ import {
   exchangeSsoCode,
   isNayaServer,
   nayaUrl,
+  revokeNayaSessions,
   ssoIdentity,
 } from "./sso.js";
 
@@ -181,6 +182,17 @@ auth.post("/sso/exchange", async (c) => {
   if (!identity) return c.json({ error: "Invalid or expired code" }, 400);
   await audit(identity.workspace.id, identity.user.id, "auth.sso", "users", identity.user.id, { client: SSO_CLIENT });
   return c.json(identity);
+});
+
+// Naya's "sign out of every device".
+auth.post("/sso/revoke", async (c) => {
+  if (!isNayaServer(c.req.header("x-sso-secret"))) return c.json({ error: "Unauthorized" }, 401);
+  const body = (await c.req.json().catch(() => ({}))) as { userId?: unknown };
+  const userId = typeof body.userId === "string" && /^[0-9a-f-]{36}$/i.test(body.userId) ? body.userId : null;
+  if (!userId || !(await revokeNayaSessions(userId))) return c.json({ error: "Not found" }, 404);
+  const identity = await ssoIdentity(userId);
+  if (identity) await audit(identity.workspace.id, userId, "auth.sso.revoke", "users", userId, { client: SSO_CLIENT });
+  return c.json({ ok: true });
 });
 
 // Naya re-checks signed-in users now and then, so deactivation and role changes apply.

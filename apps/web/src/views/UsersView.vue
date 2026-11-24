@@ -85,6 +85,9 @@
               {{ u.isActive ? "Nonaktifkan" : "Aktifkan" }}
             </button>
           </div>
+          <button v-if="nayaOn && u.isActive" type="button" class="min-h-11 self-start rounded-xl border border-border px-3 text-sm font-semibold text-text-muted hover:bg-panel-hover disabled:opacity-50 sm:self-center" title="Misalnya kalau HP hilang: semua sesi Naya orang ini berakhir" :disabled="busy === u.id" @click="signOutNaya(u)">
+            Keluarkan dari Naya
+          </button>
         </li>
       </ul>
     </section>
@@ -93,7 +96,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
-import { ApiError, authApi, showToast, usersApi, type InvitableRole, type Me, type WebInvite, type WebUser } from "../api";
+import { ApiError, authApi, nayaApi, showToast, usersApi, type InvitableRole, type Me, type WebInvite, type WebUser } from "../api";
 
 const ROLE_HELP: Record<InvitableRole, string> = {
   Admin: "Admin: mengelola anggota, jadwal, WhatsApp, AI, integrasi, dan pengguna lain (kecuali Owner).",
@@ -112,6 +115,7 @@ const created = ref<{ email: string; role: string; url: string } | null>(null);
 const loading = ref(false);
 const error = ref("");
 const busy = ref<string | null>(null);
+const nayaOn = ref(false);
 
 function message(err: unknown, fallback: string) {
   if (err instanceof ApiError && err.status === 403) return "Hanya Owner atau Admin yang bisa mengelola pengguna.";
@@ -132,7 +136,10 @@ async function load() {
     loading.value = false;
   }
 }
-onMounted(load);
+onMounted(() => {
+  load();
+  authApi.providers().then((p) => (nayaOn.value = Boolean(p.nayaUrl)));
+});
 
 async function createInvite(target: string, targetRole: InvitableRole) {
   busy.value = "invite";
@@ -175,6 +182,19 @@ async function update(u: WebUser, input: { role?: InvitableRole; isActive?: bool
   } catch (err) {
     showToast(message(err, "Gagal menyimpan."), "error");
     await load();
+  } finally {
+    busy.value = null;
+  }
+}
+
+async function signOutNaya(u: WebUser) {
+  if (!confirm(`Keluarkan ${u.name} dari Naya di semua perangkat? Ia bisa masuk lagi lewat daily atau ketik NAYA ke bot WhatsApp.`)) return;
+  busy.value = u.id;
+  try {
+    await nayaApi.revokeSessions(u.id);
+    showToast(`${u.name} dikeluarkan dari Naya. Berlaku paling lambat 10 menit di perangkat yang sedang terbuka.`, "success");
+  } catch (err) {
+    showToast(message(err, "Gagal mengeluarkan dari Naya."), "error");
   } finally {
     busy.value = null;
   }

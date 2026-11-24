@@ -915,6 +915,12 @@ export const nayaApi = {
       method: "DELETE",
     }),
 
+  /** Ends every Naya session of the user (lost phone). */
+  revokeSessions: (userId: string) =>
+    request<{ ok: true }>(`/naya/sessions/${userId}/revoke`, {
+      method: "POST",
+    }),
+
   mcpUrl: `${API_BASE}/mcp`,
 };
 
