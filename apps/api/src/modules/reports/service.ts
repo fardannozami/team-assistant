@@ -1,7 +1,7 @@
 import { createDbClient, employees, roles, standupAnswers, standupSessions, standups } from "@repo/database";
 import { and, eq, gte, isNull, lte, notInArray, or } from "drizzle-orm";
-import { describeCounts, recentCommits } from "../github/digest.js";
-import { standupActivity } from "../github/service.js";
+import { describeCounts, recentCommits, reportWindow } from "../github/digest.js";
+import { activityBetween } from "../github/service.js";
 import { standupToday } from "../standups/engine.js";
 import { isNoBlocker } from "@repo/shared";
 
@@ -65,12 +65,12 @@ export async function generateDailyReport(workspaceId: string, date?: string) {
       ),
     );
 
-  // GitHub activity behind each standup's "kemarin" (GIT-008 timeline).
-  const activity = await standupActivity(
-    workspaceId,
-    d,
-    allEmployees.map((e) => e.id),
-  );
+  // GitHub activity since the standup's "kemarin" (GIT-008 timeline), through the report day so far.
+  const window = reportWindow(d);
+  const activity = {
+    from: window.from,
+    byEmployee: await activityBetween(workspaceId, window.since, window.until, allEmployees.map((e) => e.id)),
+  };
   const github = allEmployees
     .filter((e) => activity.byEmployee.has(e.id))
     .map((e) => ({

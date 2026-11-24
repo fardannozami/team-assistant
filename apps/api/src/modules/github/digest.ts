@@ -84,6 +84,17 @@ export function standupWindow(date: string, tz: string = DEFAULT_TIMEZONE) {
   return { from, since: startOfDay(from, tz), until: startOfDay(date, tz) };
 }
 
+/**
+ * The daily report's GitHub window: the standup's "kemarin" plus the report day itself, up to
+ * now, so a report read in the afternoon also lists today's commits.
+ */
+export function reportWindow(date: string, now: Date = new Date(), tz: string = DEFAULT_TIMEZONE) {
+  const { from, since } = standupWindow(date, tz);
+  const [y, m, d] = date.split("-").map(Number);
+  const endOfDay = startOfDay(new Date(Date.UTC(y!, m! - 1, d!) + DAY_MS).toISOString().slice(0, 10), tz);
+  return { from, since, until: now < endOfDay ? now : endOfDay };
+}
+
 /** "3 commit, 1 PR di-merge", most frequent first. */
 export function describeCounts(counts: Record<string, number>) {
   return Object.entries(counts)
