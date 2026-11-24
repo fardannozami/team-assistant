@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { apiFetch } from '../api.ts'
 import { apiPost, useMe } from '../access.ts'
 import { formatDateTime, orderedStatuses, statusTone } from '../format.ts'
 import { usePolling } from '../polling.ts'
@@ -130,6 +131,69 @@ function InstructionDialog({ boards, onClose, onCreated }: { boards: { slug: str
   </Dialog>
 }
 
+interface Attachment { id: number; filename: string; size: number; contentType?: string; uploadedBy?: string; createdAt?: string }
+
+const isText = (file: Attachment) => /^(text\/|application\/json)/.test(file.contentType ?? '')
+const fileSize = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
+
+/** Files the agent attached to the task (its deliverables): read text here, download anything. */
+function TaskAttachments({ task, version }: { task: Task; version: number }) {
+  const [files, setFiles] = useState<Attachment[] | null>(null)
+  const [open, setOpen] = useState<{ id: number; text: string } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const base = `/api/tasks/${encodeURIComponent(task.id ?? '')}/attachments`
+  const board = task.board ? `?board=${encodeURIComponent(task.board)}` : ''
+  useEffect(() => {
+    if (!task.id) return
+    let active = true
+    void apiFetch(`${base}${board}`).then(async (response) => {
+      const data = await response.json().catch(() => undefined) as { attachments?: Attachment[] } | undefined
+      if (active) setFiles(response.ok ? data?.attachments ?? [] : [])
+    }).catch(() => { if (active) setFiles([]) })
+    return () => { active = false }
+  }, [base, board, task.id, version])
+  if (!files?.length) return null
+
+  async function fetchFile(file: Attachment): Promise<Blob | null> {
+    setError(null)
+    const response = await apiFetch(`${base}/${file.id}${board}`).catch(() => null)
+    if (!response?.ok) {
+      const data = await response?.json().catch(() => undefined) as { error?: string } | undefined
+      setError(data?.error ?? 'Lampiran tidak bisa dibuka.')
+      return null
+    }
+    return response.blob()
+  }
+  async function view(file: Attachment) {
+    if (open?.id === file.id) return setOpen(null)
+    const blob = await fetchFile(file)
+    if (blob) setOpen({ id: file.id, text: await blob.text() })
+  }
+  async function download(file: Attachment) {
+    const blob = await fetchFile(file)
+    if (!blob) return
+    const url = URL.createObjectURL(blob)
+    const link = Object.assign(document.createElement('a'), { href: url, download: file.filename })
+    link.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1_000)
+  }
+
+  return <section className="task-section">
+    <p className="eyebrow">LAMPIRAN ({files.length})</p>
+    <ul className="task-attachments">{files.map((file) => <li key={file.id}>
+      <div className="task-attachment-row">
+        <span><b>{file.filename}</b><small>{fileSize(file.size)}{file.createdAt ? ` · ${formatDateTime(file.createdAt)}` : ''}</small></span>
+        <span className="task-attachment-actions">
+          {isText(file) && <button type="button" className="chip chip-button" aria-expanded={open?.id === file.id} onClick={() => void view(file)}>{open?.id === file.id ? 'Tutup' : 'Lihat'}</button>}
+          <button type="button" className="chip chip-button" onClick={() => void download(file)}>Unduh</button>
+        </span>
+      </div>
+      {open?.id === file.id && <pre className="task-text task-attachment-text">{open.text}</pre>}
+    </li>)}</ul>
+    {error && <p className="text-bad small-note" role="alert">{error}</p>}
+  </section>
+}
+
 function Field({ label, value }: { label: string; value?: string | number }) {
   return value === undefined || value === '' ? null : <div><dt>{label}</dt><dd>{value}</dd></div>
 }
@@ -171,6 +235,7 @@ export function TaskDetailDialog({ task, onClose, onOpenTask, onChanged }: { tas
       {detail.lastError && <section className="task-section"><p className="eyebrow">KEGAGALAN TERAKHIR</p><pre className="task-text text-bad">{detail.lastError}</pre></section>}
       <section className="task-section"><p className="eyebrow">DESKRIPSI</p>{detail.body ? <pre className="task-text">{detail.body}</pre> : <p className="muted">Tanpa deskripsi.</p>}</section>
       {detail.result && <section className="task-section"><p className="eyebrow">HASIL / RINGKASAN TERAKHIR</p><pre className="task-text">{detail.result}</pre></section>}
+      <TaskAttachments task={task} version={version}/>
       {detail.runs.length > 0 && <section className="task-section"><p className="eyebrow">PERCOBAAN ({detail.runs.length})</p><table className="log-table"><thead><tr><th>Run</th><th>Profil</th><th>Status</th><th>Mulai</th><th>Selesai</th></tr></thead><tbody>{detail.runs.map((run) => <tr key={run.id}><td>#{run.id}</td><td>{run.profile ?? '—'}</td><td><span className={`badge ${statusTone(run.outcome ?? run.status ?? '')}`}>{run.outcome ?? run.status ?? '—'}</span>{run.error && <div className="text-bad small-note">{run.error}</div>}{run.summary && <div className="small-note">{run.summary}</div>}</td><td>{formatDateTime(run.startedAt)}</td><td>{formatDateTime(run.endedAt)}</td></tr>)}</tbody></table></section>}
       {detail.comments.length > 0 && <section className="task-section"><p className="eyebrow">KOMENTAR ({detail.comments.length})</p><ul className="task-timeline">{detail.comments.map((comment, index) => <li key={index}><b>{comment.author}</b><small>{formatDateTime(comment.createdAt)}</small><p>{comment.body}</p></li>)}</ul></section>}
       {detail.events.length > 0 && <section className="task-section"><p className="eyebrow">AKTIVITAS ({detail.events.length})</p><ul className="task-timeline">{[...detail.events].reverse().map((event, index) => <li key={index}><b>{event.kind}</b><small>{formatDateTime(event.createdAt)}{event.runId ? ` · run #${event.runId}` : ''}</small>{event.detail && <code>{event.detail}</code>}</li>)}</ul></section>}

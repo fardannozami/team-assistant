@@ -252,3 +252,33 @@ describe("naya chat", () => {
     expect(events.slice(1).map(([, data]) => data.text).join("")).toBe("Halo Fardan");
   });
 });
+
+describe("naya attachments", () => {
+  test("files stream through from the bridge; refusals keep their status", async () => {
+    const { bridge } = await import("./modules/naya/bridge.js");
+    const original = globalThis.fetch;
+    const env = { url: process.env.HERMES_BRIDGE_URL, token: process.env.BRIDGE_TOKEN };
+    process.env.HERMES_BRIDGE_URL = "http://hermes:8700";
+    process.env.BRIDGE_TOKEN = "bridge-token-for-tests";
+    const seen: string[] = [];
+    globalThis.fetch = (async (url: string) => {
+      seen.push(String(url));
+      if (String(url).endsWith("/2")) return new Response(JSON.stringify({ error: "Lampiran di luar folder Hermes." }), { status: 403 });
+      if (String(url).endsWith("/3")) return new Response(JSON.stringify({ error: "Lampiran terlalu besar" }), { status: 413 });
+      return new Response("1. Indofood\n", { headers: { "content-type": "text/plain; charset=utf-8" } });
+    }) as unknown as typeof fetch;
+    try {
+      const file = await bridge.attachment("t_3a25786b", "1", "sales");
+      expect(await file.text()).toBe("1. Indofood\n");
+      expect(seen[0]).toBe("http://hermes:8700/tasks/t_3a25786b/attachments/1?board=sales");
+      await expect(bridge.attachment("t_3a25786b", "2")).rejects.toMatchObject({ status: 403 });
+      await expect(bridge.attachment("t_3a25786b", "3")).rejects.toMatchObject({ status: 400 });
+    } finally {
+      globalThis.fetch = original;
+      process.env.HERMES_BRIDGE_URL = env.url;
+      process.env.BRIDGE_TOKEN = env.token;
+      if (env.url === undefined) delete process.env.HERMES_BRIDGE_URL;
+      if (env.token === undefined) delete process.env.BRIDGE_TOKEN;
+    }
+  });
+});

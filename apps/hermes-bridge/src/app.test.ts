@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { createBridge } from './app.js'
+import { REVIEW_NOTE } from './kanban-write.js'
 import type { Run, TaskBoardSnapshot } from './mission-control.js'
 
 const TOKEN = 'bridge-token-for-tests'
@@ -40,7 +41,7 @@ describe('hermes-bridge', () => {
     const changed = await post('/tasks/t_design/changes', { note: 'Kontras kurang', board: 'design', actor })
     expect(await changed.json()).toEqual({ ok: true, assignee: 'design', status: 'review' })
     expect(calls).toEqual([
-      ['kanban', 'create', 'Carikan 20 prospek FMCG', '--triage', '--created-by', 'Fardan (PM)', '--json'],
+      ['kanban', 'create', 'Carikan 20 prospek FMCG', '--body', REVIEW_NOTE, '--triage', '--created-by', 'Fardan (PM)', '--json'],
       ['kanban', 'complete', 't_review', '--result', 'Disetujui oleh Fardan (PM): Oke'],
       ['kanban', '--board', 'design', 'reopen-review', 't_design', '--reason', '[Revisi dari Fardan (PM)] Kontras kurang'],
     ])

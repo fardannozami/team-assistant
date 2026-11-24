@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { createInstruction, review, WriteError, type Actor } from './kanban-write.js'
+import { createInstruction, review, REVIEW_NOTE, WriteError, type Actor } from './kanban-write.js'
 import type { Run, RunOptions } from './mission-control.js'
 
 const actor: Actor = { id: 'u1', name: 'Fardan', role: 'PM' }
@@ -17,19 +17,19 @@ describe('instructions', () => {
   it('parks an unassigned instruction in triage and returns its id', async () => {
     const { calls, run } = recorder([JSON.stringify({ id: 't_1a2b' })])
     await expect(createInstruction({ title: ' Carikan 20 prospek FMCG ', body: 'Jakarta\nIT/Purchasing', board: 'sales' }, actor, run)).resolves.toEqual({ id: 't_1a2b', board: 'sales' })
-    expect(calls[0]!.args).toEqual(['kanban', '--board', 'sales', 'create', 'Carikan 20 prospek FMCG', '--body', 'Jakarta\nIT/Purchasing', '--triage', '--created-by', 'Fardan (PM)', '--json'])
+    expect(calls[0]!.args).toEqual(['kanban', '--board', 'sales', 'create', 'Carikan 20 prospek FMCG', '--body', `Jakarta\nIT/Purchasing\n\n---\n${REVIEW_NOTE}`, '--triage', '--created-by', 'Fardan (PM)', '--json'])
     expect(calls[0]!.options).toMatchObject({ timeoutMs: 20_000, logAs: 'hermes kanban --board sales create' })
   })
 
   it('assigns straight to an agent, or splits a triage task in the background', async () => {
     const direct = recorder([JSON.stringify({ id: 't_1' })])
     await createInstruction({ title: 'Audit website', assignee: 'sales' }, actor, direct.run)
-    expect(direct.calls[0]!.args).toEqual(['kanban', 'create', 'Audit website', '--assignee', 'sales', '--created-by', 'Fardan (PM)', '--json'])
+    expect(direct.calls[0]!.args).toEqual(['kanban', 'create', 'Audit website', '--body', REVIEW_NOTE, '--assignee', 'sales', '--created-by', 'Fardan (PM)', '--json'])
 
     const split = recorder([JSON.stringify({ id: 't_2' })])
     await createInstruction({ title: 'Kampanye FMCG', decompose: true }, actor, split.run)
     expect(split.calls.map((call) => call.args)).toEqual([
-      ['kanban', 'create', 'Kampanye FMCG', '--triage', '--created-by', 'Fardan (PM)', '--json'],
+      ['kanban', 'create', 'Kampanye FMCG', '--body', REVIEW_NOTE, '--triage', '--created-by', 'Fardan (PM)', '--json'],
       ['kanban', 'decompose', 't_2', '--author', 'Fardan (PM)'],
     ])
   })

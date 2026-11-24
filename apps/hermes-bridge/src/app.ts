@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'node:crypto'
 import { Hono } from 'hono'
+import { listAttachments, readAttachment } from './attachments.js'
 import { createInstruction, review, taskId, boardSlug, WriteError, type Actor, type ReviewAction } from './kanban-write.js'
 import {
   declareState,
@@ -28,6 +29,8 @@ export interface BridgeOptions {
   run?: Run
   /** The board writes check against (tests pass a fixed one). */
   board?: typeof getTaskBoard
+  /** Where attachments may be read from (tests pass a temporary folder). */
+  hermesHome?: string
 }
 
 /** `?fresh=1` (a manual refresh) skips the 10 s cache for anything older than 2 s. */
@@ -76,6 +79,30 @@ export function createBridge(options: BridgeOptions): Hono {
   app.get('/tasks/:id', async (c) => {
     const detail = await getTaskDetail(c.req.param('id'), Date.now(), c.req.query('board') || undefined)
     return detail ? c.json(detail) : c.json({ error: 'Task tidak dikenal.' }, 404)
+  })
+  // Files an agent attached to a task, such as a research result kept from its workspace.
+  const knownTask = async (id: string, slug: string | undefined) => {
+    const snapshot = await board(Date.now())
+    if (snapshot.tasks.availability === 'available' && !snapshot.tasks.data.some((item) => item.id === id && item.board === slug)) throw new WriteError('Task tidak dikenal.', 404)
+  }
+  app.get('/tasks/:id/attachments', async (c) => {
+    const id = taskId(c.req.param('id'))
+    const slug = boardSlug(c.req.query('board'))
+    await knownTask(id, slug)
+    return c.json({ attachments: await listAttachments(id, slug, run) })
+  })
+  app.get('/tasks/:id/attachments/:attachment', async (c) => {
+    const id = taskId(c.req.param('id'))
+    const slug = boardSlug(c.req.query('board'))
+    const attachmentId = Number(c.req.param('attachment'))
+    if (!Number.isSafeInteger(attachmentId) || attachmentId < 1) throw new WriteError('Lampiran tidak dikenal.')
+    await knownTask(id, slug)
+    const { attachment, data } = await readAttachment(id, attachmentId, slug, { run, home: options.hermesHome })
+    return c.body(data as unknown as ArrayBuffer, 200, {
+      'content-type': attachment.contentType ?? 'application/octet-stream',
+      'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(attachment.filename)}`,
+      'x-content-type-options': 'nosniff',
+    })
   })
   app.get('/office', async (c) => c.json(await getOffice(now(c.req.query('fresh')))))
   app.get('/usage', async (c) => c.json(await getUsage(Number(c.req.query('days')) || 7, now(c.req.query('fresh')))))

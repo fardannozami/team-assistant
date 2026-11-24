@@ -12,7 +12,7 @@ export const hermesConfigured = () => Boolean(bridgeUrl() && process.env.BRIDGE_
 
 export type Actor = { id: string; name: string; role: string | null };
 
-async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+async function send(method: "GET" | "POST", path: string, body?: unknown): Promise<Response> {
   if (!hermesConfigured()) throw new HttpError(503, "Hermes belum terhubung (HERMES_BRIDGE_URL dan BRIDGE_TOKEN).");
   let response: Response;
   try {
@@ -25,12 +25,17 @@ async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Pr
   } catch {
     throw new HttpError(503, "Hermes tidak bisa dihubungi. Apakah container hermes jalan?");
   }
-  const data = (await response.json().catch(() => undefined)) as (T & { error?: string }) | undefined;
   if (!response.ok) {
-    const status = [400, 404, 409].includes(response.status) ? (response.status as 400 | 404 | 409) : 503;
+    const data = (await response.json().catch(() => undefined)) as { error?: string } | undefined;
+    // A file too large to download (413) reaches the browser as a plain bad request.
+    const status = response.status === 413 ? 400 : [400, 403, 404, 409].includes(response.status) ? (response.status as 400 | 403 | 404 | 409) : 503;
     throw new HttpError(status, data?.error ?? `Hermes menjawab HTTP ${response.status}.`);
   }
-  return data as T;
+  return response;
+}
+
+async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+  return (await (await send(method, path, body)).json().catch(() => undefined)) as T;
 }
 
 const query = (params: Record<string, string | undefined>) => {
@@ -43,6 +48,9 @@ export const bridge = {
   office: (fresh?: boolean) => call<Record<string, unknown>>("GET", `/office${query({ fresh: fresh ? "1" : undefined })}`),
   tasks: (fresh?: boolean) => call<Record<string, unknown>>("GET", `/tasks${query({ fresh: fresh ? "1" : undefined })}`),
   task: (id: string, board?: string) => call<Record<string, unknown>>("GET", `/tasks/${encodeURIComponent(id)}${query({ board })}`),
+  attachments: (id: string, board?: string) => call<{ attachments: Record<string, unknown>[] }>("GET", `/tasks/${encodeURIComponent(id)}/attachments${query({ board })}`),
+  /** The bridge's response as is, so the file streams through with its type and name. */
+  attachment: (id: string, attachmentId: string, board?: string) => send("GET", `/tasks/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}${query({ board })}`),
   usage: (days: number) => call<Record<string, unknown>>("GET", `/usage${query({ days: String(days) })}`),
   calendar: () => call<Record<string, unknown>>("GET", "/calendar"),
   dashboard: (fresh?: boolean) => call<Record<string, unknown>>("GET", `/dashboard${query({ fresh: fresh ? "1" : undefined })}`),

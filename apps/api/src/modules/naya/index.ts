@@ -61,6 +61,18 @@ nayaApi.get("/runtime", anyone, async (c) => c.json(await bridge.runtime(fresh(c
 nayaApi.get("/office", anyone, async (c) => c.json(await bridge.office(fresh(c))));
 nayaApi.get("/tasks", anyone, async (c) => c.json(await bridge.tasks(fresh(c))));
 nayaApi.get("/tasks/:id", anyone, async (c) => c.json(await bridge.task(c.req.param("id"), c.req.query("board") || undefined)));
+nayaApi.get("/tasks/:id/attachments", anyone, async (c) => c.json(await bridge.attachments(c.req.param("id"), c.req.query("board") || undefined)));
+nayaApi.get("/tasks/:id/attachments/:attachment", anyone, async (c) => {
+  const file = await bridge.attachment(c.req.param("id"), c.req.param("attachment"), c.req.query("board") || undefined);
+  return new Response(file.body, {
+    headers: {
+      "content-type": file.headers.get("content-type") ?? "application/octet-stream",
+      "content-disposition": file.headers.get("content-disposition") ?? "attachment",
+      "x-content-type-options": "nosniff",
+      "cache-control": "private, no-store",
+    },
+  });
+});
 nayaApi.get("/usage", anyone, async (c) => c.json(await bridge.usage(Number(c.req.query("days")) || 7)));
 nayaApi.get("/calendar", anyone, async (c) => c.json(await bridge.calendar()));
 nayaApi.get("/dashboard", anyone, async (c) => c.json(await bridge.dashboard(fresh(c))));

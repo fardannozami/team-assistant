@@ -447,6 +447,12 @@ main { max-width: 1680px; }
 .task-links { display: flex; flex-wrap: wrap; gap: 6px; }
 .task-section { border-top: 1px solid var(--border); margin-top: 18px; padding-top: 14px; }
 .task-text { background: var(--code-bg); border: 1px solid var(--border); color: var(--c-c9d1c9); font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; margin: 8px 0 0; max-height: 280px; overflow: auto; padding: 12px; white-space: pre-wrap; word-break: break-word; }
+.task-attachments { display: grid; gap: 8px; list-style: none; margin: 8px 0 0; padding: 0; }
+.task-attachment-row { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
+.task-attachment-row b { overflow-wrap: anywhere; }
+.task-attachment-row small { color: var(--text-muted); display: block; font-size: 12px; }
+.task-attachment-actions { display: flex; gap: 6px; }
+.task-attachment-text { max-height: 420px; }
 .task-timeline { display: grid; gap: 10px; list-style: none; margin: 8px 0 0; padding: 0; }
 .task-timeline li { border-left: 2px solid var(--border-strong); display: grid; gap: 3px; padding-left: 10px; }
 .task-timeline b { font-size: 13px; }

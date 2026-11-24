@@ -25,6 +25,13 @@ The Hermes Kanban is the source of truth:
 | Feedback / revisi | *Minta revisi*: `reopen-review --reason "…"`. The note becomes a comment the agent sees when it reworks |
 | Ditolak | *Tolak*: `block --kind needs_input "[Ditolak oleh …] …"` |
 
+Humans decide when work is done:
+
+- Every instruction from Naya ends with a note telling the agent to finish with `request-review`, not `complete` (`REVIEW_NOTE` in `apps/hermes-bridge/src/kanban-write.ts`). The profiles' `SOUL.md` says the same, for tasks the agents create themselves.
+- `kanban.review_dispatch: false` in every profile's config. Otherwise Hermes hands review tasks to a reviewer agent, which approves them before anyone in Naya sees them.
+
+Files an agent attaches to a task (`kanban_complete` keeps the deliverables of its scratch workspace this way, because the workspace is deleted afterwards) show under *Lampiran* in the task detail. Text files open in place, and anything can be downloaded, up to 10 MB. The bridge serves a file only when its stored path resolves inside `HERMES_HOME`.
+
 Every action is checked against the person's daily role and written to `audit_logs`:
 
 | Action | Roles |
@@ -88,6 +95,7 @@ When `claude --version` works where the bridge runs, Claude Code gets its own de
    $compose exec hermes hermes profile create content --description "Blog SEO, case studies, social posts, video scripts"
    $compose exec hermes hermes profile create ops     --description "Watches the app's services; restarts when stuck"
    $compose exec hermes hermes config set kanban.orchestrator_profile naya
+   $compose exec hermes hermes config set kanban.review_dispatch false   # and with -p <profile> for each profile
    ```
    - Web search: run `hermes tools` in the container and choose Tavily, Firecrawl or Exa with a key. The keyless tier works, but with limits.
    - The `ops` profile gets no web tools.

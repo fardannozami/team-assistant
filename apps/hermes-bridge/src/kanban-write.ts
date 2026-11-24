@@ -64,6 +64,12 @@ async function write(run: Run, board: string | undefined, args: string[], label:
   }
 }
 
+/**
+ * Added to every instruction from Naya: the humans decide when work is done, so the agent ends
+ * with a review request (Naya's "Menunggu review") instead of completing the task itself.
+ */
+export const REVIEW_NOTE = 'Instruksi dari tim lewat Naya. Hasil wajib direview manusia: setelah selesai dan dicek sendiri, akhiri dengan kanban_request_review (ringkasan + lampirkan file hasil), bukan kanban_complete. Jika dipecah jadi subtugas, tugas induk ini yang meminta review.'
+
 export interface InstructionInput { title: unknown; body?: unknown; board?: unknown; assignee?: unknown; decompose?: unknown }
 
 /**
@@ -81,7 +87,7 @@ export async function createInstruction(input: InstructionInput, actor: Actor, r
   }
   const output = await write(run, board, [
     'create', title,
-    ...(body ? ['--body', body] : []),
+    '--body', body ? `${body}\n\n---\n${REVIEW_NOTE}` : REVIEW_NOTE,
     ...(assignee ? ['--assignee', assignee] : ['--triage']),
     '--created-by', author(actor),
     '--json',
