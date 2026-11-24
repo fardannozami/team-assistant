@@ -1,3 +1,4 @@
+import type { ApiTokenScope } from "@repo/shared";
 import type { McpTool } from "./protocol.js";
 import { listProjects } from "../projects/service.js";
 import { listEmployees } from "../employees/service.js";
@@ -9,7 +10,7 @@ import { listBriefingItems } from "../briefings/service.js";
 // Read-only daily data for Hermes agents. Fees, shares and phone numbers stay
 // out: agents only need who works on what.
 
-export type McpContext = { workspaceId: string };
+export type McpContext = { workspaceId: string; tokenId: string; scopes: string[] };
 
 const json = (value: unknown) => ({ text: JSON.stringify(value, null, 1) });
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -65,9 +66,13 @@ export async function teamLoad(workspaceId: string, date: string) {
   });
 }
 
-export const MCP_TOOLS: McpTool<McpContext>[] = [
+/** Each tool needs one token scope. */
+export type ScopedTool = McpTool<McpContext> & { scope: ApiTokenScope };
+
+export const READ_TOOLS: ScopedTool[] = [
   {
     name: "list_projects",
+    scope: "mcp:read",
     description: "Client projects with platform, type, status, dates and members (name and role). No fees.",
     inputSchema: {
       type: "object",
@@ -78,6 +83,7 @@ export const MCP_TOOLS: McpTool<McpContext>[] = [
   },
   {
     name: "list_team",
+    scope: "mcp:read",
     description: "Active team members with team, role and position (pm_sales, design, development, …). No phone numbers.",
     inputSchema: noInput,
     run: async (_args, { workspaceId }) =>
@@ -93,6 +99,7 @@ export const MCP_TOOLS: McpTool<McpContext>[] = [
   },
   {
     name: "standup_today",
+    scope: "mcp:read",
     description: "Standup answers for a day: yesterday, today, done and blockers per person.",
     inputSchema: dateInput,
     run: async (args, { workspaceId }) => {
@@ -106,18 +113,21 @@ export const MCP_TOOLS: McpTool<McpContext>[] = [
   },
   {
     name: "daily_report",
+    scope: "mcp:read",
     description: "The daily standup report: who submitted, blockers and GitHub activity.",
     inputSchema: dateInput,
     run: async (args, { workspaceId }) => ({ text: (await generateDailyReport(workspaceId, dateArg(args))).text }),
   },
   {
     name: "weekly_report",
+    scope: "mcp:read",
     description: "The last seven days of standups: submissions per day and repeated blockers.",
     inputSchema: noInput,
     run: async (_args, { workspaceId }) => ({ text: (await generateWeeklyReport(workspaceId)).text }),
   },
   {
     name: "idle_members",
+    scope: "mcp:read",
     description:
       "Who has capacity: every active member with their ongoing projects and today's plan; idle=true means no ongoing project (bench time).",
     inputSchema: dateInput,
@@ -129,6 +139,7 @@ export const MCP_TOOLS: McpTool<McpContext>[] = [
   },
   {
     name: "list_leads",
+    scope: "mcp:read",
     description: "Leads and news from the pre-standup briefings (newest first).",
     inputSchema: {
       type: "object",

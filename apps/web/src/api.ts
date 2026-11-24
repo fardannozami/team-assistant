@@ -500,8 +500,8 @@ export const authApi = {
   providers: () =>
     request<{ google: boolean; nayaUrl: string | null }>("/auth/providers").catch(() => ({ google: false, nayaUrl: null })),
 
-  /** A one-time link that signs the current user in to Naya. */
-  nayaLink: () => request<{ url: string }>("/auth/sso/code", { method: "POST" }),
+  /** A one-time link that opens Naya already signed in. */
+  nayaLink: () => request<{ url: string }>("/auth/link", { method: "POST", body: JSON.stringify({ app: "naya" }) }),
 
   googleLoginUrl: `${API_BASE}/auth/google`,
 
@@ -901,24 +901,43 @@ export interface AgentToken {
 }
 
 // Tokens Hermes agents (Naya's AI team) use to read daily data over MCP.
+export interface NayaAgent {
+  profile: string;
+  displayName: string;
+  description: string | null;
+  chatRoles: string[];
+  isLead: boolean;
+  hasKey: boolean;
+  apiKeyHint: string | null;
+}
+export type AgentTokenScope = "mcp:read" | "ops:read" | "ops:restart";
+
+// Naya (naya.digdaya.co): the Hermes agents people chat with, and the tokens agents use for MCP.
 export const nayaApi = {
+  agents: () => request<NayaAgent[]>("/naya/agents"),
+
+  saveAgent: (profile: string, input: { displayName: string; description?: string | null; apiKey?: string; chatRoles: string[]; isLead: boolean }) =>
+    request<NayaAgent>(`/naya/agents/${encodeURIComponent(profile)}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }),
+
+  removeAgent: (profile: string) =>
+    request<{ ok: true }>(`/naya/agents/${encodeURIComponent(profile)}`, {
+      method: "DELETE",
+    }),
+
   tokens: () => request<AgentToken[]>("/naya/tokens"),
 
-  createToken: (name: string) =>
+  createToken: (name: string, scopes: AgentTokenScope[] = ["mcp:read"]) =>
     request<{ id: string; token: string }>("/naya/tokens", {
       method: "POST",
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, scopes }),
     }),
 
   revokeToken: (id: string) =>
     request<{ ok: true }>(`/naya/tokens/${id}`, {
       method: "DELETE",
-    }),
-
-  /** Ends every Naya session of the user (lost phone). */
-  revokeSessions: (userId: string) =>
-    request<{ ok: true }>(`/naya/sessions/${userId}/revoke`, {
-      method: "POST",
     }),
 
   mcpUrl: `${API_BASE}/mcp`,

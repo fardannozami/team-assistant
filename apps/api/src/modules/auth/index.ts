@@ -6,16 +6,7 @@ import { users, roles, employees, auditLogs, workspaces } from "@repo/database";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { acceptPendingInvite } from "../users/service.js";
 import { secretEnv } from "../../lib/env.js";
-import {
-  SSO_CLIENT,
-  callbackUrl,
-  createSsoCode,
-  exchangeSsoCode,
-  isNayaServer,
-  nayaUrl,
-  revokeNayaSessions,
-  ssoIdentity,
-} from "./sso.js";
+import { appUrl, createLoginLink, isLoginApp, redeemLoginLink, type LoginApp } from "./login-links.js";
 
 const db = createDbClient(process.env.DATABASE_URL ?? "postgres://teamassistant:teamassistant@localhost:5432/teamassistant");
 const JWT_SECRET = secretEnv("JWT_SECRET", "dev-secret-change-me");
@@ -64,14 +55,14 @@ const GOOGLE_SIGNUP_ENABLED = process.env.GOOGLE_SIGNUP_ENABLED !== "false";
 const OAUTH_STATE_COOKIE = "ta_oauth_state";
 const googleEnabled = () => Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET);
 
-auth.get("/providers", (c) => c.json({ google: googleEnabled(), nayaUrl: nayaUrl() }));
+auth.get("/providers", (c) => c.json({ google: googleEnabled(), nayaUrl: appUrl("naya") }));
 
 auth.get("/google", (c) => {
   if (!googleEnabled()) return c.json({ error: "Google login is not configured" }, 404);
   const state = crypto.randomUUID();
-  // `?sso=naya`: after sign-in, go back to Naya with a one-time code instead of the dashboard.
-  const sso = c.req.query("sso") === SSO_CLIENT && nayaUrl() ? `:${SSO_CLIENT}` : "";
-  setCookie(c, OAUTH_STATE_COOKIE, `${state}${sso}`, {
+  // `?app=naya`: sign-in started on Naya returns there instead of the dashboard.
+  const app: LoginApp = isLoginApp(c.req.query("app")) ? (c.req.query("app") as LoginApp) : "web";
+  setCookie(c, OAUTH_STATE_COOKIE, `${state}:${app}`, {
     httpOnly: true,
     sameSite: "Lax",
     secure: GOOGLE_REDIRECT_URI.startsWith("https://"),
@@ -90,11 +81,11 @@ auth.get("/google", (c) => {
 });
 
 auth.get("/google/callback", async (c) => {
-  const [expectedState, sso] = (getCookie(c, OAUTH_STATE_COOKIE) ?? "").split(":");
+  const [expectedState, requestedApp] = (getCookie(c, OAUTH_STATE_COOKIE) ?? "").split(":");
   deleteCookie(c, OAUTH_STATE_COOKIE, { path: "/auth/google" });
-  const toNaya = sso === SSO_CLIENT && Boolean(nayaUrl());
-  const fail = (reason: string) =>
-    c.redirect(toNaya ? `${nayaUrl()}/auth/callback?error=${reason}` : `${WEB_URL}/#auth_error=${reason}`);
+  const app: LoginApp = isLoginApp(requestedApp) ? requestedApp : "web";
+  const home = appUrl(app) ?? WEB_URL;
+  const fail = (reason: string) => c.redirect(`${home}/#auth_error=${reason}`);
 
   const { code, state, error } = c.req.query();
   if (error) return fail("cancelled");
@@ -154,53 +145,28 @@ auth.get("/google/callback", async (c) => {
   }
   if (!user.isActive) return fail("not_registered");
 
-  await audit(user.workspaceId, user.id, "auth.login", "users", user.id, { provider: "google", client: toNaya ? SSO_CLIENT : "web" });
-  if (toNaya) return c.redirect(callbackUrl(await createSsoCode(user.id)));
-  return c.redirect(`${WEB_URL}/#token=${encodeURIComponent(await issueToken(user))}`);
+  await audit(user.workspaceId, user.id, "auth.login", "users", user.id, { provider: "google", app });
+  return c.redirect(`${home}/#token=${encodeURIComponent(await issueToken(user))}`);
 });
 
-/* ---------- Naya single sign-on (see ./sso.ts) ---------- */
+/* ---------- One-time sign-in links (see ./login-links.ts) ---------- */
 
-// Naya sends people here when they open it without a daily session.
-auth.get("/sso/start", (c) => {
-  if (!nayaUrl() || !googleEnabled()) return c.json({ error: "Naya is not configured" }, 404);
-  return c.redirect(`${GOOGLE_REDIRECT_URI.replace(/\/callback$/, "")}?sso=${SSO_CLIENT}`);
-});
-
-// "Buka Naya" in the dashboard: a one-time code for the signed-in user.
-auth.post("/sso/code", requireRole(), async (c) => {
-  if (!nayaUrl()) return c.json({ error: "Naya is not configured" }, 404);
+// "Buka Naya" in the dashboard: a link that opens the other app already signed in.
+auth.post("/link", requireRole(), async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { app?: unknown };
+  if (!isLoginApp(body.app)) return c.json({ error: "Unknown app" }, 404);
   const { sub } = c.get("user" as never) as { sub: string };
-  return c.json({ url: callbackUrl(await createSsoCode(sub)) });
+  return c.json({ url: await createLoginLink(sub, body.app) });
 });
 
-// Naya's server swaps the code for who the user is.
-auth.post("/sso/exchange", async (c) => {
-  if (!isNayaServer(c.req.header("x-sso-secret"))) return c.json({ error: "Unauthorized" }, 401);
-  const body = (await c.req.json().catch(() => ({}))) as { code?: unknown };
-  const identity = typeof body.code === "string" ? await exchangeSsoCode(body.code) : null;
-  if (!identity) return c.json({ error: "Invalid or expired code" }, 400);
-  await audit(identity.workspace.id, identity.user.id, "auth.sso", "users", identity.user.id, { client: SSO_CLIENT });
-  return c.json(identity);
-});
-
-// Naya's "sign out of every device".
-auth.post("/sso/revoke", async (c) => {
-  if (!isNayaServer(c.req.header("x-sso-secret"))) return c.json({ error: "Unauthorized" }, 401);
-  const body = (await c.req.json().catch(() => ({}))) as { userId?: unknown };
-  const userId = typeof body.userId === "string" && /^[0-9a-f-]{36}$/i.test(body.userId) ? body.userId : null;
-  if (!userId || !(await revokeNayaSessions(userId))) return c.json({ error: "Not found" }, 404);
-  const identity = await ssoIdentity(userId);
-  if (identity) await audit(identity.workspace.id, userId, "auth.sso.revoke", "users", userId, { client: SSO_CLIENT });
-  return c.json({ ok: true });
-});
-
-// Naya re-checks signed-in users now and then, so deactivation and role changes apply.
-auth.get("/sso/verify", async (c) => {
-  if (!isNayaServer(c.req.header("x-sso-secret"))) return c.json({ error: "Unauthorized" }, 401);
-  const userId = c.req.query("userId") ?? "";
-  const identity = /^[0-9a-f-]{36}$/i.test(userId) ? await ssoIdentity(userId) : null;
-  return identity ? c.json(identity) : c.json({ error: "Not found" }, 404);
+// The app swaps the code from its address for a session token.
+auth.post("/link/redeem", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { code?: unknown; app?: unknown };
+  const user =
+    typeof body.code === "string" && isLoginApp(body.app) ? await redeemLoginLink(body.code, body.app) : null;
+  if (!user) return c.json({ error: "Link sudah kedaluwarsa atau sudah dipakai." }, 400);
+  await audit(user.workspaceId, user.id, "auth.login", "users", user.id, { provider: "link", app: body.app });
+  return c.json({ token: await issueToken(user) });
 });
 
 export async function verifyToken(token: string) {

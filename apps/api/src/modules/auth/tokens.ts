@@ -1,7 +1,7 @@
 import { apiTokens, createDbClient, workspaces } from "@repo/database";
 import type { ApiTokenScope } from "@repo/shared";
 import { and, desc, eq, isNull } from "drizzle-orm";
-import { newSecret, sha256Hex } from "./sso.js";
+import { newSecret, sha256Hex } from "./login-links.js";
 
 // Bearer tokens for Hermes agents (Naya's AI team) reading daily data over MCP.
 // Each token belongs to one workspace, carries scopes and can be revoked.
@@ -79,7 +79,7 @@ export function requireToken(...scopes: ApiTokenScope[]) {
     const row = token ? await resolveApiToken(token) : null;
     if (!row) return c.json({ error: "Unauthorized" }, 401);
     if (!scopes.every((scope) => row.scopes.includes(scope))) return c.json({ error: "Forbidden" }, 403);
-    c.set("user", { sub: null, role: "agent", workspaceId: row.workspaceId, tokenId: row.id });
+    c.set("user", { sub: null, role: "agent", workspaceId: row.workspaceId, tokenId: row.id, scopes: row.scopes });
     c.set("workspaceId", row.workspaceId);
     await next();
   };

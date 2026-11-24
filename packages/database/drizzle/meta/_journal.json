@@ -145,15 +145,8 @@
     {
       "idx": 20,
       "version": "7",
-      "when": 1795498333358,
+      "when": 1795501490714,
       "tag": "0020_naya",
-      "breakpoints": true
-    },
-    {
-      "idx": 21,
-      "version": "7",
-      "when": 1795499103893,
-      "tag": "0021_naya_session_version",
       "breakpoints": true
     }
   ]

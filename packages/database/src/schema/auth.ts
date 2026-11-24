@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, uuid, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, uuid } from "drizzle-orm/pg-core";
 import { workspaceRef } from "./workspaces.js";
 
 export const roles = pgTable("roles", {
@@ -15,8 +15,6 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   roleId: uuid("role_id").references(() => roles.id),
   isActive: boolean("is_active").default(true).notNull(),
-  // Raised by "sign out of every device" in Naya: older Naya sessions stop working.
-  nayaSessionVersion: integer("naya_session_version").default(0).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });

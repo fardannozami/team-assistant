@@ -1,0 +1,150 @@
+# Naya: the AI team (naya.digdaya.co)
+
+Naya is the office of Digdaya's AI team. It is a second web app on the same API, database and login
+as the dashboard (daily.digdaya.co). The team gives instructions there, reviews the agents' work and
+chats with them. The agents are **Hermes Agent** profiles, running in the `hermes` container.
+
+```
+naya.digdaya.co (apps/naya)  ─┐
+daily.digdaya.co (apps/web)  ─┴─▶ api (apps/api) ─┬─▶ hermes:8700  hermes-bridge (Kanban, status, usage)
+                                                 ├─▶ hermes:8642  Hermes API server (chat)
+                                                 └─▶ docker-socket-proxy (ops: status, logs, restart)
+hermes (agents) ──MCP, Bearer ta_agent_… ──▶ api /mcp (daily data; ops tools for the ops agent)
+```
+
+## How the pieces map to the blueprint
+
+The Hermes Kanban is the source of truth:
+
+| Blueprint | Hermes |
+|---|---|
+| Instruction to the AI CEO | *Instruksi ke Naya* creates a task in **triage**; the decomposer splits it into tasks for the specialist profiles (`kanban.auto_decompose`, default on) |
+| In progress | todo / ready / running: agents claim and work |
+| Waiting for review | **review**: the agent called `request-review` |
+| Selesai (approved) | *Setujui*: `complete --result "Disetujui oleh …"` |
+| Feedback / revisi | *Minta revisi*: `reopen-review --reason "…"`. The note becomes a comment the agent sees when it reworks |
+| Ditolak | *Tolak*: `block --kind needs_input "[Ditolak oleh …] …"` |
+
+Every action is checked against the person's daily role and written to `audit_logs`:
+
+| Action | Roles |
+|---|---|
+| instruct | Owner, Admin, PM |
+| review | Owner, Admin, Manager, PM |
+| comment | everyone |
+| chat | per agent |
+
+## Isolation
+
+- The `hermes` container is only on the Docker network `agents`.
+  - It cannot reach Postgres, Redis, the Docker socket, WhatsApp sessions or daily's `.env`.
+  - It does have the internet (web research, browser).
+- The agents read daily over MCP, with a token per agent: Pengaturan › AI › *Token MCP agent*.
+  - `mcp:read`: projects, team, standups, reports, idle members and leads. No fees, no phone numbers.
+  - `ops:read` and `ops:restart` (Owner only, for the `ops` agent): status and redacted logs of `OPS_SERVICES`, and restarting one of them. Every restart is audited and sent to Owners and Admins on WhatsApp.
+- The Docker proxy (`docker-socket-proxy`) allows only container reads and restarts, and only the `api` container can reach it (network `ops`).
+
+## First deploy
+
+1. **`.env` on the VPS:**
+   ```bash
+   NAYA_WEB_URL=https://naya.digdaya.co
+   BRIDGE_TOKEN=<openssl rand -hex 32>
+   OPS_SERVICES=api,web,worker,agents,naya
+   OPS_COMPOSE_PROJECT=<the compose project name, usually the folder name: team-assistant>
+   NAYA_PORT=3001
+   # HERMES_UID/HERMES_GID: only if you mount hermes-data from a host folder
+   ```
+   GitHub repository variables:
+   - `VITE_DAILY_URL=https://daily.digdaya.co` (Naya links back to it)
+   - `VITE_API_URL` (already set, shared by both apps)
+
+2. **Caddy:**
+   ```caddy
+   naya.digdaya.co {
+     encode zstd gzip
+     reverse_proxy 127.0.0.1:3001
+   }
+   ```
+   The API's own block needs no change. Chat streams (SSE) pass through Caddy as they are.
+
+3. **Deploy** (push to `main`): the workflow builds `naya` and `hermes`, and pulls `docker-socket-proxy`.
+
+4. **Set up Hermes once**. Everything lands in the `hermes-data` volume:
+   ```bash
+   compose="docker compose -f docker-compose.prod.yml"
+   $compose exec hermes hermes setup            # model + key (paid Gemini API key recommended)
+   $compose exec hermes hermes profile create naya    --description "Lead: plans work, splits instructions, checks results"
+   $compose exec hermes hermes profile create sales   --description "Leads, prospect research, outreach drafts"
+   $compose exec hermes hermes profile create design  --description "UI/UX trends, briefs, moodboards"
+   $compose exec hermes hermes profile create content --description "Blog SEO, case studies, social posts, video scripts"
+   $compose exec hermes hermes profile create ops     --description "Watches the app's services; restarts when stuck"
+   $compose exec hermes hermes config set kanban.orchestrator_profile naya
+   ```
+   - Web search: run `hermes tools` in the container and choose Tavily, Firecrawl or Exa with a key. The keyless tier works, but with limits.
+   - The `ops` profile gets no web tools.
+
+5. **API server per profile** (chat from Naya). In each profile's `.env` inside the volume (`/opt/data/.env` for `default`, `/opt/data/profiles/<name>/.env` for the others):
+   ```bash
+   API_SERVER_ENABLED=true
+   API_SERVER_KEY=<openssl rand -hex 24>
+   ```
+   One listener serves every profile, at `/p/<profile>/v1` (multiplexing is on by default). Then run `$compose restart hermes`.
+
+6. **Register the agents in daily** (Pengaturan › AI › *Agent Naya*):
+   - Profile name, display name, its `API_SERVER_KEY`, and which roles may chat.
+   - Mark `naya` as **lead**; it answers *Tanya Naya*.
+
+7. **MCP for the agents.** Create a token per profile in daily (`mcp:read`; for `ops` also `ops:read`/`ops:restart`), then in the profile's `config.yaml`:
+   ```yaml
+   mcp_servers:
+     daily:
+       url: https://<api-host>/mcp
+       headers:
+         Authorization: "Bearer ta_agent_…"
+   ```
+   The agents reach the API by its public URL. `http://api:4000/mcp` also works from the container, because `api` is on the `agents` network.
+
+8. **Backups.** Back up the `hermes-data` volume nightly. The simplest way is a Hermes cron job on the `ops` profile that commits `/opt/data` (without `.env` files and `*.db`) to a private git repo. Alternatively, snapshot the volume from the host.
+
+## Signing in
+
+- **daily → Naya:** **Naya ↗** in the dashboard header opens Naya already signed in. It uses a one-time link that is valid for a minute.
+- **Directly:** *Masuk dengan Google* on naya.digdaya.co uses the same Google login as daily.
+- **Phone:** send `NAYA` to the WhatsApp bot to get a one-time link, valid for 10 minutes.
+- **Signing out:** *Keluar* signs this browser out.
+  - The session is daily's JWT, which lasts 7 days.
+  - Deactivating someone in daily blocks them right away.
+
+## Local development
+
+```bash
+bun run dev                               # api, web, worker (and naya on :3001)
+docker compose --profile agents up hermes docker-socket-proxy
+```
+
+`.env` for the API outside Docker:
+```bash
+NAYA_WEB_URL=http://localhost:3001
+HERMES_BRIDGE_URL=http://localhost:8700
+HERMES_API_URL=http://localhost:8642
+BRIDGE_TOKEN=dev-bridge-token-change-me
+DOCKER_PROXY_URL=http://localhost:2375
+```
+
+Set up the dev Hermes as in steps 4–7, with `docker compose exec hermes …`.
+
+Without Docker, the bridge can also read a Hermes installed on your machine:
+```bash
+cd apps/hermes-bridge && bun run dev
+```
+
+Tests:
+- `bun test` in `apps/api` and in `apps/hermes-bridge` (the Hermes CLI is faked).
+- `vitest` in `apps/naya`.
+- CI does not run Hermes.
+
+## Upgrading Hermes
+
+Bump the tag and digest in `docker/hermes.Dockerfile` together. Use the `stable` tag's version from
+Docker Hub (`nousresearch/hermes-agent`), then deploy. The data in `hermes-data` is kept.

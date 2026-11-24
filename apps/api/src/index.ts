@@ -28,10 +28,20 @@ const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 
 const app = new Hono();
 
+// The dashboard (WEB_URL), Naya (NAYA_WEB_URL) and any extra CORS_ORIGINS may call the API
+// from a browser. Without WEB_URL (local development) every origin is allowed.
+const allowedOrigins = [process.env.WEB_URL, process.env.NAYA_WEB_URL, ...(process.env.CORS_ORIGINS ?? "").split(",")]
+  .map((url) => (url ?? "").trim().replace(/\/+$/, ""))
+  .filter(Boolean);
+function corsOrigin(origin: string): string | null {
+  if (!process.env.WEB_URL) return origin || "*";
+  return allowedOrigins.includes(origin) ? origin : null;
+}
+
 app.use(
   "*",
   cors({
-    origin: (origin) => origin ?? "*",
+    origin: corsOrigin,
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization", "x-internal-token"],
     credentials: true,
