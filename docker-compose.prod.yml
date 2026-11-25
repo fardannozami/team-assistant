@@ -107,8 +107,10 @@ services:
       # read-only. Unset: an empty folder, and OpenCode has no desk in the office.
       - ${OPENCODE_HOST_DATA:-./opencode-data}:/opt/opencode:ro
     networks: [agents]
-    # The browser tool (Chromium) needs 2 GB or more.
-    mem_limit: 3g
+    # One multiplexed gateway (~250 MB) serves every profile; each running Kanban task adds a
+    # worker. The image has no Chromium, so the browser tool stays off and needs no headroom.
+    # Set here, not on the server: every deploy copies this file over the server's copy.
+    mem_limit: 1536m
     cpus: 1.5
 
   # Read-only Docker API for the ops agent's actions (status, logs, restart of whitelisted
