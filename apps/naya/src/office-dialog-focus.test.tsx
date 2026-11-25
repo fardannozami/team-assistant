@@ -3,7 +3,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Office } from './pages/Office.tsx'
-import type { ActivitySnapshot, ChannelSnapshot, OfficeSnapshot } from './types.ts'
+import type { ActivitySnapshot, ChannelSnapshot, OfficeSnapshot, TeamSnapshot } from './types.ts'
 
 const testEnvironment = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 testEnvironment.IS_REACT_ACT_ENVIRONMENT = true
@@ -14,12 +14,14 @@ const office: OfficeSnapshot = {
 }
 const activity: ActivitySnapshot = { sessions: { availability: 'available', data: [] }, fetchedAt: office.fetchedAt }
 const channels: ChannelSnapshot = { channels: { availability: 'available', data: [] }, fetchedAt: office.fetchedAt }
+const team: TeamSnapshot = { members: [], fetchedAt: office.fetchedAt }
+const responses: Record<string, unknown> = { office, activity, channels, team }
 
 afterEach(() => { vi.unstubAllGlobals(); document.body.replaceChildren() })
 
 describe('Office detail dialog focus', () => {
   it('contains Tab navigation and restores the station trigger after Escape closes it', async () => {
-    vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve(new Response(JSON.stringify(url.endsWith('/naya/office') ? office : url.endsWith('/naya/activity') ? activity : channels)))))
+    vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve(new Response(JSON.stringify(responses[url.split('/naya/')[1]?.split('?')[0] ?? ''] ?? {})))))
     const host = document.body.appendChild(document.createElement('div'))
     const root = createRoot(host)
 
