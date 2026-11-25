@@ -936,9 +936,12 @@ function collaborationState(sessions: Session[], aliases: readonly string[]): Of
   return sessions.some((session) => session.active === true && session.actor && aliases.includes(session.actor.trim().toLowerCase())) ? 'Collaborating' : 'Unknown'
 }
 
+/** The office shows an agent as Idle only when every source it reads is at most this old. */
+export const OFFICE_FRESH_MS = 30_000
+
 function isFresh(fetchedAt: string, now: number): boolean {
   const timestamp = Date.parse(fetchedAt)
-  return Number.isFinite(timestamp) && timestamp <= now + 1_000 && now - timestamp <= 30_000
+  return Number.isFinite(timestamp) && timestamp <= now + 1_000 && now - timestamp <= OFFICE_FRESH_MS
 }
 
 function explicitState(agent: AgentSpec, states: ExplicitOfficeState[], now: number): OfficeState | undefined {
@@ -1079,10 +1082,11 @@ export function buildDashboard(parts: { runtime: RuntimeSnapshot; board: TaskBoa
 // Cached accessors. Concurrent callers share one in-flight read per source. Profiles, tasks,
 // sessions, cron and agent activity come from Hermes' files (milliseconds). Skills and channels
 // still start the Python CLI (seconds of CPU each), so they are kept much longer. A source with
-// `staleMs` answers from its last value at once while it re-reads in the background.
+// `staleMs` answers from its last value at once while it re-reads in the background; the office's
+// sources never do, because a value older than OFFICE_FRESH_MS turns every Idle agent Unknown.
 
-/** Profiles, cron and sessions: cheap to read, but they change rarely. */
-const SLOW_CACHE_MS = 30_000
+/** Profiles and cron: cheap to read and rarely changed; kept below OFFICE_FRESH_MS with margin. */
+export const SLOW_CACHE_MS = 20_000
 /** Skills and messaging channels: CLI only, and they change only when someone sets them up. */
 const CLI_ONLY_CACHE_MS = 15 * 60_000
 const STALE_MS = 60 * 60_000
@@ -1120,10 +1124,10 @@ const runtimeSource = cachedSource(async () => {
   if (snapshot.profiles.availability === 'available') lastProfiles = snapshot.profiles
   else if (lastProfiles) return { ...snapshot, profiles: lastProfiles }
   return snapshot
-}, SLOW_CACHE_MS, STALE_MS)
+}, SLOW_CACHE_MS)
 const taskBoardSource = cachedSource(() => collectTaskBoardFast())
 const calendarSource = cachedSource(async () => collectCalendar(systemRun, (await getSnapshot()).profiles, hermesHome()), SLOW_CACHE_MS, STALE_MS)
-const activitySource = cachedSource(() => collectActivity(systemRun, hermesHome()), CACHE_MS, STALE_MS)
+const activitySource = cachedSource(() => collectActivity(systemRun, hermesHome()))
 const knowledgeSource = cachedSource(() => collectKnowledge(), CLI_ONLY_CACHE_MS, STALE_MS)
 const channelSource = cachedSource(() => collectChannels(), CLI_ONLY_CACHE_MS, STALE_MS)
 const usageSources = new Map(USAGE_PERIODS.map((days) => [days, cachedSource(async () => collectUsage(days, (await getSnapshot()).profiles.data.map((profile) => profile.name)), INSIGHTS_CACHE_MS)]))

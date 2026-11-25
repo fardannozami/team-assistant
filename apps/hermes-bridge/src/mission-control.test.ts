@@ -4,6 +4,8 @@ import {
   collectCalendar,
   collectKnowledge,
   collectSnapshot,
+  OFFICE_FRESH_MS,
+  SLOW_CACHE_MS,
   collectTaskBoard,
   buildOfficeSnapshot,
   buildOfficeSummary,
@@ -36,6 +38,10 @@ describe('Hermes output parsers', () => {
     const snapshot = await collectSnapshot(async () => { throw new Error('not found') })
     expect(snapshot.profiles).toMatchObject({ availability: 'unavailable', data: [], error: { code: 'COMMAND_FAILED' } })
     expect(snapshot.openCode.data).toBe('Unknown')
+  })
+
+  it('keeps the office sources fresher than the office requires, so Idle agents never flip to Unknown', () => {
+    expect(SLOW_CACHE_MS).toBeLessThan(OFFICE_FRESH_MS)
   })
 
   it('gives the slow profile list 30 s, and the quick version checks the default timeout', async () => {
