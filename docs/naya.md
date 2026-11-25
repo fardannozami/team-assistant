@@ -41,7 +41,7 @@ Hermes keeps the AI side of a card; daily's Postgres keeps the people (`naya_car
 - **Next version.** Items that were not *Selesai* go back to *In Progress* as the next version (v2, v3, …) and are handed over again when the agent returns the card to review. Their notes are kept as candidate `naya_learned_rules` for the agent; activating them is still manual.
 - **Follow-up email.** When the natural next step is an email to a client or prospect, the AI writes it in full. It appears in the card's discussion as a *Template email*, with buttons that copy the subject and the body to send from the PM's own account. Naya never sends it.
 - **On to design or development.** A card whose checklist is all *Selesai* can continue with *Lanjut ke Designer* or *Lanjut ke Developer*. This creates a new card that waits on the approved one, so the agent reads its full result. Agent 3A writes the design requirement, or 2B writes the PRD. The new card's PIC is picked automatically from the designer or developer pool when the agent is done. A card continues only once.
-- **Tugas Saya and Lanjut.** *Tugas Saya* lists the cards waiting on you, and cards waiting more than 48 hours come first. Those cards also get a WhatsApp reminder at most once a day. *Lanjut* in the header opens the most urgent one.
+- **Tugas Saya.** It lists the cards waiting on you, and cards waiting more than 48 hours come first. Those cards also get a WhatsApp reminder at most once a day.
 
 Humans decide when work is done:
 

@@ -250,7 +250,7 @@ export interface InboxEntry {
 /**
  * Tugas Saya: cards in review that wait on this person, either as the PIC of an item still being
  * checked, or as the card's PIC before its checklist exists. Items with no PIC wait on everyone
- * who may review. The oldest and overdue come first; "Lanjut" opens the first.
+ * who may review. The oldest and overdue come first.
  */
 export async function inbox(workspaceId: string, me: string | null, canReview: boolean, now = Date.now()): Promise<InboxEntry[]> {
   const snapshot = await boardSnapshot();

@@ -8,7 +8,7 @@ import { EmptyState, PageTitle } from '../ui.tsx'
 import { TaskDetailDialog } from './TaskBoard.tsx'
 
 // Tugas Saya: the cards the AI handed over that wait on the signed-in person, overdue first.
-// WhatsApp links (`#/my-tasks/<board>/<id>`) and the header's "Lanjut" open a card straight away.
+// WhatsApp links (`#/my-tasks/<board>/<id>`) open a card straight away.
 
 const asTask = (entry: InboxEntry): Task => ({ id: entry.id, title: entry.title, status: 'review', board: entry.board, ...(entry.assignee ? { assignee: entry.assignee } : {}) })
 

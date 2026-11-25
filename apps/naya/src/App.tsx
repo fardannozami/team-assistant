@@ -10,16 +10,16 @@ import { MyTasks } from './pages/MyTasks.tsx'
 import { LOCKED_EVENT, loadMe, MeContext, type Me } from './access.ts'
 import { consumeAuthRedirect, DAILY_URL, setToken } from './api.ts'
 import { LoginScreen } from './LockScreen.tsx'
-import { RefreshContext, usePolling } from './polling.ts'
+import { usePolling } from './polling.ts'
 import { usePreferences } from './preferences.ts'
-import { cardHash, HOME, navigation, pageFromHash, pageLabel, pageSlug, type Page } from './routes.ts'
-import type { DashboardSnapshot, InboxEntry } from './types.ts'
+import { HOME, navigation, pageFromHash, pageLabel, pageSlug, type Page } from './routes.ts'
+import type { DashboardSnapshot } from './types.ts'
 
 function currentPage(): Page {
   return typeof window === 'undefined' ? HOME : pageFromHash(window.location.hash)
 }
 
-function Shell({ onRefresh, me, onSignedOut }: { onRefresh: () => void; me: Me; onSignedOut: () => void }) {
+function Shell({ me, onSignedOut }: { me: Me; onSignedOut: () => void }) {
   const [page, setPage] = useState<Page>(currentPage)
   const { theme, toggleTheme } = usePreferences()
   // The navigation is a drawer over the page, closed by default, like a game's menu.
@@ -28,9 +28,6 @@ function Shell({ onRefresh, me, onSignedOut }: { onRefresh: () => void; me: Me; 
   const drawer = useRef<HTMLElement>(null)
   const dashboard = usePolling<DashboardSnapshot>('/api/dashboard', 15_000)
   const data = dashboard.status === 'ready' ? dashboard.data : null
-  // "Lanjut": how many cards wait on me, and a jump to the most urgent one.
-  const inbox = usePolling<InboxEntry[]>('/api/inbox', 30_000)
-  const waiting = inbox.status === 'ready' ? inbox.data : []
 
   useEffect(() => {
     const onHashChange = () => setPage(currentPage())
@@ -84,7 +81,7 @@ function Shell({ onRefresh, me, onSignedOut }: { onRefresh: () => void; me: Me; 
       <div className="sidebar-note"><span className="dot"/> {me.user.name.toUpperCase()} · {(me.user.role ?? 'TANPA PERAN').toUpperCase()}</div>
       <small className="drawer-hint">Tekan M untuk membuka atau menutup menu</small>
     </aside>
-    <main><header><span className="header-title"><button type="button" ref={menuButton} className="icon-button menu-button" onClick={() => (menuOpen ? closeMenu() : setMenuOpen(true))} aria-controls="app-sidebar" aria-expanded={menuOpen} aria-label={menuOpen ? 'Tutup menu' : 'Buka menu'} title="Menu (M)">☰{alerts > 0 && <span className="menu-alert" aria-label={`${alerts} peringatan di menu`}/>}</button><span>NAYA / {pageLabel(page).toUpperCase()}</span></span><span className="header-actions"><button type="button" className="primary-button next-button" disabled={!waiting.length} onClick={() => { if (waiting[0]) window.location.hash = cardHash(waiting[0].board, waiting[0].id) }} title={waiting.length ? `Buka keputusan paling mendesak (${waiting.length} kartu menunggu Anda)` : 'Tidak ada keputusan yang menunggu Anda'}>LANJUT{waiting.length ? <b className="mono"> {waiting.length}</b> : null}</button><span className={`sync-label${dashboard.status === 'failed' ? ' text-bad' : ''}`}>{syncLabel}</span><button type="button" className="icon-button theme-toggle" onClick={toggleTheme} aria-label={`Ganti ke mode ${theme === 'dark' ? 'terang' : 'gelap'}`} title={`Ganti ke mode ${theme === 'dark' ? 'terang' : 'gelap'}`}>{theme === 'dark' ? '☀' : '☾'}</button><button type="button" className="refresh-button" onClick={onRefresh} aria-label="Muat ulang semua sumber">↻ MUAT ULANG</button>
+    <main><header><span className="header-title"><button type="button" ref={menuButton} className="icon-button menu-button" onClick={() => (menuOpen ? closeMenu() : setMenuOpen(true))} aria-controls="app-sidebar" aria-expanded={menuOpen} aria-label={menuOpen ? 'Tutup menu' : 'Buka menu'} title="Menu (M)">☰{alerts > 0 && <span className="menu-alert" aria-label={`${alerts} peringatan di menu`}/>}</button><span>NAYA / {pageLabel(page).toUpperCase()}</span></span><span className="header-actions"><span className={`sync-label${dashboard.status === 'failed' ? ' text-bad' : ''}`}>{syncLabel}</span><button type="button" className="icon-button theme-toggle" onClick={toggleTheme} aria-label={`Ganti ke mode ${theme === 'dark' ? 'terang' : 'gelap'}`} title={`Ganti ke mode ${theme === 'dark' ? 'terang' : 'gelap'}`}>{theme === 'dark' ? '☀' : '☾'}</button>
         <span className="account"><button type="button" className="refresh-button account-button" aria-expanded={accountOpen} aria-haspopup="menu" onClick={() => setAccountOpen(!accountOpen)} title={me.user.email}>{me.user.name}<small>{me.user.role ?? 'Tanpa peran'}</small></button>
           {accountOpen && <span className="account-menu" role="menu"><a role="menuitem" href={DAILY_URL} target="_blank" rel="noopener">Buka daily ↗</a><button type="button" role="menuitem" onClick={signOut}>Keluar</button></span>}</span></span></header>
       {!me.hermes && <section className="notice" role="alert"><strong>Hermes belum terhubung.</strong> API daily belum diberi HERMES_BRIDGE_URL dan BRIDGE_TOKEN, jadi kantor dan papan tugas kosong.</section>}
@@ -93,7 +90,6 @@ function Shell({ onRefresh, me, onSignedOut }: { onRefresh: () => void; me: Me; 
 }
 
 export function App() {
-  const [tick, setTick] = useState(0)
   // undefined while checking; null when signed out.
   const [me, setMe] = useState<Me | null | undefined>()
   const [authError, setAuthError] = useState<string>()
@@ -108,5 +104,5 @@ export function App() {
   }, [])
   if (me === undefined) return <main className="lock-screen" aria-busy="true"/>
   if (me === null) return <LoginScreen error={authError}/>
-  return <MeContext.Provider value={me}><RefreshContext.Provider value={tick}><Shell me={me} onSignedOut={() => setMe(null)} onRefresh={() => setTick((value) => value + 1)}/></RefreshContext.Provider></MeContext.Provider>
+  return <MeContext.Provider value={me}><Shell me={me} onSignedOut={() => setMe(null)}/></MeContext.Provider>
 }
