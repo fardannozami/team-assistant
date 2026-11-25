@@ -4,7 +4,8 @@
 Hermes is on standby (kanban.dispatch_in_gateway: false, auto_decompose: false):
 it keeps the board and Naya's office, and this script does the thinking.
 
-Each run (cron, every minute) works the board until nothing is left, under a lock:
+Each run (cron, every minute) works the board until nothing is left, under a lock, with up to
+PARALLEL tasks at once (subtasks that do not need each other's results run side by side):
   1. a task in triage  -> Claude decomposes it (one task, or chained subtasks)
   2. else a ready task -> Claude works it: comment the result, then complete /
      request-review (when the task asks for human review) / block (needs input)
@@ -25,6 +26,7 @@ import subprocess
 import sys
 import time
 import urllib.request
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -36,6 +38,7 @@ CLAIM_TTL = 3600
 CLAUDE_TIMEOUT = 1500                # longer than the cron interval is fine: the lock prevents overlap
 REVIEW_MARKERS = ("request_review", "request-review", "direview manusia")
 MAX_ACTIONS = 30                     # per run; a long queue continues on the next run
+PARALLEL = max(1, int(os.environ.get("CLAUDE_WORKER_PARALLEL", "3")))  # Claude runs at once
 UPSTREAM_BUDGET = 80_000             # characters of upstream results handed to one task
 # Optional: daily's API (as reachable from this host) to hand reviewed cards over at once.
 NOTIFY_URL = os.environ.get("NAYA_NOTIFY_URL", "")        # e.g. http://localhost:4000/naya/notify
@@ -139,8 +142,14 @@ DECOMPOSE_SCHEMA = {
             "type": "array",
             "items": {
                 "type": "object",
-                "properties": {"title": {"type": "string"}, "body": {"type": "string"}, "agent": AGENT_CODES},
-                "required": ["title", "body", "agent"],
+                "properties": {
+                    "title": {"type": "string"},
+                    "body": {"type": "string"},
+                    "agent": AGENT_CODES,
+                    "after": {"type": "array", "items": {"type": "integer"},
+                              "description": "Positions of earlier subtasks whose results this one needs; empty to start at once."},
+                },
+                "required": ["title", "body", "agent", "after"],
             },
         },
     },
@@ -159,6 +168,13 @@ WORK_SCHEMA = {
 }
 
 
+def dependencies(after: object, index: int) -> list[int]:
+    """The earlier subtasks one waits on: only positions before it (so the graph has no cycles)."""
+    if not isinstance(after, list):
+        return []
+    return sorted({n for n in after if isinstance(n, int) and 0 <= n < index})
+
+
 def decompose(task: dict) -> None:
     tid = task["id"]
     show = hk("show", tid)
@@ -167,10 +183,13 @@ def decompose(task: dict) -> None:
         BASE_SYSTEM + """
 
 You are Naya Core: decide how to run this new task and which agent of the roster does each part.
-Prefer "single" unless the work clearly has 2-5 sequential steps that each produce something a later
-step needs. Every subtask must be doable with no tools (analysis, specs, plans, writing, reviews of
-pasted material). Subtasks run in the order given, each seeing the previous results in full; the
-original task runs last and assembles the final answer. Keep "subtasks" empty for "single".
+Prefer "single" unless the work clearly has 2-5 parts that each produce something the final answer
+needs. Every subtask must be doable with no tools (analysis, specs, plans, writing, reviews of
+pasted material). For each subtask, "after" lists the earlier subtasks (0-based positions) whose
+results it needs; it sees those results in full. Leave "after" empty when it can start right away:
+subtasks with nothing to wait for run at the same time, so only add a dependency when the later
+step really uses the earlier result. The original task runs last, sees every subtask's result and
+assembles the final answer. Keep "subtasks" empty for "single".
 
 Pick each agent by matching the work to its input and output. Use the generalist only when no
 specialist fits. Roster:
@@ -181,9 +200,9 @@ specialist fits. Roster:
     subs = (plan.get("subtasks") or [])[:5] if plan["mode"] == "split" else []
     root = agent_of(plan.get("agent"))["code"]
     # Hermes's own triage exits (the same ones its decomposer uses): atomic, and they move the task
-    # triage -> todo. Split: children chained in order, the root waits on all of them.
+    # triage -> todo. Split: each child waits on the earlier children it names, the root on all.
     children = [{"title": s["title"], "body": s["body"], "assignee": agent_of(s.get("agent"))["code"],
-                 "parents": [i - 1] if i else []} for i, s in enumerate(subs)]
+                 "parents": dependencies(s.get("after"), i)} for i, s in enumerate(subs)]
     payload = json.dumps({"task": tid, "children": children, "author": AUTHOR, "root": root})
     out = hermes_py(TRIAGE_EXIT, payload)
     res = json.loads(out.strip().splitlines()[-1])
@@ -191,7 +210,11 @@ specialist fits. Roster:
         raise RuntimeError(f"triage exit failed for {tid}: {res}")
     label = lambda code: f"{AGENTS[code]['label']} {AGENTS[code]['name']}"
     if res.get("child_ids"):
-        parts = ", ".join(f"{cid} → {label(c['assignee'])}" for cid, c in zip(res["child_ids"], children))
+        ids = res["child_ids"]
+        def part(cid: str, child: dict) -> str:
+            waits = f" (setelah {', '.join(ids[p] for p in child['parents'])})" if child["parents"] else ""
+            return f"{cid} → {label(child['assignee'])}{waits}"
+        parts = ", ".join(part(cid, c) for cid, c in zip(ids, children))
         note = f"Dipecah oleh Naya Core menjadi {len(res['child_ids'])} subtugas: {parts}. Hasil akhir disusun oleh {label(root)}. {plan['reason']}"
     else:
         note = f"Dikerjakan langsung oleh {label(root)} tanpa dipecah. {plan['reason']}"
@@ -325,28 +348,42 @@ def main() -> int:
             log(f"orphaned claim on {t['id']}; reclaiming")
             hk("reclaim", "--reason", "claude-worker: previous run died", t["id"], check=False)
 
-    failed: set[str] = set()
-    for _ in range(MAX_ACTIONS):
-        # Re-read every time: a finished subtask makes the next one ready.
-        tasks = json.loads(hk("list", "--json") or "[]")
-        triage = [t for t in tasks if t["status"] == "triage" and t["id"] not in failed]
-        ready = [t for t in tasks if t["status"] == "ready" and t["id"] not in failed]
-        if triage:
-            task = sorted(triage, key=lambda t: t["created_at"])[0]
-            try:
-                decompose(task)
-            except Exception as e:
-                log(f"decompose {task['id']}: FAILED {e}")
-                failed.add(task["id"])
-        elif ready:
-            task = sorted(ready, key=lambda t: (-(t.get("priority") or 0), t["created_at"]))[0]
-            work(task)
-            # A failed run hands the task back to ready; leave it for the next run, not a tight loop.
-            if task["id"] in {t["id"] for t in json.loads(hk("list", "--json") or "[]") if t["status"] == "ready"}:
-                failed.add(task["id"])
-        else:
-            break
+    drain(PARALLEL)
     return 0
+
+
+def drain(parallel: int) -> None:
+    """Works triage and ready tasks until none are left, `parallel` at a time. A task is never
+    started twice: it is in flight until its thread ends, and Hermes' claim guards it too."""
+    failed: set[str] = set()
+    running: dict[Future, tuple[str, str]] = {}  # future -> (task id, "decompose" | "work")
+    started = 0
+    with ThreadPoolExecutor(max_workers=parallel) as pool:
+        while True:
+            # Re-read every time: a finished subtask makes the next ones ready.
+            busy = {tid for tid, _ in running.values()}
+            tasks = json.loads(hk("list", "--json") or "[]")
+            triage = sorted((t for t in tasks if t["status"] == "triage" and t["id"] not in failed | busy),
+                            key=lambda t: t["created_at"])
+            ready = sorted((t for t in tasks if t["status"] == "ready" and t["id"] not in failed | busy),
+                           key=lambda t: (-(t.get("priority") or 0), t["created_at"]))
+            queue = [(t, "decompose") for t in triage] + [(t, "work") for t in ready]
+            while queue and len(running) < parallel and started < MAX_ACTIONS:
+                task, kind = queue.pop(0)
+                running[pool.submit(decompose if kind == "decompose" else work, task)] = (task["id"], kind)
+                started += 1
+            if not running:
+                return
+            done, _ = wait(running, return_when=FIRST_COMPLETED)
+            after = {t["id"]: t["status"] for t in json.loads(hk("list", "--json") or "[]")}
+            for future in done:
+                tid, kind = running.pop(future)
+                if future.exception() is not None:
+                    log(f"{kind} {tid}: FAILED {future.exception()}")
+                    failed.add(tid)
+                # A failed run hands the task back; leave it for the next run, not a tight loop.
+                elif after.get(tid) == ("triage" if kind == "decompose" else "ready"):
+                    failed.add(tid)
 
 
 if __name__ == "__main__":

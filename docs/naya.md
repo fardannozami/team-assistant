@@ -27,7 +27,7 @@ The Hermes Kanban is the source of truth:
 
 ### The agent roster
 
-`packages/shared/src/naya-roster.json` lists the blueprint's agents: code, input, output, the human role that reviews them, and the instructions each one works by. When `claude-worker` splits a card, it acts as Naya Core and assigns each subtask, and the final assembly, to an agent from this roster. The agent's code becomes the Hermes assignee, and its contract becomes the system prompt.
+`packages/shared/src/naya-roster.json` lists the blueprint's agents: code, input, output, the human role that reviews them, and the instructions each one works by. When `claude-worker` splits a card, it acts as Naya Core and assigns each subtask, and the final assembly, to an agent from this roster. The agent's code becomes the Hermes assignee, and its contract becomes the system prompt. Subtasks name the earlier subtasks whose results they need. Those that need none run at the same time, up to `CLAUDE_WORKER_PARALLEL` (default 3), and the card itself runs last.
 
 Agents that need tools the worker does not have yet (web research for 1A/1B/4A/4B, GitHub for 3C/3D) are marked `available: false` and are never picked. The Agent page lists the roster. Labels such as "2B · Transcript-to-PRD & Backlog" appear on the board and in the checklist, together with the reviewer role from the blueprint.
 

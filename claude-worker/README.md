@@ -6,7 +6,7 @@ menyimpan papan dan kantor Naya (`kanban.dispatch_in_gateway: false`,
 yang berpikir.
 
 Setiap kali jalan (tiap menit, dengan lock agar tidak tumpang tindih), papan dikerjakan
-sampai habis, maksimal 30 aksi:
+sampai habis, maksimal 30 aksi, dengan hingga 3 Claude berjalan bersamaan (`CLAUDE_WORKER_PARALLEL`):
 
 1. Ada tugas di `triage` → Claude memutuskan dikerjakan langsung atau dipecah menjadi
    2–5 subtugas berurutan.
@@ -18,6 +18,17 @@ Tugas yang gagal dikembalikan ke antrean dan baru dicoba lagi pada run berikutny
 Begitu sebuah kartu masuk review, worker langsung meminta API daily mengirim WhatsApp
 serah terima ke PIC (lihat env di bawah). Tanpa env itu, WhatsApp tetap terkirim lewat
 pengecekan 10 menit di worker daily.
+
+## Subtugas paralel
+
+Saat memecah, Naya Core menentukan untuk tiap subtugas subtugas sebelumnya mana yang hasilnya
+benar-benar dibutuhkan (`after`). Subtugas tanpa ketergantungan langsung `ready` dan dikerjakan
+bersamaan. Yang bergantung menunggu sampai hasil yang dibutuhkannya selesai, lalu menerima hasil
+itu secara lengkap. Kartu induk menunggu semua subtugas, lalu menyusun hasil akhir. Komentar
+pembagian di kartu mencatat urutannya, misalnya "t_c → 3A UX Architect (setelah t_a)".
+
+Batas paralel diatur dengan `CLAUDE_WORKER_PARALLEL` (default 3). Semua run Claude memakai akun
+yang sama, jadi turunkan angkanya jika sering terkena batas pemakaian.
 
 ## Roster agent
 
