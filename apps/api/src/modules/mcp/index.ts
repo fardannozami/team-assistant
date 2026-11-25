@@ -10,7 +10,7 @@ import { OPS_TOOLS } from "./ops-tools.js";
 export const mcpApi = new Hono();
 
 const INSTRUCTIONS =
-  "Data from daily.digdaya.co (PT Digdaya Inovasi Gemilang): projects, team, standups, reports, idle members and briefing leads (read-only); with an ops token also the status, logs and restarts of the app's services. Dates are YYYY-MM-DD.";
+  "Data from daily.digdaya.co (PT Digdaya Inovasi Gemilang): projects, team, standups, reports and idle members (read-only); with an ops token also the status, logs and restarts of the app's services. Dates are YYYY-MM-DD.";
 
 export const MCP_TOOLS = [...READ_TOOLS, ...OPS_TOOLS];
 const MAX_BATCH = 20;

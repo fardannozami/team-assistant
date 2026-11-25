@@ -1,7 +1,6 @@
 import { Worker, Queue, type Job } from "bullmq";
 import pino from "pino";
 import {
-  agencyProfiles,
   calendarSettings,
   checkinConfigs,
   createDbClient,
@@ -14,7 +13,7 @@ import {
 } from "@repo/database";
 import { and, eq } from "drizzle-orm";
 import { dateInTimezone, DEFAULT_TIMEZONE, SHIFT_TIMES, shiftDate } from "@repo/shared";
-import { reminderTimes, standupReminderTimes, timeBefore } from "./reminder-times.js";
+import { reminderTimes, standupReminderTimes } from "./reminder-times.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 
@@ -59,6 +58,7 @@ const OWNED_PREFIXES = [
   "checkin-reminders",
   "checkin-close",
   "figma-sync",
+  // Retired: still owned so reconcile removes repeatables left in Redis.
   "briefing-run",
 ];
 
@@ -80,7 +80,6 @@ const API_PATHS: Record<string, string> = {
   "checkin-reminders": "/checkins/reminders",
   "checkin-close": "/checkins/close",
   "figma-sync": "/figma/sync",
-  "briefing-run": "/briefings/run",
 };
 
 // Runs every hour, so one claim per hour instead of per day.
@@ -119,14 +118,13 @@ type DesiredRepeatable = {
 
 async function desiredRepeatables(): Promise<DesiredRepeatable[]> {
   const rows = await db
-    .select({ schedule: schedules, briefing: agencyProfiles })
+    .select({ schedule: schedules })
     .from(schedules)
     .innerJoin(workspaces, eq(schedules.workspaceId, workspaces.id))
-    .leftJoin(agencyProfiles, eq(agencyProfiles.workspaceId, schedules.workspaceId))
     .where(and(eq(schedules.isActive, true), eq(workspaces.isActive, true)));
 
   const desired: DesiredRepeatable[] = [];
-  for (const { schedule, briefing } of rows) {
+  for (const { schedule } of rows) {
     const owner = { scheduleId: schedule.id, workspaceId: schedule.workspaceId };
     const tz = schedule.timezone || "Asia/Jakarta";
     const weekdays = Array.isArray(schedule.weekdays)
@@ -160,15 +158,6 @@ async function desiredRepeatables(): Promise<DesiredRepeatable[]> {
         desired.push({
           name: `standup-close:${schedule.id}`,
           pattern: cronFor(schedule.closeTime, weekdays),
-          tz,
-          ...owner,
-        });
-      }
-      // Pre-standup briefings (apps/agents); on unless the workspace turned them off.
-      if (briefing?.isActive !== false) {
-        desired.push({
-          name: `briefing-run:${schedule.id}`,
-          pattern: cronFor(timeBefore(schedule.timeOfDay, briefing?.offsetMinutes ?? 30), weekdays),
           tz,
           ...owner,
         });

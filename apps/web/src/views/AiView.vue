@@ -119,57 +119,6 @@
       </form>
     </section>
 
-    <!-- Tavily: web search for the sales briefing -->
-    <section v-if="search" class="mt-9">
-      <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-3">Pencarian leads (Tavily)</div>
-      <p class="text-text-muted text-sm mb-4">
-        Briefing sales mencari lowongan publik di LinkedIn, Freelancer.com, dan RFP lewat Tavily. Tanpa key, briefing tetap jalan dari job board dan tender saja.
-        Ada 1.000 pencarian gratis per bulan; satu briefing memakai sekitar 3.
-        <a :href="search.keyUrl" target="_blank" rel="noopener" class="font-semibold text-accent hover:underline">Buat API key Tavily ›</a>
-      </p>
-      <div class="flex flex-wrap items-center gap-3 px-4 py-4 mb-4 rounded-xl border border-border bg-panel-hover">
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-[11px] font-extrabold tracking-tight uppercase border" :class="search.configured ? 'bg-success/8 text-success border-success/20' : 'bg-text-muted/10 text-text-dim border-border'">
-          {{ search.configured ? "Aktif" : search.sharedKeyAvailable ? "Memakai key server" : "Belum diatur" }}
-        </span>
-        <span v-if="search.configured" class="text-sm text-text-muted">Key berakhiran <span class="font-mono text-text">…{{ search.apiKeyHint }}</span></span>
-      </div>
-      <p v-if="searchWarning" class="mb-4 px-4 py-3 rounded-xl border border-warning/30 bg-warning/5 text-sm text-text slide-in">{{ searchWarning }}</p>
-      <form class="grid gap-4" @submit.prevent="saveSearch">
-        <div>
-          <label for="tavily-key" class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">API key Tavily</label>
-          <input
-            id="tavily-key"
-            v-model="searchKey"
-            type="password"
-            autocomplete="off"
-            placeholder="tvly-…"
-            required
-            :class="inputClass"
-          />
-          <p class="mt-1.5 text-text-muted text-xs">Diuji dengan satu pencarian, lalu disimpan terenkripsi dan tidak pernah ditampilkan kembali.</p>
-        </div>
-        <div class="flex flex-wrap gap-2">
-          <button
-            type="submit"
-            :disabled="savingSearch"
-            class="inline-flex items-center justify-center gap-2.5 px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white transition hover:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            <span v-if="savingSearch" class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full spin-slow" aria-hidden="true"></span>
-            {{ savingSearch ? "Menguji key…" : "Uji & simpan" }}
-          </button>
-          <button
-            v-if="search.configured"
-            type="button"
-            :disabled="savingSearch"
-            class="px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight border border-border text-danger hover:bg-danger/5 disabled:opacity-60"
-            @click="removeSearch"
-          >
-            Hapus key
-          </button>
-        </div>
-      </form>
-    </section>
-
     <!-- Naya: Hermes agents people can chat with -->
     <section v-if="nayaAgents" class="mt-9">
       <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-3">Agent Naya</div>
@@ -220,7 +169,7 @@
     <section v-if="agentTokens" class="mt-9">
       <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-3">Token MCP agent</div>
       <p class="text-text-muted text-sm mb-4">
-        Agent Hermes bisa membaca proyek, anggota, standup, laporan, anggota yang sedang kosong, dan leads briefing (tanpa fee dan nomor HP).
+        Agent Hermes bisa membaca proyek, anggota, standup, laporan, dan anggota yang sedang kosong (tanpa fee dan nomor HP).
         Token dengan akses <b>ops</b> (khusus Owner) juga bisa melihat status dan log service app, dan me-restart-nya. Berikan hanya ke agent <span class="font-mono text-text">ops</span>.
         Buat satu token per agent, lalu pasang di <span class="font-mono text-text">config.yaml</span> profil Hermes-nya.
       </p>
@@ -348,7 +297,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import { currentRole } from "../session";
-import { aiApi, ApiError, briefingsApi, nayaApi, showToast, type AgentToken, type AgentTokenScope, type NayaAgent, type AiPolicy, type AiProvider, type AiSettings, type AiUsage, type SearchKeyStatus } from "../api";
+import { aiApi, ApiError, nayaApi, showToast, type AgentToken, type AgentTokenScope, type NayaAgent, type AiPolicy, type AiProvider, type AiSettings, type AiUsage } from "../api";
 
 const providerOptions: { id: AiProvider; label: string; help: string; keyUrl?: string }[] = [
   { id: "gemini", label: "Google Gemini", help: "Ada kuota gratis harian. Buat key di Google AI Studio.", keyUrl: "https://aistudio.google.com/apikey" },
@@ -373,10 +322,6 @@ const form = reactive<{ provider: AiProvider; baseUrl: string; model: string; ap
   apiKey: "",
 });
 
-const search = ref<SearchKeyStatus | null>(null);
-const searchKey = ref("");
-const searchWarning = ref("");
-const savingSearch = ref(false);
 
 const CHAT_ROLE_OPTIONS = ["Owner", "Admin", "Manager", "PM", "Employee"];
 const SCOPE_OPTIONS: { scope: AgentTokenScope; label: string; ownerOnly: boolean }[] = [
@@ -453,8 +398,7 @@ async function savePolicy() {
 async function load() {
   loading.value = true;
   try {
-    const [s, p, k, t, n] = await Promise.all([aiApi.settings(), aiApi.policy(), briefingsApi.searchKey(), nayaApi.tokens(), nayaApi.agents()]);
-    search.value = k;
+    const [s, p, t, n] = await Promise.all([aiApi.settings(), aiApi.policy(), nayaApi.tokens(), nayaApi.agents()]);
     agentTokens.value = t;
     nayaAgents.value = n;
     fillPolicy(p.policy);
@@ -485,37 +429,6 @@ async function save() {
     error.value = err instanceof ApiError ? err.message : "API key gagal disimpan.";
   } finally {
     saving.value = false;
-  }
-}
-
-async function saveSearch() {
-  error.value = "";
-  searchWarning.value = "";
-  savingSearch.value = true;
-  try {
-    const res = await briefingsApi.saveSearchKey(searchKey.value.trim());
-    search.value = res.status;
-    searchKey.value = "";
-    searchWarning.value = res.warning ? `Key disimpan, tetapi: ${res.warning}` : "";
-    showToast("API key Tavily berhasil diuji dan disimpan.", "success");
-  } catch (err) {
-    error.value = err instanceof ApiError ? err.message : "API key Tavily gagal disimpan.";
-  } finally {
-    savingSearch.value = false;
-  }
-}
-
-async function removeSearch() {
-  if (!confirm("Hapus API key Tavily? Briefing sales hanya akan memakai job board dan tender.")) return;
-  savingSearch.value = true;
-  try {
-    search.value = await briefingsApi.removeSearchKey();
-    searchWarning.value = "";
-    showToast("API key Tavily dihapus.", "success");
-  } catch (err) {
-    error.value = err instanceof ApiError ? err.message : "API key Tavily gagal dihapus.";
-  } finally {
-    savingSearch.value = false;
   }
 }
 

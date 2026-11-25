@@ -35,7 +35,6 @@ services:
       DATABASE_URL: postgres://teamassistant:teamassistant@postgres:5432/teamassistant
       REDIS_URL: redis://redis:6379
       PORT: 4000
-      AGENTS_URL: http://agents:8100
       HERMES_BRIDGE_URL: http://hermes:8700
       HERMES_API_URL: http://hermes:8642
       DOCKER_PROXY_URL: http://docker-socket-proxy:2375
@@ -63,13 +62,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-
-  agents:
-    build:
-      context: .
-      dockerfile: docker/agents.Dockerfile
-    ports:
-      - "8100:8100"
 
   web:
     build:

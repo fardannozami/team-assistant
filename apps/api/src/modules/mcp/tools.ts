@@ -5,7 +5,6 @@ import { listEmployees } from "../employees/service.js";
 import { listStandupsByDate } from "../standups/service/progress.js";
 import { standupToday } from "../standups/engine/store.js";
 import { generateDailyReport, generateWeeklyReport } from "../reports/service.js";
-import { listBriefingItems } from "../briefings/service.js";
 
 // Read-only daily data for Hermes agents. Fees, shares and phone numbers stay
 // out: agents only need who works on what.
@@ -135,42 +134,6 @@ export const READ_TOOLS: ScopedTool[] = [
       const date = dateArg(args) ?? (await standupToday(workspaceId));
       const load = await teamLoad(workspaceId, date);
       return json({ date, idle: load.filter((p) => p.idle), busy: load.filter((p) => !p.idle) });
-    },
-  },
-  {
-    name: "list_leads",
-    scope: "mcp:read",
-    description: "Leads and news from the pre-standup briefings (newest first).",
-    inputSchema: {
-      type: "object",
-      properties: {
-        audience: { type: "string", enum: ["sales", "design", "dev"] },
-        status: { type: "string", enum: ["new", "sent", "claimed", "dismissed", "won"] },
-        limit: { type: "number", description: "1-100, default 30" },
-      },
-    },
-    run: async (args, { workspaceId }) => {
-      const limit = Math.min(Math.max(Number(args.limit) || 30, 1), 100);
-      const rows = await listBriefingItems(workspaceId, {
-        audience: typeof args.audience === "string" ? args.audience : undefined,
-        status: typeof args.status === "string" ? args.status : undefined,
-        limit,
-      });
-      return json(
-        rows.map((r) => ({
-          type: r.type,
-          title: r.title,
-          url: r.url,
-          source: r.source,
-          country: r.country,
-          budget: r.budget,
-          score: r.score,
-          summary: r.summary,
-          pitch: r.pitch,
-          status: r.status,
-          date: r.createdAt,
-        })),
-      );
     },
   },
 ];

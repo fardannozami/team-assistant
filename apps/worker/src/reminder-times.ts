@@ -55,8 +55,3 @@ export function standupReminderTimes(schedule: {
   );
   return [...new Set(times)].sort();
 }
-
-/** `minutes` before a time of day, never before 00:00 of the same day. */
-export function timeBefore(timeOfDay: string, minutes: number): string {
-  return toTime(Math.max(0, toMinutes(timeOfDay) - Math.max(0, minutes)));
-}

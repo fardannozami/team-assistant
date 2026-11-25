@@ -28,7 +28,7 @@ export const OPS_TOOLS: ScopedTool[] = [
   {
     name: "ops_status",
     scope: "ops:read",
-    description: "State of the app's services on the VPS (api, web, worker, agents, naya): running or not, and for how long.",
+    description: "State of the app's services on the VPS (api, web, worker, naya): running or not, and for how long.",
     inputSchema: { type: "object", properties: {} },
     run: async () => json(await opsStatus()),
   },

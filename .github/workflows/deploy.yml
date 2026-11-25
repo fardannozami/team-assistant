@@ -20,7 +20,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        service: [api, worker, web, agents, naya, hermes]
+        service: [api, worker, web, naya, hermes]
     steps:
       - uses: actions/checkout@v4
 
@@ -87,7 +87,7 @@ jobs:
             export IMAGE_PREFIX IMAGE_TAG
             compose="docker compose -f docker-compose.prod.yml"
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-            $compose pull api worker web agents naya hermes docker-socket-proxy
+            $compose pull api worker web naya hermes docker-socket-proxy
             $compose up -d --wait postgres redis
             # Migrate with the API stopped so it never runs against a half-migrated schema.
             $compose stop api worker 2>/dev/null || true

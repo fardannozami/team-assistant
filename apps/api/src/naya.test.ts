@@ -123,7 +123,6 @@ describe("mcp protocol", () => {
       "daily_report",
       "weekly_report",
       "idle_members",
-      "list_leads",
     ]);
     expect(reply.result.tools.every((t) => t.inputSchema.type === "object")).toBe(true);
   });

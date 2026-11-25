@@ -10,7 +10,7 @@ export const MAX_LOG_LINES = 200;
 
 /** Compose services the ops agent may see and restart (OPS_SERVICES). */
 export function opsServices(env: NodeJS.ProcessEnv = process.env): string[] {
-  return (env.OPS_SERVICES ?? "api,web,worker,agents,naya")
+  return (env.OPS_SERVICES ?? "api,web,worker,naya")
     .split(",")
     .map((name) => name.trim())
     .filter((name) => /^[a-z0-9][a-z0-9_-]{0,63}$/.test(name));

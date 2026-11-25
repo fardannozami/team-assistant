@@ -2,9 +2,9 @@ import { pgTable, text, timestamp, uuid, integer, boolean, unique, index } from 
 import { employees } from "./employees.js";
 import { workspaceRef } from "./workspaces.js";
 
-// Pre-standup briefings from apps/agents (CrewAI): leads for sales/PM, UI/UX
-// trends for designers, dev news for developers. One profile per workspace
-// says what the agency sells, so the sales crew can score leads against it.
+// Retired pre-standup briefings (the apps/agents CrewAI service is gone): leads
+// for sales/PM, UI/UX trends for designers, dev news for developers. The tables
+// stay for their existing data; nothing writes them any more.
 export const agencyProfiles = pgTable("agency_profiles", {
   id: uuid("id").defaultRandom().primaryKey(),
   workspaceId: workspaceRef().unique(),

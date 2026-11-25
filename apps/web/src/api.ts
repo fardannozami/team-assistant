@@ -814,29 +814,6 @@ export const aiApi = {
     }),
 };
 
-export interface SearchKeyStatus {
-  configured: boolean;
-  apiKeyHint: string | null;
-  sharedKeyAvailable: boolean;
-  keyUrl: string;
-}
-
-// Bring-your-own Tavily key for the sales briefing's web search.
-export const briefingsApi = {
-  searchKey: () => request<SearchKeyStatus>("/briefings/search-key"),
-
-  saveSearchKey: (apiKey: string) =>
-    request<{ status: SearchKeyStatus; warning: string | null }>("/briefings/search-key", {
-      method: "PUT",
-      body: JSON.stringify({ apiKey }),
-    }),
-
-  removeSearchKey: () =>
-    request<SearchKeyStatus>("/briefings/search-key", {
-      method: "DELETE",
-    }),
-};
-
 export interface AgentToken {
   id: string;
   name: string;

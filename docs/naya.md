@@ -81,7 +81,7 @@ Clicking the avatar shows today's work as a small kanban: *Dikerjakan* (each lin
    ```bash
    NAYA_WEB_URL=https://naya.digdaya.co
    BRIDGE_TOKEN=<openssl rand -hex 32>
-   OPS_SERVICES=api,web,worker,agents,naya
+   OPS_SERVICES=api,web,worker,naya
    OPS_COMPOSE_PROJECT=<the compose project name, usually the folder name: team-assistant>
    NAYA_PORT=3001
    # HERMES_UID/HERMES_GID: only if you mount hermes-data from a host folder
