@@ -401,6 +401,75 @@ export const searchKeySchema = z.object({
   apiKey: z.string().trim().min(10, "API key Tavily wajib diisi").max(200),
 });
 
+/** Scopes of Naya agent tokens (Hermes agents calling /mcp). */
+/**
+ * Scopes of Naya agent tokens (Hermes agents calling /mcp):
+ * mcp:read  projects, team, standups, reports, idle members, leads
+ * ops:read  status and (redacted) logs of the app's containers
+ * ops:restart  restart one of OPS_SERVICES
+ */
+export const API_TOKEN_SCOPES = ["mcp:read", "ops:read", "ops:restart"] as const;
+/** Only the Owner may hand out these. */
+export const OWNER_ONLY_SCOPES = ["ops:read", "ops:restart"] as const;
+export type ApiTokenScope = (typeof API_TOKEN_SCOPES)[number];
+
+export const createApiTokenSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Nama agent wajib diisi")
+    .max(60)
+    .regex(/^[\w .-]+$/, "Nama hanya huruf, angka, spasi, titik, minus dan garis bawah"),
+  scopes: z.array(z.enum(API_TOKEN_SCOPES)).min(1).default(["mcp:read"]),
+});
+
+/* ---------- Naya (naya.digdaya.co): the AI team on Hermes ---------- */
+
+/** Who may do what in Naya, by web role. Chat is per agent (naya_agents.chatRoles). */
+export const NAYA_POLICY = {
+  instruct: ["Owner", "Admin", "PM"],
+  review: ["Owner", "Admin", "Manager", "PM"],
+  comment: ["Owner", "Admin", "Manager", "PM", "Employee"],
+} as const satisfies Record<string, readonly (typeof ROLE_NAMES)[number][]>;
+export type NayaAction = keyof typeof NAYA_POLICY;
+
+export function nayaCan(role: string | null | undefined, action: NayaAction): boolean {
+  return !!role && (NAYA_POLICY[action] as readonly string[]).includes(role);
+}
+
+/** A Hermes profile name (as `hermes profile list` shows it). */
+export const HERMES_PROFILE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
+
+export const nayaAgentSchema = z.object({
+  displayName: z.string().trim().min(1, "Nama tampilan wajib diisi").max(60),
+  description: z.string().trim().max(300).optional().nullable(),
+  /** The profile's API_SERVER_KEY; omitted keeps the stored one. */
+  apiKey: z.string().trim().min(8, "API key terlalu pendek").max(300).optional(),
+  chatRoles: z.array(z.enum(ROLE_NAMES)).default(["Owner", "Admin"]),
+  isLead: z.boolean().default(false),
+});
+export type NayaAgentInput = z.infer<typeof nayaAgentSchema>;
+
+export const nayaInstructionSchema = z.object({
+  title: z.string().trim().min(1, "Judul wajib diisi").max(200),
+  body: z.string().max(4000).optional(),
+  board: z.string().max(64).optional(),
+  assignee: z.string().regex(HERMES_PROFILE).optional(),
+  decompose: z.boolean().default(true),
+});
+
+export const nayaReviewSchema = z.object({
+  note: z.string().max(4000).optional(),
+  board: z.string().max(64).optional(),
+});
+
+export const nayaChatSchema = z.object({
+  messages: z
+    .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().max(8000) }))
+    .min(1)
+    .max(40),
+});
+
 export const MOOD_EMOJI =["😫", "😕", "😐", "🙂", "🤩"] as const;
 
 /** 1-5 from replies like "4", "4 capek tapi oke", "🙂". Null when absent. */

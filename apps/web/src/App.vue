@@ -26,6 +26,7 @@
           </nav>
 
           <div class="flex shrink-0 items-center gap-1">
+            <button v-if="nayaUrl" class="min-h-10 rounded-xl px-3 text-sm font-semibold text-accent transition hover:bg-accent/10" title="Buka Naya, kantor tim AI" @click="openNaya">Naya ↗</button>
             <button v-if="!isPm" class="grid h-10 w-10 place-items-center rounded-xl text-base font-bold text-text-muted transition hover:bg-panel-hover" aria-label="Panduan admin" title="Panduan admin" @click="navigateTo('guide')">?</button>
             <button class="min-h-10 rounded-xl px-3 text-sm font-semibold text-text-muted transition hover:bg-danger/5 hover:text-danger" @click="handleLogout">Keluar</button>
           </div>
@@ -106,6 +107,7 @@ const initialPage = consumePageParam();
 const currentTab = ref(settingsSections.includes(initialPage) ? "settings" : initialPage);
 const settingsSection = ref(settingsSections.includes(initialPage) ? initialPage : "whatsapp");
 const apiOk = ref<boolean | null>(null);
+const nayaUrl = ref<string | null>(null);
 const toasts = ref<Toast[]>([]);
 const showTour = ref(!!token.value && !hasOnboarded());
 const currentComponent = computed(() => views[currentTab.value]);
@@ -161,8 +163,22 @@ async function loadMe() {
 }
 onMounted(async () => {
   loadMe();
+  authApi.providers().then((p) => (nayaUrl.value = p.nayaUrl));
   apiOk.value = await apiHealth();
 });
+// The tab opens first (popup blockers allow it only during the click), then gets the one-time link.
+async function openNaya() {
+  const tab = window.open("", "_blank");
+  try {
+    const { url } = await authApi.nayaLink();
+    if (!tab) return window.location.assign(url);
+    tab.opener = null;
+    tab.location.href = url;
+  } catch {
+    tab?.close();
+    showToast("Naya belum bisa dibuka. Coba lagi sebentar lagi.", "error");
+  }
+}
 function navigateTo(tab: string) {
   if (isPm.value && !PM_TABS.includes(tab)) tab = "projects";
   if (settingsSections.includes(tab)) {

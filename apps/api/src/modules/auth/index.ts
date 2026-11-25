@@ -6,6 +6,7 @@ import { users, roles, employees, auditLogs, workspaces } from "@repo/database";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { acceptPendingInvite } from "../users/service.js";
 import { secretEnv } from "../../lib/env.js";
+import { appUrl, createLoginLink, isLoginApp, redeemLoginLink, type LoginApp } from "./login-links.js";
 
 const db = createDbClient(process.env.DATABASE_URL ?? "postgres://teamassistant:teamassistant@localhost:5432/teamassistant");
 const JWT_SECRET = secretEnv("JWT_SECRET", "dev-secret-change-me");
@@ -54,12 +55,14 @@ const GOOGLE_SIGNUP_ENABLED = process.env.GOOGLE_SIGNUP_ENABLED !== "false";
 const OAUTH_STATE_COOKIE = "ta_oauth_state";
 const googleEnabled = () => Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET);
 
-auth.get("/providers", (c) => c.json({ google: googleEnabled() }));
+auth.get("/providers", (c) => c.json({ google: googleEnabled(), nayaUrl: appUrl("naya") }));
 
 auth.get("/google", (c) => {
   if (!googleEnabled()) return c.json({ error: "Google login is not configured" }, 404);
   const state = crypto.randomUUID();
-  setCookie(c, OAUTH_STATE_COOKIE, state, {
+  // `?app=naya`: sign-in started on Naya returns there instead of the dashboard.
+  const app: LoginApp = isLoginApp(c.req.query("app")) ? (c.req.query("app") as LoginApp) : "web";
+  setCookie(c, OAUTH_STATE_COOKIE, `${state}:${app}`, {
     httpOnly: true,
     sameSite: "Lax",
     secure: GOOGLE_REDIRECT_URI.startsWith("https://"),
@@ -78,9 +81,11 @@ auth.get("/google", (c) => {
 });
 
 auth.get("/google/callback", async (c) => {
-  const fail = (reason: string) => c.redirect(`${WEB_URL}/#auth_error=${reason}`);
-  const expectedState = getCookie(c, OAUTH_STATE_COOKIE);
+  const [expectedState, requestedApp] = (getCookie(c, OAUTH_STATE_COOKIE) ?? "").split(":");
   deleteCookie(c, OAUTH_STATE_COOKIE, { path: "/auth/google" });
+  const app: LoginApp = isLoginApp(requestedApp) ? requestedApp : "web";
+  const home = appUrl(app) ?? WEB_URL;
+  const fail = (reason: string) => c.redirect(`${home}/#auth_error=${reason}`);
 
   const { code, state, error } = c.req.query();
   if (error) return fail("cancelled");
@@ -140,8 +145,28 @@ auth.get("/google/callback", async (c) => {
   }
   if (!user.isActive) return fail("not_registered");
 
-  await audit(user.workspaceId, user.id, "auth.login", "users", user.id, { provider: "google" });
-  return c.redirect(`${WEB_URL}/#token=${encodeURIComponent(await issueToken(user))}`);
+  await audit(user.workspaceId, user.id, "auth.login", "users", user.id, { provider: "google", app });
+  return c.redirect(`${home}/#token=${encodeURIComponent(await issueToken(user))}`);
+});
+
+/* ---------- One-time sign-in links (see ./login-links.ts) ---------- */
+
+// "Buka Naya" in the dashboard: a link that opens the other app already signed in.
+auth.post("/link", requireRole(), async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { app?: unknown };
+  if (!isLoginApp(body.app)) return c.json({ error: "Unknown app" }, 404);
+  const { sub } = c.get("user" as never) as { sub: string };
+  return c.json({ url: await createLoginLink(sub, body.app) });
+});
+
+// The app swaps the code from its address for a session token.
+auth.post("/link/redeem", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { code?: unknown; app?: unknown };
+  const user =
+    typeof body.code === "string" && isLoginApp(body.app) ? await redeemLoginLink(body.code, body.app) : null;
+  if (!user) return c.json({ error: "Link sudah kedaluwarsa atau sudah dipakai." }, 400);
+  await audit(user.workspaceId, user.id, "auth.login", "users", user.id, { provider: "link", app: body.app });
+  return c.json({ token: await issueToken(user) });
 });
 
 export async function verifyToken(token: string) {

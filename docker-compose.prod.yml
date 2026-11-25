@@ -44,12 +44,17 @@ services:
       REDIS_URL: redis://redis:6379
       INTERNAL_API_URL: http://api:4000
       AGENTS_URL: http://agents:8100
+      HERMES_BRIDGE_URL: http://hermes:8700
+      HERMES_API_URL: http://hermes:8642
+      DOCKER_PROXY_URL: http://docker-socket-proxy:2375
       PORT: 4000
       NODE_ENV: production
     ports:
       - "${API_PORT:-4000}:4000"
     volumes:
       - whatsapp-data:/app/apps/api/data
+    # "agents": Hermes (bridge + chat); "ops": the Docker proxy for the ops agent's whitelisted actions.
+    networks: [default, agents, ops]
 
   worker:
     <<: *app
@@ -72,7 +77,56 @@ services:
     depends_on:
       - api
 
+  # Naya (naya.digdaya.co): the AI team's office, on the same API as the dashboard.
+  naya:
+    image: ${IMAGE_PREFIX}-naya:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "${NAYA_PORT:-3001}:80"
+    depends_on:
+      - api
+
+  # Hermes Agent + hermes-bridge. Only on the "agents" network: no route to Postgres, Redis or
+  # the Docker socket, and no daily .env. Its own config and model keys live in hermes-data
+  # (set up once with `docker compose exec hermes hermes setup`; see docs/naya.md).
+  hermes:
+    image: ${IMAGE_PREFIX}-hermes:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    command: ["gateway", "run"]
+    environment:
+      HERMES_UID: ${HERMES_UID:-10000}
+      HERMES_GID: ${HERMES_GID:-10000}
+      BRIDGE_TOKEN: ${BRIDGE_TOKEN:?set BRIDGE_TOKEN in .env}
+      # Reachable from the api container; each profile's API_SERVER_KEY lives in hermes-data.
+      API_SERVER_HOST: 0.0.0.0
+    volumes:
+      - hermes-data:/opt/data
+    networks: [agents]
+    # The browser tool (Chromium) needs 2 GB or more.
+    mem_limit: 3g
+    cpus: 1.5
+
+  # Read-only Docker API for the ops agent's actions (status, logs, restart of whitelisted
+  # services), reachable only from the api container over the internal "ops" network.
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:lts@sha256:be1ac64f33bd82043beb504822a17ba6b71668ea1ad7cf51a9a01d27bb7ab047
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1
+      ALLOW_RESTARTS: 1
+      POST: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [ops]
+
+networks:
+  default:
+  agents:
+  ops:
+    internal: true
+
 volumes:
   pgdata:
   redisdata:
   whatsapp-data:
+  hermes-data:

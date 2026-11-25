@@ -170,6 +170,114 @@
       </form>
     </section>
 
+    <!-- Naya: Hermes agents people can chat with -->
+    <section v-if="nayaAgents" class="mt-9">
+      <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-3">Agent Naya</div>
+      <p class="text-text-muted text-sm mb-4">
+        Daftarkan profil Hermes yang bisa diajak chat di Naya. API key adalah <span class="font-mono text-text">API_SERVER_KEY</span> profil itu, disimpan terenkripsi.
+        Agent <b>lead</b> menjawab "Tanya Naya".
+      </p>
+      <ul v-if="nayaAgents.length" class="mb-4 space-y-2">
+        <li v-for="a in nayaAgents" :key="a.profile" class="flex flex-wrap items-center gap-2 rounded-xl border border-border px-4 py-3">
+          <div class="min-w-0 flex-1">
+            <div class="font-semibold text-text">{{ a.displayName }} <span class="font-mono text-xs text-text-muted">({{ a.profile }})</span><span v-if="a.isLead" class="ml-2 rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-bold text-accent">lead</span></div>
+            <div class="text-xs text-text-muted">Chat: {{ a.chatRoles.join(", ") || "—" }} · {{ a.hasKey ? `key …${a.apiKeyHint}` : "API key belum diisi" }}</div>
+          </div>
+          <button type="button" class="text-xs font-extrabold text-accent hover:underline" @click="editAgent(a)">Ubah</button>
+          <button type="button" :disabled="savingAgent" class="text-xs font-extrabold text-danger hover:underline disabled:opacity-60" @click="removeAgent(a)">Hapus</button>
+        </li>
+      </ul>
+      <form class="grid gap-3 rounded-xl border border-border p-4" @submit.prevent="saveAgent">
+        <div class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3">
+          <div>
+            <label for="agent-profile" class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Profil Hermes</label>
+            <input id="agent-profile" v-model="agentForm.profile" type="text" maxlength="64" placeholder="mis. sales" required :disabled="agentEditing" :class="[inputClass, 'disabled:opacity-60']" />
+          </div>
+          <div>
+            <label for="agent-display" class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Nama tampilan</label>
+            <input id="agent-display" v-model="agentForm.displayName" type="text" maxlength="60" placeholder="mis. Sales Hunter" required :class="inputClass" />
+          </div>
+        </div>
+        <div>
+          <label for="agent-key" class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">API key Hermes</label>
+          <input id="agent-key" v-model="agentForm.apiKey" type="password" autocomplete="off" :placeholder="agentEditing ? 'Kosongkan untuk tetap memakai key lama' : 'API_SERVER_KEY profil ini'" :class="inputClass" />
+        </div>
+        <fieldset>
+          <legend class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Boleh chat</legend>
+          <div class="flex flex-wrap gap-3">
+            <label v-for="r in CHAT_ROLE_OPTIONS" :key="r" class="flex items-center gap-2 text-sm"><input v-model="agentForm.chatRoles" type="checkbox" :value="r" class="h-4 w-4 accent-accent" /> {{ r }}</label>
+          </div>
+        </fieldset>
+        <label class="flex items-center gap-2 text-sm"><input v-model="agentForm.isLead" type="checkbox" class="h-4 w-4 accent-accent" /> Agent lead (menjawab "Tanya Naya")</label>
+        <div class="flex flex-wrap gap-2">
+          <button type="submit" :disabled="savingAgent" class="px-4 py-3 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white transition hover:bg-accent-hover disabled:opacity-60">{{ savingAgent ? "Menyimpan…" : agentEditing ? "Simpan agent" : "Tambah agent" }}</button>
+          <button v-if="agentEditing" type="button" class="px-4 py-3 rounded-xl text-[13px] font-extrabold tracking-tight border border-border" @click="resetAgentForm">Batal</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Naya: tokens for Hermes agents reading daily over MCP -->
+    <section v-if="agentTokens" class="mt-9">
+      <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-3">Token MCP agent</div>
+      <p class="text-text-muted text-sm mb-4">
+        Agent Hermes bisa membaca proyek, anggota, standup, laporan, anggota yang sedang kosong, dan leads briefing (tanpa fee dan nomor HP).
+        Token dengan akses <b>ops</b> (khusus Owner) juga bisa melihat status dan log service app, dan me-restart-nya. Berikan hanya ke agent <span class="font-mono text-text">ops</span>.
+        Buat satu token per agent, lalu pasang di <span class="font-mono text-text">config.yaml</span> profil Hermes-nya.
+      </p>
+      <div class="px-4 py-3 mb-4 rounded-xl border border-border bg-panel-hover text-sm">
+        <span class="text-text-muted">URL MCP:</span> <span class="font-mono text-text break-all">{{ nayaApi.mcpUrl }}</span>
+      </div>
+      <div v-if="newToken" class="mb-4 px-4 py-4 rounded-xl border border-success/30 bg-success/5 slide-in">
+        <p class="text-sm font-bold text-text mb-2">Token untuk "{{ newToken.name }}". Salin sekarang, token ini tidak ditampilkan lagi.</p>
+        <div class="flex flex-wrap items-center gap-2">
+          <code class="flex-1 min-w-0 break-all rounded-lg border border-border bg-panel px-3 py-2 font-mono text-xs text-text">{{ newToken.token }}</code>
+          <button type="button" class="px-3 py-2 rounded-lg text-xs font-extrabold border border-border hover:bg-panel-hover" @click="copyToken">Salin</button>
+        </div>
+      </div>
+      <form class="flex flex-wrap items-end gap-2 mb-4" @submit.prevent="createAgentToken">
+        <div class="flex-1 min-w-[200px]">
+          <label for="agent-token-name" class="block text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-1.5">Nama agent</label>
+          <input id="agent-token-name" v-model="agentName" type="text" maxlength="60" placeholder="mis. sales" required :class="inputClass" />
+        </div>
+        <fieldset class="flex flex-wrap items-center gap-3 basis-full">
+          <legend class="sr-only">Akses token</legend>
+          <label v-for="o in SCOPE_OPTIONS" :key="o.scope" class="flex items-center gap-2 text-sm" :class="o.ownerOnly && currentRole !== 'Owner' ? 'opacity-50' : ''"><input v-model="tokenScopes" type="checkbox" :value="o.scope" :disabled="o.ownerOnly && currentRole !== 'Owner'" class="h-4 w-4 accent-accent" /> {{ o.label }}</label>
+        </fieldset>
+        <button
+          type="submit"
+          :disabled="savingToken || tokenScopes.length === 0"
+          class="px-4 py-3.5 rounded-xl text-[13px] font-extrabold tracking-tight bg-accent text-white transition hover:bg-accent-hover disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {{ savingToken ? "Membuat…" : "Buat token" }}
+        </button>
+      </form>
+      <p v-if="agentTokens.length === 0" class="text-sm text-text-muted">Belum ada token agent.</p>
+      <div v-else class="overflow-x-auto rounded-xl border border-border">
+        <table class="w-full text-sm">
+          <thead class="bg-panel-hover text-left text-[11px] font-extrabold uppercase tracking-wider text-text-dim">
+            <tr>
+              <th class="px-4 py-2.5">Agent</th>
+              <th class="px-4 py-2.5">Token</th>
+              <th class="px-4 py-2.5">Akses</th>
+              <th class="px-4 py-2.5">Terakhir dipakai</th>
+              <th class="px-4 py-2.5"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="t in agentTokens" :key="t.id" class="border-t border-border">
+              <td class="px-4 py-2.5 text-text">{{ t.name }}</td>
+              <td class="px-4 py-2.5 font-mono text-text-muted">…{{ t.tokenHint }}</td>
+              <td class="px-4 py-2.5 text-xs text-text-muted">{{ t.scopes.join(", ") }}</td>
+              <td class="px-4 py-2.5 text-text-muted">{{ t.lastUsedAt ? formatDateTime(t.lastUsedAt) : "Belum pernah" }}</td>
+              <td class="px-4 py-2.5 text-right">
+                <button type="button" :disabled="savingToken" class="text-xs font-extrabold text-danger hover:underline disabled:opacity-60" @click="revokeAgentToken(t)">Cabut</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- Akses & batas -->
     <section v-if="policy" class="mt-9">
       <div class="text-[11px] font-extrabold tracking-wider uppercase text-text-dim mb-3">Akses & batas</div>
@@ -239,7 +347,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { aiApi, ApiError, briefingsApi, showToast, type AiPolicy, type AiProvider, type AiSettings, type AiUsage, type SearchKeyStatus } from "../api";
+import { currentRole } from "../session";
+import { aiApi, ApiError, briefingsApi, nayaApi, showToast, type AgentToken, type AgentTokenScope, type NayaAgent, type AiPolicy, type AiProvider, type AiSettings, type AiUsage, type SearchKeyStatus } from "../api";
 
 const providerOptions: { id: AiProvider; label: string; help: string; keyUrl?: string }[] = [
   { id: "gemini", label: "Google Gemini", help: "Ada kuota gratis harian. Buat key di Google AI Studio.", keyUrl: "https://aistudio.google.com/apikey" },
@@ -268,6 +377,23 @@ const search = ref<SearchKeyStatus | null>(null);
 const searchKey = ref("");
 const searchWarning = ref("");
 const savingSearch = ref(false);
+
+const CHAT_ROLE_OPTIONS = ["Owner", "Admin", "Manager", "PM", "Employee"];
+const SCOPE_OPTIONS: { scope: AgentTokenScope; label: string; ownerOnly: boolean }[] = [
+  { scope: "mcp:read", label: "Baca data daily", ownerOnly: false },
+  { scope: "ops:read", label: "Ops: status & log", ownerOnly: true },
+  { scope: "ops:restart", label: "Ops: restart service", ownerOnly: true },
+];
+const nayaAgents = ref<NayaAgent[] | null>(null);
+const emptyAgent = () => ({ profile: "", displayName: "", apiKey: "", chatRoles: ["Owner", "Admin"], isLead: false });
+const agentForm = reactive(emptyAgent());
+const agentEditing = ref(false);
+const savingAgent = ref(false);
+const tokenScopes = ref<AgentTokenScope[]>(["mcp:read"]);
+const agentTokens = ref<AgentToken[] | null>(null);
+const agentName = ref("");
+const newToken = ref<{ name: string; token: string } | null>(null);
+const savingToken = ref(false);
 
 const policy = ref<AiPolicy | null>(null);
 const usage = ref<AiUsage | null>(null);
@@ -327,8 +453,10 @@ async function savePolicy() {
 async function load() {
   loading.value = true;
   try {
-    const [s, p, k] = await Promise.all([aiApi.settings(), aiApi.policy(), briefingsApi.searchKey()]);
+    const [s, p, k, t, n] = await Promise.all([aiApi.settings(), aiApi.policy(), briefingsApi.searchKey(), nayaApi.tokens(), nayaApi.agents()]);
     search.value = k;
+    agentTokens.value = t;
+    nayaAgents.value = n;
     fillPolicy(p.policy);
     usage.value = p.usage;
     fillForm(s);
@@ -388,6 +516,95 @@ async function removeSearch() {
     error.value = err instanceof ApiError ? err.message : "API key Tavily gagal dihapus.";
   } finally {
     savingSearch.value = false;
+  }
+}
+
+function formatDateTime(iso: string) {
+  return new Date(iso).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
+}
+
+async function createAgentToken() {
+  error.value = "";
+  savingToken.value = true;
+  try {
+    const name = agentName.value.trim();
+    const { token } = await nayaApi.createToken(name, tokenScopes.value);
+    newToken.value = { name, token };
+    agentName.value = "";
+    tokenScopes.value = ["mcp:read"];
+    agentTokens.value = await nayaApi.tokens();
+  } catch (err) {
+    error.value = err instanceof ApiError ? err.message : "Token agent gagal dibuat.";
+  } finally {
+    savingToken.value = false;
+  }
+}
+
+function resetAgentForm() {
+  Object.assign(agentForm, emptyAgent());
+  agentEditing.value = false;
+}
+
+function editAgent(a: NayaAgent) {
+  Object.assign(agentForm, { profile: a.profile, displayName: a.displayName, apiKey: "", chatRoles: [...a.chatRoles], isLead: a.isLead });
+  agentEditing.value = true;
+}
+
+async function saveAgent() {
+  error.value = "";
+  savingAgent.value = true;
+  try {
+    await nayaApi.saveAgent(agentForm.profile.trim(), {
+      displayName: agentForm.displayName.trim(),
+      apiKey: agentForm.apiKey.trim() || undefined,
+      chatRoles: agentForm.chatRoles,
+      isLead: agentForm.isLead,
+    });
+    nayaAgents.value = await nayaApi.agents();
+    showToast(`Agent ${agentForm.displayName.trim()} disimpan.`, "success");
+    resetAgentForm();
+  } catch (err) {
+    error.value = err instanceof ApiError ? err.message : "Agent gagal disimpan.";
+  } finally {
+    savingAgent.value = false;
+  }
+}
+
+async function removeAgent(a: NayaAgent) {
+  if (!confirm(`Hapus agent "${a.displayName}" dari Naya? Agent di Hermes tidak ikut terhapus.`)) return;
+  savingAgent.value = true;
+  try {
+    await nayaApi.removeAgent(a.profile);
+    nayaAgents.value = await nayaApi.agents();
+    if (agentForm.profile === a.profile) resetAgentForm();
+  } catch (err) {
+    error.value = err instanceof ApiError ? err.message : "Agent gagal dihapus.";
+  } finally {
+    savingAgent.value = false;
+  }
+}
+
+async function copyToken() {
+  if (!newToken.value) return;
+  try {
+    await navigator.clipboard.writeText(newToken.value.token);
+    showToast("Token disalin.", "success");
+  } catch {
+    showToast("Gagal menyalin. Pilih teksnya lalu salin manual.", "error");
+  }
+}
+
+async function revokeAgentToken(t: AgentToken) {
+  if (!confirm(`Cabut token agent "${t.name}"? Agent itu tidak bisa membaca data daily lagi.`)) return;
+  savingToken.value = true;
+  try {
+    await nayaApi.revokeToken(t.id);
+    agentTokens.value = await nayaApi.tokens();
+    showToast("Token dicabut.", "success");
+  } catch (err) {
+    error.value = err instanceof ApiError ? err.message : "Token gagal dicabut.";
+  } finally {
+    savingToken.value = false;
   }
 }
 

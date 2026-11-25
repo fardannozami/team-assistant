@@ -3,6 +3,7 @@ import { getEmployeeByPhone, getRoleName } from "../../auth/index.js";
 import { handleStandupMessage } from "../../standups/engine.js";
 import { handleCheckinMessage } from "../../checkins/engine.js";
 import { handleAdminMessage } from "../admin.js";
+import { isNayaKeyword, nayaLoginReply } from "../../naya/login.js";
 import { replyText } from "./send.js";
 import { logger, markProcessed, type BotState, type Socket } from "./state.js";
 
@@ -91,6 +92,7 @@ export async function handleIncomingMessage(state: BotState, socket: Socket, msg
     }
 
     const reply =
+      (employee && isNayaKeyword(body) ? await nayaLoginReply(employee) : null) ??
       (await handleAdminMessage({ workspaceId, phone, body, employee, roleName })) ??
       (employee ? await employeeReply(workspaceId, phone, body, employee, roleName) : null);
     if (reply) {

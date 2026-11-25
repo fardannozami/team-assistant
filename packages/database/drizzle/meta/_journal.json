@@ -141,6 +141,13 @@
       "when": 1795422955051,
       "tag": "0019_briefing_search_key",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1795501490714,
+      "tag": "0020_naya",
+      "breakpoints": true
     }
   ]
 }
