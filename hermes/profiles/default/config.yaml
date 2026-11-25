@@ -1,0 +1,18 @@
+# Referensi konfigurasi profil default (Asisten Umum).
+# Skrip setup menerapkan nilai ini dengan `hermes config set`, bukan menimpa config.yaml.
+model:
+  provider: gemini
+  default: gemini-3.5-flash-lite
+
+delegation:
+  enabled: true
+  orchestrator_enabled: true
+  max_spawn_depth: 1
+
+# Pengaturan Kanban global dibaca oleh dispatcher di gateway (profil default).
+kanban:
+  dispatch_in_gateway: true
+  auto_decompose: true
+  orchestrator_profile: default
+  default_assignee: default
+  review_dispatch: false

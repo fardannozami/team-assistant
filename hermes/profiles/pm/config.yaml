@@ -1,0 +1,13 @@
+# Referensi konfigurasi PM (worker/leaf).
+model:
+  provider: gemini
+  default: gemini-3.5-flash-lite
+
+delegation:
+  enabled: true
+  orchestrator_enabled: false
+  max_spawn_depth: 1
+
+kanban:
+  default_assignee: pm
+  review_dispatch: false

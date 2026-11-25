@@ -1,0 +1,13 @@
+# Referensi konfigurasi CEO (orkestrator strategi).
+model:
+  provider: gemini
+  default: gemini-3.5-flash-lite
+
+delegation:
+  enabled: true
+  orchestrator_enabled: true
+  max_spawn_depth: 1
+
+kanban:
+  orchestrator_profile: ceo
+  review_dispatch: false
