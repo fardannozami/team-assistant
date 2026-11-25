@@ -957,3 +957,7 @@ a.primary-button { display: inline-block; text-align: center; text-decoration: n
 .task-timeline .md { margin: 2px 0 0; }
 .roster-table td, .roster-table th { font-size: 13px; }
 .roster-off td { color: var(--text-dim); }
+/* A big crew: only names and states stay on screen; a bubble shows on hover or keyboard focus. */
+.office-3d.crowded .agent-tag-3d .speech-3d { display: none; }
+.office-3d.crowded .agent-tag-3d:hover .speech-3d, .office-3d.crowded .agent-tag-3d:focus-visible .speech-3d { display: block; }
+.office-3d.crowded .agent-tag-3d:hover, .office-3d.crowded .agent-tag-3d:focus-visible { z-index: 5; }

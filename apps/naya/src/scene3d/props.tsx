@@ -143,6 +143,42 @@ export function CoffeeTable({ position }: { position: Vec3 }) {
   </Group>
 }
 
+/** A round café table on a pedestal, with a laptop and coffee: the collaboration corner. */
+export function RoundTable({ position }: { position: Vec3 }) {
+  return <Group position={position}>
+    <Cyl position={[0, 0.74, 0]} radius={0.55} height={0.05} color="#e8dcc6" roughness={0.45} segments={32}/>
+    <Cyl position={[0, 0.37, 0]} radius={0.05} height={0.72} color="#2a2f33" metalness={0.4}/>
+    <Cyl position={[0, 0.02, 0]} radius={0.3} height={0.04} color="#2a2f33" metalness={0.4}/>
+    {/* An open laptop, a notebook and two cups */}
+    <RBox position={[-0.1, 0.78, 0.05]} size={[0.34, 0.02, 0.24]} radius={0.01} color="#bfc4c9" metalness={0.4}/>
+    <RBox position={[-0.1, 0.9, -0.07]} size={[0.34, 0.22, 0.015]} radius={0.01} rotation={[-0.25, 0, 0]} color="#2a2f33"/>
+    <RBox position={[0.25, 0.775, 0.18]} size={[0.16, 0.015, 0.22]} radius={0.005} color="#e0a43a"/>
+    <Cyl position={[0.28, 0.81, -0.18]} radius={0.04} height={0.09} color="#f4efe6"/>
+    <Cyl position={[-0.34, 0.81, 0.3]} radius={0.04} height={0.09} color="#2f6f8f"/>
+  </Group>
+}
+
+/** A wooden café stool with a cushion. */
+export function CafeStool({ position, color = '#d9784a' }: { position: Vec3; color?: string }) {
+  return <Group position={position}>
+    <Cyl position={[0, 0.46, 0]} radius={0.2} height={0.06} color={color} roughness={0.9}/>
+    <Cyl position={[0, 0.42, 0]} radius={0.21} height={0.03} color="#8a5a3a"/>
+    {[[0.13, 0.13], [-0.13, 0.13], [0.13, -0.13], [-0.13, -0.13]].map(([x, z]) => <Cyl key={`${x}${z}`} position={[x, 0.2, z]} radius={0.02} height={0.4} color="#6b4a32"/>)}
+  </Group>
+}
+
+/** A tall planter box with a row of leafy plants: a soft divider between desk pods. */
+export function PlanterBox({ position, length = 1.2, rotation = 0 }: { position: Vec3; length?: number; rotation?: number }) {
+  const leaves = Math.max(2, Math.round(length / 0.4))
+  return <Group position={position} rotation={rotation}>
+    <RBox position={[0, 0.3, 0]} size={[length, 0.6, 0.4]} radius={0.03} color="#e7e2d8" roughness={0.8}/>
+    {Array.from({ length: leaves }, (_, index) => {
+      const x = -length / 2 + (index + 0.5) * (length / leaves)
+      return <mesh key={index} position={[x, 0.8 + (index % 2) * 0.1, 0]} castShadow><icosahedronGeometry args={[0.24, 1]}/><meshStandardMaterial color={index % 2 ? '#4f8a4a' : '#5f9d55'} roughness={0.85} flatShading/></mesh>
+    })}
+  </Group>
+}
+
 export function Plant({ position, size = 1 }: { position: Vec3; size?: number }) {
   return <Group position={position} scale={size}>
     <Cyl position={[0, 0.22, 0]} radius={0.2} top={0.26} height={0.44} color="#b0643a" roughness={0.8}/>

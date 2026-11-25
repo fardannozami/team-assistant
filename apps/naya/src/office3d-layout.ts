@@ -85,6 +85,12 @@ const DESK_RIGHT_X = -2
 const DESK_PITCH = 2.6
 const DESK_ROWS_Z = [-3.5, -1]
 const MIN_DESK_COLUMNS = 3
+/** A bigger crew sits in pods of two columns (four desks), with a wider walkway between pods. */
+const POD_GAP = 1.1
+/** The collaboration corner fills the front of the workspace left of the meeting room once it is at least this wide. */
+const MIN_COLLAB_WIDTH = 4.5
+const COLLAB_TABLE_Z = 2.65
+const COLLAB_TABLE_PITCH = 3
 /** The stock building (up to six agents) and the scene width the camera is framed for. */
 const BASE_MIN_X = -9.5
 const BASE_SCENE_WIDTH = 28.7
@@ -114,6 +120,10 @@ export interface OfficeLayout {
   camera: { target: Vec3; offset: Vec3 }
   /** How far the view may be panned (camera target bounds), so the office never leaves the screen. */
   pan: { minX: number; maxX: number; minZ: number; maxZ: number }
+  /** Pods of four desks (a bigger crew): the floor area each covers, for its rug and plants. */
+  pods: { minX: number; maxX: number }[]
+  /** Collaboration corner left of the meeting room (round tables, beanbags, books), when there is room. */
+  collab: { minX: number; maxX: number; minZ: number; maxZ: number; tables: Vec3[] } | null
   idleStops: IdleStop[]
 }
 
@@ -132,9 +142,12 @@ function stallSpot(stall: Vec3, x: number, z: number, facing: number, seated = f
  * Where idle agents spend their time. Each stop has a few spots; idlePlan spreads agents so that
  * no two share a spot while free ones remain.
  */
-function idleStops(building: OfficeLayout['building'], baksoCart: Vec3, kopiBike: Vec3, beds: Vec3[]): IdleStop[] {
+function idleStops(building: OfficeLayout['building'], baksoCart: Vec3, kopiBike: Vec3, beds: Vec3[], collab: OfficeLayout['collab']): IdleStop[] {
   const [tableX, , tableZ] = LESEHAN_TABLE
+  // Around each round table: on the stools behind and in front of it, facing each other.
+  const collabSpots = (collab?.tables ?? []).flatMap(([x, , z]) => [spot(x - 0.75, z, Math.PI / 2, true), spot(x + 0.75, z, -Math.PI / 2, true), spot(x, z + 0.8, Math.PI, true)])
   return [
+    ...(collabSpots.length ? [{ key: 'kolab', label: 'Diskusi di pojok kolaborasi', spots: collabSpots }] : []),
     { key: 'tidur', label: 'Tidur', spots: beds.map((bed) => bedSpot(bed)) },
     { key: 'balkon', label: 'Bersantai di balkon', spots: [
       upstairs(BALCONY_TABLE[0] - 0.85, BALCONY_TABLE[2], Math.PI / 2, { seated: true }),
@@ -159,29 +172,52 @@ function idleStops(building: OfficeLayout['building'], baksoCart: Vec3, kopiBike
 export function createLayout(agentCount: number): OfficeLayout {
   const deskCount = Math.max(1, agentCount)
   const columns = Math.max(MIN_DESK_COLUMNS, Math.ceil(deskCount / DESK_ROWS_Z.length))
+  // The stock office keeps its even rows; a bigger crew gets pods with walkways between them.
+  const podded = columns > MIN_DESK_COLUMNS
+  const columnX = (column: number) => DESK_RIGHT_X - column * DESK_PITCH - (podded ? Math.floor(column / 2) * POD_GAP : 0)
   // The back row fills first (right to left), then the front row.
   const desks: Vec3[] = Array.from({ length: deskCount }, (_, index) => {
     const row = index < columns ? 0 : 1
     const column = row === 0 ? index : index - columns
-    return [DESK_RIGHT_X - column * DESK_PITCH, 0, DESK_ROWS_Z[row]]
+    return [columnX(column), 0, DESK_ROWS_Z[row]]
   })
-  const minX = DESK_RIGHT_X - (columns - 1) * DESK_PITCH - 2.3
+  const minX = columnX(columns - 1) - 2.3
+  const pods = podded ? Array.from({ length: Math.ceil(columns / 2) }, (_, pod) => {
+    const right = columnX(pod * 2)
+    const left = columnX(Math.min(pod * 2 + 1, columns - 1))
+    return { minX: left - 1.15, maxX: right + 1.15 }
+  }) : []
   const shift = minX - BASE_MIN_X
   const building = { minX, maxX: 9.5, minZ: -5.2, maxZ: 4.2 }
   const beds: Vec3[] = desks.map(([x], index) => [x, FLOOR_HEIGHT, BED_ROWS_Z[index < columns ? 0 : 1]])
   const baksoCart: Vec3 = [-11.9 + shift, 0, -2.3]
   const kopiBike: Vec3 = [-11.9 + shift, 0, 1.6]
   const sceneMinX = minX - 3.7
-  const scale = (GAME_ROOM.maxX - sceneMinX) / BASE_SCENE_WIDTH
+  const width = (GAME_ROOM.maxX - sceneMinX) / BASE_SCENE_WIDTH
+  // A wide office is framed a little closer (its depth does not grow), and pans to see its ends.
+  const scale = width > 1 ? width ** 0.8 : width
+  const room = meetingRoom(building, deskCount)
+  const collab = collabCorner(building, room)
   return {
-    deskCount, building, desks, beds, baksoCart, kopiBike,
+    deskCount, building, desks, beds, baksoCart, kopiBike, pods, collab,
     sideLaneX: -10.15 + shift,
     gangCenterX: -11.4 + shift,
-    camera: { target: [(sceneMinX + GAME_ROOM.maxX) / 2 - 0.15, 0.6, 0.2], offset: CAMERA_OFFSET_BASE.map((value) => value * scale) as Vec3 },
+    camera: { target: [(sceneMinX + GAME_ROOM.maxX) / 2 - 0.15, 0.6, width > 1 ? -0.4 : 0.2], offset: CAMERA_OFFSET_BASE.map((value) => value * scale) as Vec3 },
     pan: { minX: sceneMinX - 0.3, maxX: 17, minZ: -7, maxZ: 11 },
-    idleStops: idleStops(building, baksoCart, kopiBike, beds),
-    meetingRoom: meetingRoom(building, deskCount),
+    idleStops: idleStops(building, baksoCart, kopiBike, beds, collab),
+    meetingRoom: room,
   }
+}
+
+/** Round tables in the front of the workspace left of the meeting room, when the building is wide enough. */
+function collabCorner(building: OfficeLayout['building'], room: OfficeLayout['meetingRoom']): OfficeLayout['collab'] {
+  const minX = building.minX + 0.3
+  const maxX = room.minX - 0.3
+  if (maxX - minX < MIN_COLLAB_WIDTH) return null
+  // Tables from the meeting room wall leftwards, leaving the far end for beanbags and books.
+  const tables: Vec3[] = []
+  for (let x = maxX - 1.7; x - 1.2 > minX + 1.6; x -= COLLAB_TABLE_PITCH) tables.push([x, 0, COLLAB_TABLE_Z])
+  return { minX, maxX, minZ: MEETING_ROOM_MIN_Z, maxZ: building.maxZ, tables }
 }
 
 /**
@@ -332,7 +368,7 @@ function simplify(from: [number, number], route: [number, number][], to: [number
 
 /** How long an idle agent stays at one stop (walking included). */
 export const IDLE_STOP_MS = 32_000
-export const IDLE_ROUTE = ['lounge', 'galon', 'balkon', 'game', 'bakso', 'tidur', 'jalan', 'arcade', 'lesehan', 'kopi', 'dapur', 'balkon', 'game', 'tidur']
+export const IDLE_ROUTE = ['lounge', 'galon', 'kolab', 'balkon', 'game', 'bakso', 'tidur', 'jalan', 'arcade', 'kolab', 'lesehan', 'kopi', 'dapur', 'balkon', 'game', 'tidur']
 
 export interface IdleAssignment { stop: IdleStop; placement: Placement }
 
@@ -346,7 +382,9 @@ export function idlePlan(seats: number[], time: number, layout: OfficeLayout = D
   const plan = new Map<number, IdleAssignment>()
   const taken = new Map<string, number>()
   const step = Math.floor(time / IDLE_STOP_MS)
-  const stopAt = (index: number) => layout.idleStops.find((item) => item.key === IDLE_ROUTE[index % IDLE_ROUTE.length])!
+  // The collaboration corner only exists in a wide office; elsewhere the route skips it.
+  const route = IDLE_ROUTE.filter((key) => layout.idleStops.some((item) => item.key === key))
+  const stopAt = (index: number) => layout.idleStops.find((item) => item.key === route[index % route.length])!
   // Sleepers (when the viewer sends idle agents to bed) stay in bed; they take the first beds.
   const beds = layout.idleStops.find((item) => item.key === 'tidur')!
   for (const seat of [...sleepers].sort((a, b) => a - b)) {
@@ -357,7 +395,7 @@ export function idlePlan(seats: number[], time: number, layout: OfficeLayout = D
   for (const seat of [...seats].filter((item) => !plan.has(item)).sort((a, b) => a - b)) {
     const start = step + (Math.max(seat, 1) - 1) * 3
     let stop = stopAt(start)
-    for (let offset = 0; offset < IDLE_ROUTE.length; offset += 1) {
+    for (let offset = 0; offset < route.length; offset += 1) {
       const candidate = stopAt(start + offset)
       if ((taken.get(candidate.key) ?? 0) < candidate.spots.length) { stop = candidate; break }
     }

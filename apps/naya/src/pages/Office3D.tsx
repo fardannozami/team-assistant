@@ -279,6 +279,8 @@ const FLOORS: { floor: Floor; label: string; title: string }[] = [
   { floor: 1, label: 'Kantor', title: 'Lantai 1: kantor, lounge, pantry, dan ruang game' },
 ]
 const FLOOR_KEY = 'mc.officeFloor'
+/** More people than this and the speech bubbles only show on hover or focus. */
+const CROWDED = 8
 const SLEEP_KEY = 'mc.officeSleep'
 
 /** An on/off preference kept per browser. */
@@ -323,7 +325,9 @@ export default function Office3D({ stations, onSelect }: { stations: OfficeStati
   const placement = (station: OfficeStation) => wandering(station)?.placement ?? placementFor(station, layout, Math.max(0, meetingOrder.indexOf(station.id)))
   const floorCount = (value: Floor) => stations.filter((station) => floorOf(placement(station).position) === value).length
   const occupiedSeats = new Set(stations.filter((station) => station.room === 'Workspace' && station.roomPosition !== 'meeting-area' && station.state !== 'Offline').map((station) => station.seat))
-  return <div className="office-3d" ref={setKeyTarget} tabIndex={0} role="region" aria-label="Kantor 3D. Seret untuk memutar, seret klik kanan atau dua jari untuk menggeser, scroll untuk zoom, tombol panah untuk menggeser saat fokus. Page Up dan Page Down untuk pindah lantai." onKeyDown={(event) => {
+  // With a big crew the speech bubbles would cover each other: they show on hover or focus.
+  const crowded = stations.length > CROWDED
+  return <div className={`office-3d${crowded ? ' crowded' : ''}`} ref={setKeyTarget} tabIndex={0} role="region" aria-label="Kantor 3D. Seret untuk memutar, seret klik kanan atau dua jari untuk menggeser, scroll untuk zoom, tombol panah untuk menggeser saat fokus. Page Up dan Page Down untuk pindah lantai." onKeyDown={(event) => {
     if (event.key === 'PageUp' || event.key === 'PageDown') { event.preventDefault(); setFloor(event.key === 'PageUp' ? 2 : 1) }
   }}>
     <Canvas shadows dpr={[1, 2]} camera={{ position: [-3, 13, 16], fov: 40, near: 0.5, far: 150 }} gl={{ antialias: true }}>

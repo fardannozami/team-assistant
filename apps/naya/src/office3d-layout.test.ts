@@ -215,3 +215,43 @@ describe('lantai 2', () => {
     }
   })
 })
+
+describe('a big crew (13 people)', () => {
+  const big = createLayout(13)
+
+  it('sits in pods of four desks with walkways between them; the stock office keeps even rows', () => {
+    expect(createLayout(6).pods).toEqual([])
+    expect(big.pods).toHaveLength(4)
+    const backRow = big.desks.slice(0, 7).map(([x]) => x)
+    const gaps = backRow.slice(1).map((x, index) => +(backRow[index] - x).toFixed(2))
+    // Inside a pod desks keep their pitch; between pods the walkway is wider.
+    expect(gaps).toEqual([2.6, 3.7, 2.6, 3.7, 2.6, 3.7])
+    for (const [x] of big.desks) expect(big.pods.some((pod) => x > pod.minX && x < pod.maxX)).toBe(true)
+  })
+
+  it('turns the front of the wide workspace into a collaboration corner, an idle stop with its own seats', () => {
+    expect(createLayout(3).collab).toBeNull()
+    const collab = big.collab!
+    expect(collab.tables.length).toBeGreaterThanOrEqual(2)
+    expect(collab.maxX).toBeLessThan(big.meetingRoom.minX)
+    expect(collab.minX).toBeGreaterThan(big.building.minX)
+    const stop = big.idleStops.find((item) => item.key === 'kolab')!
+    expect(stop.spots).toHaveLength(collab.tables.length * 3)
+    expect(new Set(stop.spots.map((spot) => spot.position.join(','))).size).toBe(stop.spots.length)
+    for (const { position: [x, , z] } of stop.spots) {
+      expect(x > collab.minX && x < collab.maxX && z > AISLE_Z && z < big.building.maxZ).toBe(true)
+    }
+  })
+
+  it('sends idle people to the collaboration corner only where it exists', () => {
+    const visited = (layout: ReturnType<typeof createLayout>) => new Set(Array.from({ length: IDLE_ROUTE.length }, (_, step) => idleStop(1, step * IDLE_STOP_MS, layout).stop.key))
+    expect(visited(big).has('kolab')).toBe(true)
+    expect(visited(createLayout(3)).has('kolab')).toBe(false)
+    // Nine idle people at once still never share a spot.
+    const seats = Array.from({ length: 9 }, (_, index) => index + 1)
+    for (let step = 0; step < IDLE_ROUTE.length; step += 1) {
+      const plan = idlePlan(seats, step * IDLE_STOP_MS, big)
+      expect(new Set(seats.map((seat) => plan.get(seat)!.placement.position.join(','))).size).toBe(9)
+    }
+  })
+})

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { ARCADES, BALCONY, BALCONY_DOOR, BALCONY_TABLE, BATHROOM, BEANBAGS, CARROM, COFFEE_TABLE, ENTRANCE_X, FLAG, FLOOR_HEIGHT, type Floor as FloorNumber, GAME_DOOR, GAME_ROOM, GAME_TV, HAMMOCK, LESEHAN_TABLE, LOUNGE_PARTITION_END_Z, MEETING_DOOR_X, PARTITION_X, PING_PONG, SOFA, STAIRS, STALL_ROTATION, type OfficeLayout, TV, type Vec3 } from '../office3d-layout.ts'
-import { AcOutdoorUnit, AirConditioner, ArcadeCabinet, Armchair, BathroomFittings, Beanbag, Bed, Bookshelf, BoomGate, CarromTable, ClothesLine, CoffeeTable, DigdayaSign, EntranceCanopy, EntranceDoors, Fence, FlagPole, FloorCushion, Fridge, GalonDispenser, Gerobak, GuardPost, Hammock, KopiSepeda, LongTable, LowTable, Nightstand, OfficeChair, OfficeLight, PantryCounter, PingPongTable, Plant, Railing, RattanChair, RBox, Satpam, Scooter, SideTable, SignPylon, Sofa, Staircase, StreetLamp, StringLights, Television, Tree, Vendor, WallClock, Wardrobe, WaterTank, Whiteboard } from './props.tsx'
+import { AcOutdoorUnit, AirConditioner, ArcadeCabinet, Armchair, BathroomFittings, Beanbag, Bed, Bookshelf, BoomGate, CafeStool, CarromTable, ClothesLine, CoffeeTable, DigdayaSign, EntranceCanopy, EntranceDoors, Fence, FlagPole, FloorCushion, Fridge, GalonDispenser, Gerobak, GuardPost, Hammock, KopiSepeda, LongTable, LowTable, Nightstand, OfficeChair, OfficeLight, PantryCounter, PlanterBox, RoundTable, PingPongTable, Plant, Railing, RattanChair, RBox, Satpam, Scooter, SideTable, SignPylon, Sofa, Staircase, StreetLamp, StringLights, Television, Tree, Vendor, WallClock, Wardrobe, WaterTank, Whiteboard } from './props.tsx'
 import { asphalt, carpet, grass, pavingStones, tileFloor, woodFloor } from './textures.ts'
 
 // The building (floors, walls, windows, furniture) and its surroundings (yard, sidewalk,
@@ -73,12 +73,23 @@ function Building({ night, layout }: { night: boolean; layout: OfficeLayout }) {
   const tiles = useMemo(() => tileFloor([3, 5]), [])
   const rug = useMemo(() => carpet('#5b7c8c', [2, 2]), [])
   const meetingRug = useMemo(() => carpet('#8a4b3c', [2, 2]), [])
+  const podRug = useMemo(() => carpet('#4f6a5e', [2, 2]), [])
+  const collabRug = useMemo(() => carpet('#c2a46b', [2, 2]), [])
+  // A wide office gets more windows along its back wall, between the stock ones.
+  const backWindows = [-7, -3.6, 1.4, 6.6, ...Array.from({ length: Math.max(0, Math.floor((-8.7 - (minX + 1.4)) / 3.4)) }, (_, index) => -10.4 - index * 3.4)]
   return <group>
     {/* Floors: parquet everywhere, tiles in the pantry, rugs in the lounge and meeting area */}
     <Floor position={[(minX + maxX) / 2, 0.005, (minZ + maxZ) / 2]} size={[maxX - minX, maxZ - minZ]} map={wood} roughness={0.55}/>
     <Floor position={[8.35, 0.01, 1.4]} size={[2.3, 5.4]} map={tiles} roughness={0.35}/>
     <Floor position={[4.6, 0.012, -2.9]} size={[4.4, 2.8]} map={rug}/>
     <Floor position={[(layout.meetingRoom.minX + layout.meetingRoom.maxX) / 2, 0.012, (layout.meetingRoom.minZ + layout.meetingRoom.maxZ) / 2]} size={[layout.meetingRoom.maxX - layout.meetingRoom.minX - 0.3, layout.meetingRoom.maxZ - layout.meetingRoom.minZ - 0.3]} map={meetingRug}/>
+    {/* Desk pods: a rug under each, planters between them */}
+    {layout.pods.map((pod) => <Floor key={pod.minX} position={[(pod.minX + pod.maxX) / 2, 0.011, -2.45]} size={[pod.maxX - pod.minX, 4.9]} map={podRug} roughness={0.95}/>)}
+    {layout.pods.slice(1).map((pod, index) => {
+      const x = (pod.maxX + layout.pods[index].minX) / 2
+      return <group key={x}><PlanterBox position={[x, 0, -4.5]} length={0.9} rotation={Math.PI / 2}/><Plant position={[x, 0, -2.3]} size={0.85}/></group>
+    })}
+    {layout.collab && <CollabCorner collab={layout.collab} rug={collabRug} night={night}/>}
     {/* Full-height back and left walls, low walls towards the camera */}
     <Wall from={[minX, minZ]} to={[maxX, minZ]}/>
     <Wall from={[minX, minZ]} to={[minX, maxZ]}/>
@@ -99,7 +110,7 @@ function Building({ night, layout }: { night: boolean; layout: OfficeLayout }) {
     <MeetingRoom layout={layout} night={night}/>
     {[1.3, 2.3, 3.3].map((z) => <Plant key={z} position={[0.9, 0, z]} size={0.8}/>)}
     {/* Windows on the back and left walls */}
-    {[-7, -3.6, 1.4, 6.6].map((x) => <Window key={x} position={[x, 1.55, minZ + 0.14]} night={night}/>)}
+    {backWindows.map((x) => <Window key={x} position={[x, 1.55, minZ + 0.14]} night={night}/>)}
     {[-3].map((z) => <group key={z} rotation={[0, Math.PI / 2, 0]} position={[minX + 0.14, 1.55, z]}><Window position={[0, 0, 0]} width={1.6} night={night}/></group>)}
     {/* Workspace */}
     <Bookshelf position={[minX + 0.35, 0, -0.9]} rotation={Math.PI / 2}/>
@@ -127,6 +138,30 @@ function Building({ night, layout }: { night: boolean; layout: OfficeLayout }) {
     {[...layout.desks.map(([x, , z]): Vec3 => [x, 2.4, z + 0.2]),  [(layout.meetingRoom.table.x1 + layout.meetingRoom.table.x2) / 2, 2.4, layout.meetingRoom.table.z] as Vec3, [COFFEE_TABLE[0], 2.4, COFFEE_TABLE[2] + 0.4] as Vec3, [8.2, 2.4, 1.2] as Vec3].map((position) => <OfficeLight key={position.join(',')} position={position} night={night}/>)}
     <Stairs/>
     <GameRoom night={night}/>
+  </group>
+}
+
+/** Round tables with stools, beanbags and books in the front of a wide workspace. */
+function CollabCorner({ collab, rug, night }: { collab: NonNullable<OfficeLayout['collab']>; rug: ReturnType<typeof carpet>; night: boolean }) {
+  const { minX, maxX, minZ, maxZ, tables } = collab
+  const end = tables.length ? tables[tables.length - 1][0] - 1.6 : maxX
+  return <group>
+    <Floor position={[(minX + maxX) / 2, 0.011, (minZ + maxZ) / 2 + 0.1]} size={[maxX - minX, maxZ - minZ - 0.4]} map={rug} roughness={0.95}/>
+    {tables.map(([x, , z], index) => <group key={x}>
+      <RoundTable position={[x, 0, z]}/>
+      <CafeStool position={[x - 0.75, 0, z]} color={['#d9784a', '#3d7fd6', '#4f8a4a'][index % 3]}/>
+      <CafeStool position={[x + 0.75, 0, z]} color={['#e0a43a', '#d9784a', '#3d7fd6'][index % 3]}/>
+      <CafeStool position={[x, 0, z + 0.8]} color={['#4f8a4a', '#e0a43a', '#d9784a'][index % 3]}/>
+      <OfficeLight position={[x, 2.4, z]} night={night}/>
+    </group>)}
+    {/* The far end: beanbags around a low table, books, and plants */}
+    {end - minX > 1.8 && <>
+      <Beanbag position={[minX + 0.9, 0, maxZ - 1.2]} color="#e76f51"/>
+      <Beanbag position={[minX + 0.9, 0, maxZ - 2.4]} color="#2a9d8f"/>
+      <Bookshelf position={[minX + 1.2, 0, minZ + 0.35]} rotation={0}/>
+    </>}
+    <Plant position={[maxX - 0.35, 0, maxZ - 0.45]} size={0.9}/>
+    <Plant position={[minX + 0.35, 0, maxZ - 0.45]} size={1.1}/>
   </group>
 }
 
