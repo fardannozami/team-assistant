@@ -12,7 +12,7 @@ import { consumeAuthRedirect, DAILY_URL, setToken } from './api.ts'
 import { LoginScreen } from './LockScreen.tsx'
 import { usePolling } from './polling.ts'
 import { usePreferences } from './preferences.ts'
-import { HOME, navigation, pageFromHash, pageLabel, pageSlug, type Page } from './routes.ts'
+import { canOpen, HOME, navigation, pageFromHash, pageLabel, pageSlug, type Page } from './routes.ts'
 import type { DashboardSnapshot } from './types.ts'
 
 function currentPage(): Page {
@@ -20,7 +20,12 @@ function currentPage(): Page {
 }
 
 function Shell({ me, onSignedOut }: { me: Me; onSignedOut: () => void }) {
-  const [page, setPage] = useState<Page>(currentPage)
+  // Pages a role may not open (Agent, Kalender, Pemakaian) are left out of the menu, and an address
+  // naming one opens the office instead.
+  const allowed = (next: Page) => canOpen(next, me.can.see)
+  const [requested, setPage] = useState<Page>(currentPage)
+  const page = allowed(requested) ? requested : HOME
+  const menu = navigation.filter(allowed)
   const { theme, toggleTheme } = usePreferences()
   // The navigation is a drawer over the page, closed by default, like a game's menu.
   const [menuOpen, setMenuOpen] = useState(false)
@@ -58,6 +63,7 @@ function Shell({ me, onSignedOut }: { me: Me; onSignedOut: () => void }) {
   }
 
   const navigate = (next: Page) => {
+    if (!allowed(next)) return
     window.location.hash = `/${pageSlug(next)}`
     setPage(next)
     setMenuOpen(false)
@@ -77,7 +83,7 @@ function Shell({ me, onSignedOut }: { me: Me; onSignedOut: () => void }) {
     {menuOpen && <div className="drawer-backdrop" onClick={closeMenu} aria-hidden="true"/>}
     <aside id="app-sidebar" className="drawer" ref={drawer} hidden={!menuOpen} aria-label="Menu">
       <div className="drawer-head"><a className="brand" href="#/office" onClick={(event) => { event.preventDefault(); navigate(HOME) }}>NAYA<span>DIGDAYA AI STUDIO</span></a><button type="button" className="icon-button" onClick={closeMenu} aria-label="Tutup menu" title="Tutup menu (Esc)">✕</button></div>
-      <nav aria-label="Main">{navigation.map((item) => <a href={`#/${pageSlug(item)}`} className={page === item ? 'active' : ''} aria-current={page === item ? 'page' : undefined} key={item} onClick={(event) => { event.preventDefault(); navigate(item) }}>{pageLabel(item)}</a>)}<a href={DAILY_URL} target="_blank" rel="noopener">daily ↗</a></nav>
+      <nav aria-label="Main">{menu.map((item) => <a href={`#/${pageSlug(item)}`} className={page === item ? 'active' : ''} aria-current={page === item ? 'page' : undefined} key={item} onClick={(event) => { event.preventDefault(); navigate(item) }}>{pageLabel(item)}</a>)}<a href={DAILY_URL} target="_blank" rel="noopener">daily ↗</a></nav>
       <div className="sidebar-note"><span className="dot"/> {me.user.name.toUpperCase()} · {(me.user.role ?? 'TANPA PERAN').toUpperCase()}</div>
       <small className="drawer-hint">Tekan M untuk membuka atau menutup menu</small>
     </aside>

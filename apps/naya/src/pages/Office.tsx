@@ -2,7 +2,7 @@ import { Component, lazy, Suspense, useEffect, useRef, useState, type CSSPropert
 import { agentLook } from '../agents.ts'
 import { usePolling } from '../polling.ts'
 import { formatCompact, formatDateTime, formatNumber } from '../format.ts'
-import { pageLabel, type Page } from '../routes.ts'
+import { canOpen, pageLabel, type Page } from '../routes.ts'
 import type { ActivitySnapshot, ChannelSnapshot, DashboardSnapshot, OfficeRoom, OfficeSnapshot, OfficeStation, TeamSnapshot, TeamTask, UsageSnapshot } from '../types.ts'
 import { stationBadge, teamStations } from '../team.ts'
 import { LoadingState, SourceStatus } from '../ui.tsx'
@@ -140,7 +140,7 @@ export function OfficeDetail({ station, onClose }: { station: OfficeStation; onC
         </>}
         {!employee && tab === 'Overview' && <>
           {station.activity && <p className="detail-activity">{station.activity}</p>}
-          <dl className="office-detail-grid"><div><dt>Jenis agent</dt><dd>{station.role}</dd></div>{station.role !== 'OpenCode' && station.role !== 'Claude Code' && <AgentTokens agent={station.id}/>}<div><dt>Ruangan</dt><dd>{roomLabel(station.room)} / {station.roomPosition}</dd></div><div><dt>Tugas saat ini</dt><dd>{station.currentTask}</dd></div><div><dt>Aktivitas terakhir</dt><dd>{station.recentActivity}</dd></div><div><dt>Sumber data</dt><dd>{station.provenance}</dd></div><div><dt>Kebaruan data</dt><dd>{station.freshness}</dd></div></dl></>}
+          <dl className="office-detail-grid"><div><dt>Jenis agent</dt><dd>{station.role}</dd></div>{station.role !== 'OpenCode' && station.role !== 'Claude Code' && me?.can.see.usage && <AgentTokens agent={station.id}/>}<div><dt>Ruangan</dt><dd>{roomLabel(station.room)} / {station.roomPosition}</dd></div><div><dt>Tugas saat ini</dt><dd>{station.currentTask}</dd></div><div><dt>Aktivitas terakhir</dt><dd>{station.recentActivity}</dd></div><div><dt>Sumber data</dt><dd>{station.provenance}</dd></div><div><dt>Kebaruan data</dt><dd>{station.freshness}</dd></div></dl></>}
         {tab === 'Chat' && canChat && <AgentChat agent={station.id}/>}
       </div>
     </section>
@@ -214,6 +214,9 @@ export function Office({ dashboard, dashboardPending = false, onNavigate }: { da
   const [webgl] = useState(() => typeof document === 'undefined' || webglAvailable())
   const [panel, setPanel] = useState<PanelTab | undefined>(() => typeof window === 'undefined' ? undefined : storedPanel())
   const [overlay, setOverlay] = useState<OverlayKind | undefined>()
+  const me = useMe()
+  // Kalender and Token only for those who may see those pages; the tasks overlay shows one's own cards.
+  const overlays = (['chat', 'tasks', 'calendar', 'usage'] as const).filter((item) => item === 'calendar' ? me?.can.see.calendar : item === 'usage' ? me?.can.see.usage : true)
   const choosePanel = (next: PanelTab | undefined) => {
     setPanel(next)
     try { window.localStorage.setItem('mc.officePanel', next ?? 'closed') } catch { /* storage may be blocked */ }
@@ -245,10 +248,10 @@ export function Office({ dashboard, dashboardPending = false, onNavigate }: { da
   const stationButton2d = (station: OfficeStation) => { const badge = stationBadge(station); const busy = ['Working', 'Reviewing', 'Collaborating'].includes(station.state); return <button className={`pixel-station ${station.roomPosition} state-${station.state.toLowerCase()}`} key={station.id} onClick={(event) => { selectedTrigger.current = event.currentTarget; setSelectedId(station.id) }} aria-label={`${station.name}. ${officeStateLabel(station)}${station.activity ? `: ${station.activity}` : ''}. Buka detail.`} title={station.activity || officeStateLabel(station)}>{busy && station.activity && <span className="speech" aria-hidden="true">{station.activity}</span>}<span className="pixel-station-name">{station.privacy === 'locked' ? '🔒 ' : ''}{station.name}</span><span className={`badge ${badge.tone}`}>{officeStateLabel(station)}</span>{station.state === 'Unknown' && <span className="neutral-label">STATUS BELUM JELAS</span>}<PixelCharacter agent={station.id}/></button> }
   const stationButton = (station: OfficeStation) => { const badge = stationBadge(station); return <button type="button" className="crew-row" key={station.id} onClick={(event) => { selectedTrigger.current = event.currentTarget; setSelectedId(station.id) }} aria-label={`Detail ${station.name}: ${officeStateLabel(station)}`}><PixelCharacter agent={station.id}/><span><strong>{station.name}</strong><small>{station.activity || station.role}</small></span><span className={`badge ${badge.tone}`}>{badge.label}</span></button> }
   return <section className={`office-stage view-${show3d ? '3d' : '2d'}`} aria-label="Kantor visual">
-    <div className="office-hud" role="list" aria-label="Statistik utama">{hud.map((item) => { const body = <><span>{item.label}</span><b>{item.value}</b></>; return <div role="listitem" key={item.label}>{item.page && onNavigate ? <button type="button" className={`hud-chip${item.tone ? ` ${item.tone}` : ''}`} title={item.title ?? `Buka ${pageLabel(item.page)}`} onClick={() => onNavigate(item.page!)}>{body}</button> : <span className={`hud-chip${item.tone ? ` ${item.tone}` : ''}`} title={item.title}>{body}</span>}</div> })}</div>
+    <div className="office-hud" role="list" aria-label="Statistik utama">{hud.map((item) => { const body = <><span>{item.label}</span><b>{item.value}</b></>; return <div role="listitem" key={item.label}>{item.page && onNavigate && canOpen(item.page, me?.can.see) ? <button type="button" className={`hud-chip${item.tone ? ` ${item.tone}` : ''}`} title={item.title ?? `Buka ${pageLabel(item.page)}`} onClick={() => onNavigate(item.page!)}>{body}</button> : <span className={`hud-chip${item.tone ? ` ${item.tone}` : ''}`} title={item.title}>{body}</span>}</div> })}</div>
     <div className="office-stage-tools">
       <div className="view-toggle" role="group" aria-label="Tampilan kantor">{(['2d', '3d'] as const).map((item) => <button type="button" key={item} className={view === item ? 'active' : ''} aria-pressed={view === item} onClick={() => chooseView(item)} disabled={item === '3d' && !webgl} title={item === '3d' && !webgl ? 'WebGL tidak tersedia di browser ini' : undefined}>{item.toUpperCase()}</button>)}</div>
-      {(['chat', 'tasks', 'calendar', 'usage'] as const).map((item) => <button type="button" key={item} className={`panel-toggle${overlay === item ? ' active' : ''}`} aria-pressed={overlay === item} onClick={() => setOverlay(overlay === item ? undefined : item)}>{item === 'chat' ? '✦ Tanya Naya' : item === 'tasks' ? '▦ Tugas' : item === 'calendar' ? '◷ Kalender' : '◔ Token'}</button>)}
+      {overlays.map((item) => <button type="button" key={item} className={`panel-toggle${overlay === item ? ' active' : ''}`} aria-pressed={overlay === item} onClick={() => setOverlay(overlay === item ? undefined : item)}>{item === 'chat' ? '✦ Tanya Naya' : item === 'tasks' ? '▦ Tugas' : item === 'calendar' ? '◷ Kalender' : '◔ Token'}</button>)}
       <button type="button" className={`panel-toggle${panel ? ' active' : ''}`} aria-expanded={Boolean(panel)} aria-controls="office-panel" onClick={() => choosePanel(panel ? undefined : 'Crew')}>◧ Panel</button>
     </div>
     <div className="office-canvas">

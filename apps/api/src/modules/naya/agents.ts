@@ -1,5 +1,5 @@
 import { createDbClient, nayaAgents } from "@repo/database";
-import { HERMES_PROFILE, NAYA_POLICY, nayaCan, type NayaAgentInput } from "@repo/shared";
+import { HERMES_PROFILE, NAYA_POLICY, NAYA_VIEWS, nayaCan, nayaSees, type NayaAgentInput, type NayaView } from "@repo/shared";
 import { and, asc, eq } from "drizzle-orm";
 import { decryptSecret, encryptSecret } from "../../lib/secrets.js";
 import { HttpError } from "../../lib/http-error.js";
@@ -99,6 +99,7 @@ export function nayaPermissions(role: string | null, agents: NayaAgent[]) {
     review: nayaCan(role, "review"),
     comment: nayaCan(role, "comment"),
     manageAgents: role === "Owner" || role === "Admin",
+    see: Object.fromEntries((Object.keys(NAYA_VIEWS) as NayaView[]).map((view) => [view, nayaSees(role, view)])) as Record<NayaView, boolean>,
     chat: agents.filter((agent) => agent.hasKey && !!role && agent.chatRoles.includes(role)).map((agent) => agent.profile),
     policy: NAYA_POLICY,
   };

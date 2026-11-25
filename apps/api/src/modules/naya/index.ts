@@ -9,8 +9,10 @@ import {
   nayaInstructionSchema,
   nayaPicSchema,
   nayaReviewSchema,
+  nayaSees,
   OWNER_ONLY_SCOPES,
   type NayaAction,
+  type NayaView,
 } from "@repo/shared";
 import { createDbClient, users } from "@repo/database";
 import { eq } from "drizzle-orm";
@@ -23,7 +25,7 @@ import { bridge, hermesConfigured, type Actor } from "./bridge.js";
 import { chatKey, deleteNayaAgent, listNayaAgents, nayaPermissions, saveNayaAgent } from "./agents.js";
 import { proxyChat } from "./chat.js";
 import { teamToday } from "./team.js";
-import { cardSummaries, continueCard, currentBoard, decideItem, getChecklist, inbox, setCardPic, setItemPic } from "./checklist.js";
+import { boardOf, cardSummaries, continueCard, currentBoard, decideItem, getChecklist, inbox, setCardPic, setItemPic, visibleCards } from "./checklist.js";
 import { employeeOf, listMembers } from "./members.js";
 import { notifyHandoffs } from "./notify.js";
 
@@ -54,6 +56,32 @@ function allow(c: Context, action: NayaAction) {
 
 const fresh = (c: Context) => c.req.query("fresh") === "1";
 
+/** A page only some roles see (Agents, Kalender, Pemakaian): the API refuses it to the others too. */
+const sees = (view: NayaView) => async (c: Context, next: () => Promise<void>) => {
+  if (!nayaSees(getActorRole(c), view)) throw new HttpError(403, "Halaman ini tidak tersedia untuk peran Anda.");
+  await next();
+};
+
+/**
+ * Without the "allTasks" view a person sees only their own cards: null means everything,
+ * otherwise the "<board>:<task id>" keys they may open.
+ */
+async function ownCards(c: Context): Promise<Set<string> | null> {
+  if (nayaSees(getActorRole(c), "allTasks")) return null;
+  return visibleCards(getWorkspaceId(c), await employeeOf(getWorkspaceId(c), getActorId(c)!));
+}
+
+/** 404 (not 403) for a card someone may not see, so its existence is not given away either. */
+async function assertSeesCard(c: Context, id: string, board: string | undefined) {
+  const own = await ownCards(c);
+  if (own && !own.has(`${boardOf(board)}:${id}`)) throw new HttpError(404, "Task tidak dikenal.");
+}
+
+const ownCard = [anyone, async (c: Context, next: () => Promise<void>) => {
+  await assertSeesCard(c, c.req.param("id")!, c.req.query("board") || undefined);
+  await next();
+}] as const;
+
 /* ---------- Who am I, and what may I do ---------- */
 
 nayaApi.get("/me", anyone, async (c) => {
@@ -66,12 +94,17 @@ nayaApi.get("/me", anyone, async (c) => {
 
 /* ---------- Reads from Hermes ---------- */
 
-nayaApi.get("/runtime", anyone, async (c) => c.json(await bridge.runtime(fresh(c))));
+nayaApi.get("/runtime", anyone, sees("agents"), async (c) => c.json(await bridge.runtime(fresh(c))));
 nayaApi.get("/office", anyone, async (c) => c.json(await bridge.office(fresh(c))));
-nayaApi.get("/tasks", anyone, async (c) => c.json(await bridge.tasks(fresh(c))));
-nayaApi.get("/tasks/:id", anyone, async (c) => c.json(await bridge.task(c.req.param("id"), c.req.query("board") || undefined)));
-nayaApi.get("/tasks/:id/attachments", anyone, async (c) => c.json(await bridge.attachments(c.req.param("id"), c.req.query("board") || undefined)));
-nayaApi.get("/tasks/:id/attachments/:attachment", anyone, async (c) => {
+nayaApi.get("/tasks", anyone, async (c) => {
+  const board = (await bridge.tasks(fresh(c))) as { tasks?: { availability: string; data: { id?: string; board?: string }[] } };
+  const own = await ownCards(c);
+  if (!own || !board.tasks || board.tasks.availability !== "available") return c.json(board);
+  return c.json({ ...board, tasks: { ...board.tasks, data: board.tasks.data.filter((task) => task.id && own.has(`${boardOf(task.board)}:${task.id}`)) } });
+});
+nayaApi.get("/tasks/:id", ...ownCard, async (c) => c.json(await bridge.task(c.req.param("id"), c.req.query("board") || undefined)));
+nayaApi.get("/tasks/:id/attachments", ...ownCard, async (c) => c.json(await bridge.attachments(c.req.param("id"), c.req.query("board") || undefined)));
+nayaApi.get("/tasks/:id/attachments/:attachment", ...ownCard, async (c) => {
   const file = await bridge.attachment(c.req.param("id"), c.req.param("attachment"), c.req.query("board") || undefined);
   return new Response(file.body, {
     headers: {
@@ -82,8 +115,8 @@ nayaApi.get("/tasks/:id/attachments/:attachment", anyone, async (c) => {
     },
   });
 });
-nayaApi.get("/usage", anyone, async (c) => c.json(await bridge.usage(Number(c.req.query("days")) || 7)));
-nayaApi.get("/calendar", anyone, async (c) => c.json(await bridge.calendar()));
+nayaApi.get("/usage", anyone, sees("usage"), async (c) => c.json(await bridge.usage(Number(c.req.query("days")) || 7)));
+nayaApi.get("/calendar", anyone, sees("calendar"), async (c) => c.json(await bridge.calendar()));
 nayaApi.get("/dashboard", anyone, async (c) => c.json(await bridge.dashboard(fresh(c))));
 nayaApi.get("/activity", anyone, async (c) => c.json(await bridge.activity(fresh(c))));
 nayaApi.get("/channels", anyone, async (c) => c.json(await bridge.channels(fresh(c))));
@@ -121,6 +154,7 @@ for (const action of ["reject", "comment", "retry"] as const) {
     const input = parseWith(nayaReviewSchema, await c.req.json().catch(() => ({})));
     const actor = await actorOf(c);
     const id = c.req.param("id");
+    await assertSeesCard(c, id, input.board);
     const result = await bridge.review(id, action, input, actor);
     // The note itself stays in Hermes (the task's comments); the log records who did what.
     await audit(getWorkspaceId(c), actor.id, `naya.${action}`, "kanban_task", id, {
@@ -134,14 +168,23 @@ for (const action of ["reject", "comment", "retry"] as const) {
 
 /* ---------- The human half: PIC, checklist, Tugas Saya ---------- */
 
-nayaApi.get("/people", anyone, async (c) => c.json(await listMembers(getWorkspaceId(c))));
-nayaApi.get("/cards", anyone, async (c) => c.json(await cardSummaries(getWorkspaceId(c))));
+nayaApi.get("/people", anyone, async (c) => {
+  const members = await listMembers(getWorkspaceId(c));
+  // Who is santai and how much waits on whom is for those who assign work; others get names only.
+  if (nayaSees(getActorRole(c), "allTasks")) return c.json(members);
+  return c.json(members.map((member) => ({ ...member, team: null, lead: null, presence: "absent", userId: null, load: 0 })));
+});
+nayaApi.get("/cards", anyone, async (c) => {
+  const cards = await cardSummaries(getWorkspaceId(c));
+  const own = await ownCards(c);
+  return c.json(own ? cards.filter((card) => own.has(`${card.board}:${card.taskId}`)) : cards);
+});
 nayaApi.get("/inbox", anyone, async (c) => {
   const actor = await actorOf(c);
   return c.json(await inbox(getWorkspaceId(c), await employeeOf(getWorkspaceId(c), actor.id), nayaCan(actor.role, "review")));
 });
 
-nayaApi.get("/tasks/:id/checklist", anyone, async (c) =>
+nayaApi.get("/tasks/:id/checklist", ...ownCard, async (c) =>
   c.json(await getChecklist(getWorkspaceId(c), c.req.query("board") || undefined, c.req.param("id"))),
 );
 

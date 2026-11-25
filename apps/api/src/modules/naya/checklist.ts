@@ -352,3 +352,22 @@ export async function continueCard(workspaceId: string, board: string | undefine
     return { id: created.id, board: key, step };
   });
 }
+
+/**
+ * The cards a member without the "allTasks" view may see: those they are the PIC of, or of an item
+ * on, plus the subtasks behind their items (so the card's detail can link to them). Keys are
+ * "<board>:<task id>".
+ */
+export async function visibleCards(workspaceId: string, employeeId: string | null): Promise<Set<string>> {
+  if (!employeeId) return new Set();
+  const [cards, items] = await Promise.all([
+    db.select({ board: nayaCards.board, taskId: nayaCards.taskId }).from(nayaCards).where(and(eq(nayaCards.workspaceId, workspaceId), eq(nayaCards.picEmployeeId, employeeId))),
+    db.select({ board: nayaChecklistItems.board, taskId: nayaChecklistItems.taskId, source: nayaChecklistItems.sourceTaskId }).from(nayaChecklistItems).where(and(eq(nayaChecklistItems.workspaceId, workspaceId), eq(nayaChecklistItems.picEmployeeId, employeeId))),
+  ]);
+  const keys = new Set(cards.map((card) => `${card.board}:${card.taskId}`));
+  for (const item of items) {
+    keys.add(`${item.board}:${item.taskId}`);
+    if (item.source) keys.add(`${item.board}:${item.source}`);
+  }
+  return keys;
+}

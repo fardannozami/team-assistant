@@ -2,10 +2,17 @@ import { useMe, type Permissions } from '../access.ts'
 import { DAILY_URL } from '../api.ts'
 import { PageTitle } from '../ui.tsx'
 
-const ACTIONS: [Exclude<keyof Permissions, 'chat' | 'manageAgents'>, string][] = [
+const ACTIONS: [Exclude<keyof Permissions, 'chat' | 'manageAgents' | 'see'>, string][] = [
   ['instruct', 'Memberi instruksi baru ke tim AI'],
   ['review', 'Menyetujui, meminta revisi, atau menolak hasil kerja'],
   ['comment', 'Berkomentar di tugas'],
+]
+
+const VIEWS: [keyof Permissions['see'], string][] = [
+  ['allTasks', 'Melihat semua kartu di Papan Tugas (tanpa ini: hanya kartu yang ditugaskan kepada Anda)'],
+  ['agents', 'Membuka halaman Agent'],
+  ['calendar', 'Membuka Kalender'],
+  ['usage', 'Membuka Pemakaian (token dan biaya AI)'],
 ]
 
 export function Settings() {
@@ -17,6 +24,7 @@ export function Settings() {
       <p className="muted">{me.user.email}. Naya memakai akun daily; peran diatur di daily (Pengaturan › Pengguna).</p>
       <ul className="small-note">
         {ACTIONS.map(([key, label]) => <li key={key}>{me.can[key] ? '✓' : '✕'} {label}</li>)}
+        {VIEWS.map(([key, label]) => <li key={key}>{me.can.see[key] ? '✓' : '✕'} {label}</li>)}
         <li>{me.can.chat.length ? `✓ Chat dengan agent: ${me.can.chat.join(', ')}` : '✕ Belum ada agent yang bisa Anda ajak chat'}</li>
       </ul>
     </section>

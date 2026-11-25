@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { orderedStatuses } from './format.ts'
 import { mergeRefresh } from './request-state.ts'
-import { cardFromHash, navigation, pageFromHash, pageSlug } from './routes.ts'
+import { canOpen, cardFromHash, navigation, pageFromHash, pageSlug } from './routes.ts'
 
 describe('hash routing', () => {
   it('round-trips every page and falls back to the Office home', () => {
@@ -19,6 +19,15 @@ describe('hash routing', () => {
     expect(pageFromHash('#/my-tasks/default/t_9')).toBe('My Tasks')
     expect(cardFromHash('#/my-tasks/default/t_9')).toEqual({ board: 'default', id: 't_9' })
     expect(cardFromHash('#/my-tasks')).toBeNull()
+  })
+})
+
+describe('pages by role', () => {
+  it('hides Agent, Kalender and Pemakaian from those who may not see them', () => {
+    const employee = { agents: false, calendar: false, usage: false }
+    expect(navigation.filter((page) => canOpen(page, employee))).toEqual(['Office', 'My Tasks', 'Task Board', 'Settings'])
+    expect(navigation.filter((page) => canOpen(page, { agents: true, calendar: true, usage: true }))).toEqual(navigation)
+    expect(canOpen('Usage', undefined)).toBe(false)
   })
 })
 

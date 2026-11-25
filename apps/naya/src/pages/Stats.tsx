@@ -2,7 +2,8 @@ import { formatDateTime, formatNumber, orderedStatuses, statusTone, taskStatusLa
 import type { DashboardSnapshot } from '../types.ts'
 import { EmptyState, LoadingState } from '../ui.tsx'
 import { TokenUsage } from './TokenUsage.tsx'
-import type { Page } from '../routes.ts'
+import { useMe } from '../access.ts'
+import { canOpen, type Page } from '../routes.ts'
 
 function availableCount(source: { availability: string; total: number }, unit?: string) {
   return source.availability === 'available' ? `${formatNumber(source.total)}${unit ? ` ${unit}` : ''}` : 'Tidak tersedia'
@@ -14,10 +15,12 @@ function StatTile({ label, value, detail, onClick }: { label: string; value: str
 
 /** The operations overview (formerly the Dashboard page), shown in the Office panel's Stats tab. */
 export function Stats({ dashboard, pending = false, onNavigate }: { dashboard: DashboardSnapshot | null; pending?: boolean; onNavigate?: (page: Page) => void }) {
+  const me = useMe()
   if (pending) return <LoadingState message="Membaca kondisi runtime…"/>
-  if (!dashboard) return <EmptyState title="Tidak tersedia">API Naya tidak bisa dihubungi. Coba muat ulang sebentar lagi.</EmptyState>
+  if (!dashboard) return <EmptyState title="Tidak tersedia">API Naya tidak bisa dihubungi. Naya mencoba lagi otomatis.</EmptyState>
   const { runtime, tasks, calendar, activity, knowledge, channels, office, commands } = dashboard
-  const go = (page: Page) => onNavigate ? () => onNavigate(page) : undefined
+  // A tile opens its page only for those who may see it.
+  const go = (page: Page) => onNavigate && canOpen(page, me?.can.see) ? () => onNavigate(page) : undefined
   const openTasks = Object.entries(tasks.byStatus).filter(([status]) => !['done', 'archived'].includes(status)).reduce((sum, [, count]) => sum + count, 0)
   const statuses = orderedStatuses(Object.keys(tasks.byStatus))
   const hermesMissing = /not installed/i.test(runtime.profiles.error?.message ?? '')

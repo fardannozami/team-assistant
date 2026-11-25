@@ -59,6 +59,16 @@ Every action is checked against the person's daily role and written to `audit_lo
 | comment | everyone |
 | chat | per agent |
 
+What each role sees follows the blueprint's access matrix (`NAYA_VIEWS` in `packages/shared`). The menu hides a page, and the API refuses its data too:
+
+| Page | Owner, Admin, Manager, PM | Employee |
+|---|---|---|
+| Kantor, Tugas Saya, Pengaturan | ✓ | ✓ |
+| Papan Tugas | every card | only the cards they are the PIC of (of the card or of an item), and those cards' subtasks |
+| Agent, Kalender, Pemakaian | ✓ | — (`/runtime`, `/calendar`, `/usage` answer 403) |
+
+A card someone may not see answers 404 in its detail, attachments, checklist and comments, so its existence is not given away. In the PIC picker, employees get only names: who is santai and how much waits on whom is for those who assign work.
+
 ## OpenCode in the office
 
 OpenCode gets a desk when `opencode --version` works where the bridge runs, or when its session database (`opencode.db`) is readable there. It is **Working** while one of its sessions got a message in the last 3 minutes; only times and the newest session's folder name are read.

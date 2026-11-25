@@ -15,6 +15,15 @@ const LABELS: Record<Page, string> = {
   Settings: 'Pengaturan',
 }
 
+/** Pages only some roles see: Agent, Kalender and Pemakaian. */
+const VIEW_OF: Partial<Record<Page, 'agents' | 'calendar' | 'usage'>> = { Agents: 'agents', Calendar: 'calendar', Usage: 'usage' }
+
+/** Whether a person with these views may open the page (everyone sees the others). */
+export function canOpen(page: Page, see: { agents: boolean; calendar: boolean; usage: boolean } | undefined): boolean {
+  const view = VIEW_OF[page]
+  return !view || !!see?.[view]
+}
+
 export function pageLabel(page: Page): string {
   return LABELS[page]
 }

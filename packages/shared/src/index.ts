@@ -391,6 +391,27 @@ export function nayaCan(role: string | null | undefined, action: NayaAction): bo
   return !!role && (NAYA_POLICY[action] as readonly string[]).includes(role);
 }
 
+/**
+ * What each role may see in Naya (blueprint v3 access matrix). The office, Tugas Saya and settings
+ * are for everyone; the rest only for those who run the team. Everyone else sees on the task board
+ * only the cards they are the PIC of (the API filters; the menu hides the rest).
+ */
+export const NAYA_VIEWS = {
+  /** Every card on the task board, not only one's own. */
+  allTasks: ["Owner", "Admin", "Manager", "PM"],
+  /** Agents: Hermes profiles, models, gateways and the roster. */
+  agents: ["Owner", "Admin", "Manager", "PM"],
+  /** Kalender: the agents' cron jobs. */
+  calendar: ["Owner", "Admin", "Manager", "PM"],
+  /** Pemakaian: tokens and AI cost (PM and Manager may look, nothing there changes anything). */
+  usage: ["Owner", "Admin", "Manager", "PM"],
+} as const satisfies Record<string, readonly (typeof ROLE_NAMES)[number][]>;
+export type NayaView = keyof typeof NAYA_VIEWS;
+
+export function nayaSees(role: string | null | undefined, view: NayaView): boolean {
+  return !!role && (NAYA_VIEWS[view] as readonly string[]).includes(role);
+}
+
 /** A Hermes profile name (as `hermes profile list` shows it). */
 export const HERMES_PROFILE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
 

@@ -3,7 +3,7 @@
  * handoff and reminder messages.
  */
 import { describe, expect, test } from "bun:test";
-import { HERMES_PROFILE, NAYA_ROSTER, ROSTER_FALLBACK, nayaChecklistDecisionSchema, nayaInstructionSchema, nayaPoolOf, rosterAgent } from "@repo/shared";
+import { HERMES_PROFILE, NAYA_ROSTER, nayaSees, ROSTER_FALLBACK, nayaChecklistDecisionSchema, nayaInstructionSchema, nayaPoolOf, rosterAgent } from "@repo/shared";
 import { cardOutcome, continuation, handoffNote, inboxEntries, seedItems, STALE_MS } from "./modules/naya/checklist.js";
 import { mostAvailable, type Member } from "./modules/naya/members.js";
 import { cardPath, noticeText, planNotices } from "./modules/naya/notify.js";
@@ -218,5 +218,17 @@ describe("signing in from WhatsApp", () => {
     expect(text).toContain("#login=ta_login_x&next=");
     expect(text).toContain("berlaku 12 jam");
     expect(noticeText("handoff", [{ board: "default", taskId: "t_9", title: "PRD", items: 1, version: 1 }])).not.toContain("berlaku 12 jam");
+  });
+});
+
+describe("what each role sees (blueprint access matrix)", () => {
+  test("those who run the team see every page and every card; employees only the office, their tasks and settings", () => {
+    for (const role of ["Owner", "Admin", "Manager", "PM"]) {
+      for (const view of ["allTasks", "agents", "calendar", "usage"] as const) expect(nayaSees(role, view)).toBe(true);
+    }
+    for (const view of ["allTasks", "agents", "calendar", "usage"] as const) {
+      expect(nayaSees("Employee", view)).toBe(false);
+      expect(nayaSees(null, view)).toBe(false);
+    }
   });
 });

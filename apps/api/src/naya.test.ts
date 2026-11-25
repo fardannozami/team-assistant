@@ -203,7 +203,8 @@ describe("naya permissions", () => {
   test("roles decide instructing, reviewing, commenting and chatting", () => {
     expect(nayaPermissions("PM", agents)).toMatchObject({ instruct: true, review: true, comment: true, manageAgents: false, chat: ["sales"] });
     expect(nayaPermissions("Manager", agents)).toMatchObject({ instruct: false, review: true, comment: true, chat: [] });
-    expect(nayaPermissions("Employee", agents)).toMatchObject({ instruct: false, review: false, comment: true });
+    expect(nayaPermissions("Employee", agents)).toMatchObject({ instruct: false, review: false, comment: true, see: { allTasks: false, agents: false, calendar: false, usage: false } });
+    expect(nayaPermissions("PM", agents).see).toEqual({ allTasks: true, agents: true, calendar: true, usage: true });
     expect(nayaPermissions("Owner", agents)).toMatchObject({ manageAgents: true, chat: ["naya", "sales"] });
     expect(nayaPermissions(null, agents)).toMatchObject({ instruct: false, review: false, comment: false, chat: [] });
   });
