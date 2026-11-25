@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { apiFetch } from '../api.ts'
+import { useAgentName, type AgentName } from '../agent-name.ts'
 import { apiPost, useMe } from '../access.ts'
 import { agentLabel, formatDateTime, formatRelative } from '../format.ts'
 import { usePolling } from '../polling.ts'
 import { loadSnapshot, type RequestState } from '../request-state.ts'
-import type { OfficeSnapshot, Task, TaskBoardSnapshot, TaskDetailSnapshot } from '../types.ts'
+import type { Task, TaskBoardSnapshot, TaskDetailSnapshot } from '../types.ts'
 import { PILLS, pillOf, STAGES, stageOf, type Pill } from '../pipeline.ts'
 import { Dialog, EmptyState, PageTitle, SearchInput, SourceStatus, Unavailable } from '../ui.tsx'
 
@@ -16,15 +17,6 @@ const STATUS_LABEL: Record<string, string> = {
   blocked: 'Ditolak / tertahan', review: 'Menunggu review', done: 'Selesai', archived: 'Diarsipkan',
 }
 const statusLabel = (status: string) => STATUS_LABEL[status] ?? status
-
-type AgentName = (id: string | undefined) => string
-
-/** Agents by their office names (Hermes display names such as "Asisten Umum", "Coder"), as the office shows them. */
-function useAgentName(): AgentName {
-  const office = usePolling<OfficeSnapshot>('/api/office', 60_000)
-  const names = office.status === 'ready' ? Object.fromEntries(office.data.stations.map((station) => [station.id, station.name])) : {}
-  return (id) => agentLabel(id, names)
-}
 
 const FILTERS: { id: string; label: string; statuses?: string[] }[] = [
   { id: 'all', label: 'Semua' },

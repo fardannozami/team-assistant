@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { dayKey, monthEntries, type CalendarEntry } from '../cron-calendar.ts'
 import { agentLabel, formatDateTime, statusTone } from '../format.ts'
 import { usePolling } from '../polling.ts'
+import { useAgentName, type AgentName } from '../agent-name.ts'
 import type { CalendarSnapshot, ScheduledJob } from '../types.ts'
 import { EmptyState, LoadingState, PageTitle, SourceStatus, Unavailable } from '../ui.tsx'
 
@@ -17,7 +18,7 @@ function todayKey(): string {
 }
 
 /** A month grid of cron runs: upcoming runs from today, plus overdue and last-run markers. */
-export function MonthView({ jobs: allJobs }: { jobs: ScheduledJob[] }) {
+export function MonthView({ jobs: allJobs, agentName = agentLabel }: { jobs: ScheduledJob[]; agentName?: AgentName }) {
   const today = todayKey()
   const agents = [...new Set(allJobs.map((job) => job.agent).filter((agent): agent is string => Boolean(agent)))]
   const [agent, setAgent] = useState('')
@@ -37,7 +38,7 @@ export function MonthView({ jobs: allJobs }: { jobs: ScheduledJob[] }) {
       <h2>{first.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}</h2>
       <button type="button" className="icon-button" onClick={() => move(1)} aria-label="Bulan berikutnya">›</button>
       <button type="button" className="refresh-button" onClick={() => { const now = new Date(); setCursor({ year: now.getFullYear(), month: now.getMonth() }); setSelected(today) }}>Hari ini</button>
-      {agents.length > 1 && <label className="month-filter"><span>Agent</span><select value={agent} onChange={(event) => setAgent(event.target.value)}><option value="">Semua agent ({allJobs.length})</option>{agents.map((item) => <option key={item} value={item}>{agentLabel(item)} ({allJobs.filter((job) => job.agent === item).length})</option>)}</select></label>}
+      {agents.length > 1 && <label className="month-filter"><span>Agent</span><select value={agent} onChange={(event) => setAgent(event.target.value)}><option value="">Semua agent ({allJobs.length})</option>{agents.map((item) => <option key={item} value={item}>{agentName(item)} ({allJobs.filter((job) => job.agent === item).length})</option>)}</select></label>}
       <span className="month-legend"><i className="kind-run"/>jadwal <i className="kind-interval"/>berulang <i className="kind-last-ok"/>terakhir ok <i className="kind-last-failed"/>gagal / terlambat</span>
     </header>
     <div className="month-grid" role="grid">
@@ -48,7 +49,7 @@ export function MonthView({ jobs: allJobs }: { jobs: ScheduledJob[] }) {
         const list = entries.get(key) ?? []
         return <button type="button" role="gridcell" key={key} className={`month-cell${key === today ? ' today' : ''}${key === selected ? ' selected' : ''}${key < today ? ' past' : ''}`} onClick={() => setSelected(key)} aria-label={`${key}: ${list.length} jadwal`} aria-selected={key === selected}>
           <span className="month-day">{day}</span>
-          {list.slice(0, 3).map((entry, entryIndex) => <span key={entryIndex} className={`month-entry kind-${entry.kind}`} title={`${entry.job}${entry.agent ? ` (${agentLabel(entry.agent)})` : ''} · ${KIND_LABEL[entry.kind]} ${entry.label}`}><b>{entry.label}</b> {entry.job}</span>)}
+          {list.slice(0, 3).map((entry, entryIndex) => <span key={entryIndex} className={`month-entry kind-${entry.kind}`} title={`${entry.job}${entry.agent ? ` (${agentName(entry.agent)})` : ''} · ${KIND_LABEL[entry.kind]} ${entry.label}`}><b>{entry.label}</b> {entry.job}</span>)}
           {list.length > 3 && <span className="month-more">+{list.length - 3} lagi</span>}
           {list.length > 0 && <span className="month-dots" aria-hidden="true">{list.slice(0, 4).map((entry, entryIndex) => <i key={entryIndex} className={`kind-${entry.kind}`}/>)}</span>}
         </button>
@@ -56,40 +57,42 @@ export function MonthView({ jobs: allJobs }: { jobs: ScheduledJob[] }) {
     </div>
     <div className="month-day-detail">
       <p className="eyebrow">{new Date(`${selected}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-      {selectedEntries.length === 0 ? <p className="muted">Tidak ada jadwal di hari ini.</p> : <ul>{selectedEntries.map((entry, index) => <li key={index}><span className={`badge kind-${entry.kind}`}>{KIND_LABEL[entry.kind]}</span> <strong>{entry.job}</strong> <span className="muted">{entry.label}</span>{entry.agent && <span className="chip">{agentLabel(entry.agent)}</span>}</li>)}</ul>}
+      {selectedEntries.length === 0 ? <p className="muted">Tidak ada jadwal di hari ini.</p> : <ul>{selectedEntries.map((entry, index) => <li key={index}><span className={`badge kind-${entry.kind}`}>{KIND_LABEL[entry.kind]}</span> <strong>{entry.job}</strong> <span className="muted">{entry.label}</span>{entry.agent && <span className="chip">{agentName(entry.agent)}</span>}</li>)}</ul>}
       <small className="muted">Waktu mengikuti zona waktu server Hermes. Job yang dijeda hanya menampilkan jalan terakhirnya.</small>
     </div>
   </section>
 }
 
-function FailedProfiles({ profiles }: { profiles: string[] }) {
-  return <p className="file-notice" role="status">Cron job milik {profiles.map((profile) => agentLabel(profile)).join(', ')} tidak bisa dibaca, jadi tidak tampil di sini.</p>
+function FailedProfiles({ profiles, agentName }: { profiles: string[]; agentName: AgentName }) {
+  return <p className="file-notice" role="status">Cron job milik {profiles.map((profile) => agentName(profile)).join(', ')} tidak bisa dibaca, jadi tidak tampil di sini.</p>
 }
 
 /** The cron month view with its own data, for the Office overlay. */
 export function CalendarOverlayView() {
   const snapshot = usePolling<CalendarSnapshot>('/api/calendar', 30_000)
+  const agentName = useAgentName()
   const jobs = snapshot.status === 'ready' ? snapshot.data.jobs : undefined
   const failed = snapshot.status === 'ready' ? snapshot.data.failedProfiles : undefined
   if (snapshot.status === 'pending') return <LoadingState message="Membaca cron job…"/>
   return <>
     <Unavailable source={jobs} request={snapshot}/>
-    {failed && <FailedProfiles profiles={failed}/>}
-    {jobs?.availability === 'available' && <MonthView jobs={jobs.data}/>}
+    {failed && <FailedProfiles profiles={failed} agentName={agentName}/>}
+    {jobs?.availability === 'available' && <MonthView jobs={jobs.data} agentName={agentName}/>}
   </>
 }
 
 export function Calendar() {
   const snapshot = usePolling<CalendarSnapshot>('/api/calendar', 30_000)
+  const agentName = useAgentName()
   const data = snapshot.status === 'ready' ? snapshot.data : undefined
   const jobs = data?.jobs
   const sorted = [...(jobs?.data ?? [])].sort((a, b) => (a.nextRun ?? '~').localeCompare(b.nextRun ?? '~'))
   return <><PageTitle eyebrow="HERMES CRON" title="Kalender">Cron job Hermes terjadwal dari setiap agent (Hermes menyimpan cron per profile), termasuk yang dijeda dan selesai. Acara kalender umum tidak ditampilkan.</PageTitle>
     <SourceStatus source={jobs} fetchedAt={data?.fetchedAt} request={snapshot}/><Unavailable source={jobs} request={snapshot}/>
-    {data?.failedProfiles && <FailedProfiles profiles={data.failedProfiles}/>}
-    {jobs?.availability === 'available' && sorted.length > 0 && <MonthView jobs={jobs.data}/>}
+    {data?.failedProfiles && <FailedProfiles profiles={data.failedProfiles} agentName={agentName}/>}
+    {jobs?.availability === 'available' && sorted.length > 0 && <MonthView jobs={jobs.data} agentName={agentName}/>}
     {jobs?.availability === 'available' && (sorted.length === 0 ? <EmptyState title="Belum ada job terjadwal">Hermes tidak melaporkan cron job apa pun. Minta Naya lewat Tanya Naya untuk menjadwalkan pekerjaan rutin.</EmptyState> : <section className="data-list">{sorted.map((job) => <article key={`${job.agent ?? ''}:${job.id ?? `${job.name}-${job.schedule}`}`}>
-      <div><h2>{job.name}{job.agent && <span className="chip job-agent">{agentLabel(job.agent)}</span>}</h2><p><code>{job.schedule}</code>{job.repeat && <> · ulang {job.repeat}</>}</p></div>
+      <div><h2>{job.name}{job.agent && <span className="chip job-agent">{agentName(job.agent)}</span>}</h2><p><code>{job.schedule}</code>{job.repeat && <> · ulang {job.repeat}</>}</p></div>
       <dl>
         {job.status && <div><dt>Status</dt><dd><span className={`badge ${statusTone(job.status)}`}>{jobStatusLabel(job.status)}</span></dd></div>}
         <div><dt>{job.overdue ? 'Terlambat sejak' : 'Jalan berikutnya'}</dt><dd className={job.overdue ? 'text-bad' : ''}>{formatDateTime(job.nextRun)}</dd></div>
