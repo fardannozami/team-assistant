@@ -4,6 +4,7 @@ import { z } from "zod";
 import { EMPLOYEE_LEADS, FEE_GROUPS } from "./fees.js";
 
 export * from "./fees.js";
+export * from "./naya-roster.js";
 
 export const DEFAULT_TIMEZONE = "Asia/Jakarta";
 export const CORE_STANDUP_ELEMENTS = [

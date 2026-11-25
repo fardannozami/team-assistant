@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { apiPost, useMe } from './access.ts'
 import { formatRelative } from './format.ts'
+import { rosterAgent } from '@repo/shared/naya-roster'
+import { agentLabel } from './format.ts'
 import { usePeople } from './people.ts'
 import { loadSnapshot, type RequestState } from './request-state.ts'
 import type { Checklist, ChecklistItem, ChecklistStatus, Person } from './types.ts'
@@ -41,6 +43,8 @@ function ChecklistRow({ item, mayDecide, mayAssign, open, people: list, onAssign
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const pic = list.find((person) => person.id === item.picUserId)
+  // The blueprint names who reviews each agent's work; shown as a hint next to the PIC.
+  const reviewer = rosterAgent(item.agent)?.pic
   const decide = async (status: ChecklistStatus, text?: string) => {
     setBusy(true)
     const ok = await onDecide(status, text)
@@ -59,6 +63,7 @@ function ChecklistRow({ item, mayDecide, mayAssign, open, people: list, onAssign
     </div>
     <div className="checklist-meta">
       {mayAssign && open ? <PicSelect label="PIC" value={item.picUserId} people={list} onChange={onAssign} disabled={busy}/> : <small>PIC: {pic?.name ?? 'belum ada'}</small>}
+      {item.agent && <small>dikerjakan {agentLabel(item.agent)}{reviewer && reviewer !== 'PIC kartu' ? ` · review oleh ${reviewer}` : ''}</small>}
       {item.handedAt && item.status === 'in_progress' && <small>diserahkan {formatRelative(item.handedAt)}</small>}
     </div>
     {item.note && <p className={`small-note${item.status === 'in_progress' ? '' : ' checklist-note'}`}>{item.status === 'in_progress' ? `Catatan versi sebelumnya: ${item.note}` : item.note}</p>}

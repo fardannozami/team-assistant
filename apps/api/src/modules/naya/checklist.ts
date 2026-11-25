@@ -141,7 +141,10 @@ export async function getChecklist(workspaceId: string, board: string | undefine
     .from(nayaChecklistItems)
     .where(and(eq(nayaChecklistItems.workspaceId, workspaceId), eq(nayaChecklistItems.board, key), eq(nayaChecklistItems.taskId, taskId)))
     .orderBy(asc(nayaChecklistItems.createdAt), asc(nayaChecklistItems.sourceTaskId));
-  return { status: task.status, pic: card?.picUserId ?? null, items };
+  // Which agent made each item: the subtask's assignee, or the card's for its own result.
+  const tasks = (await boardSnapshot()).tasks.data.filter((item) => boardOf(item.board) === key);
+  const agentOf = (id: string | null) => (id ? tasks.find((item) => item.id === id)?.assignee : task.assignee) ?? null;
+  return { status: task.status, pic: card?.picUserId ?? null, items: items.map((item) => ({ ...item, agent: agentOf(item.sourceTaskId) })) };
 }
 
 export async function seedChecklist(workspaceId: string, board: string, task: BoardTask) {

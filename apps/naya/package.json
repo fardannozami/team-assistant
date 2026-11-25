@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Naya (naya.digdaya.co): the AI team's 3D office on Hermes, on daily's API. UI adapted from Ruang (MIT, © yugienugraha).",
+  "description": "Naya (naya.digdaya.co): the AI team's 3D office on Hermes, on daily's API. UI adapted from Ruang (MIT, \u00a9 yugienugraha).",
   "scripts": {
     "dev": "vite --port 3001",
     "build": "tsc -p tsconfig.json && vite build",
@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@react-three/fiber": "^9.8.1",
+    "@repo/shared": "*",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-markdown": "10.1.0",

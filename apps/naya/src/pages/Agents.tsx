@@ -1,3 +1,4 @@
+import { NAYA_ROSTER } from '@repo/shared/naya-roster'
 import { agentLabel } from '../format.ts'
 import { officeStateLabel } from '../office-state.ts'
 import type { OfficeSnapshot, RuntimeSnapshot } from '../types.ts'
@@ -6,10 +7,28 @@ import { EmptyState, LoadingState, PageTitle, RuntimeBadge } from '../ui.tsx'
 import { PixelCharacter } from './Office.tsx'
 
 /** Every Hermes profile on this machine is an agent, plus OpenCode when it is installed. */
+/** Naya's roster (blueprint v3): which agent claude-worker routes each part of a card to, and who reviews it. */
+function RosterTable() {
+  return <section className="task-section" aria-label="Roster agent Naya">
+    <p className="eyebrow">ROSTER AGENT NAYA · {NAYA_ROSTER.filter((agent) => agent.available).length} AKTIF DARI {NAYA_ROSTER.length}</p>
+    <p className="muted small-note">Saat memecah instruksi, Naya Core memilih agent untuk tiap bagian. Kontrak agent (input, output) menjadi instruksi kerjanya, dan hasilnya direview oleh peran di kolom PIC.</p>
+    <div className="md-table"><table className="roster-table">
+      <thead><tr><th>Kode</th><th>Agent</th><th>Input → output</th><th>PIC</th><th>Status</th></tr></thead>
+      <tbody>{NAYA_ROSTER.map((agent) => <tr key={agent.code} className={agent.available ? '' : 'roster-off'}>
+        <td className="mono">{agent.label}</td>
+        <td><b>{agent.name}</b><br/><small className="muted">{agent.pillar}</small></td>
+        <td>{agent.input} → {agent.output}</td>
+        <td>{agent.pic}</td>
+        <td>{agent.available ? <span className="pill pill-done">Aktif</span> : <span title={agent.reason}><span className="pill pill-queue">Belum</span><br/><small className="muted">{agent.reason}</small></span>}</td>
+      </tr>)}</tbody>
+    </table></div>
+  </section>
+}
+
 export function Agents({ runtime, pending = false }: { runtime: RuntimeSnapshot | null; pending?: boolean }) {
   const office = usePolling<OfficeSnapshot>('/api/office', 15_000)
   if (pending) return <><PageTitle eyebrow="TIM" title="Agent"/><LoadingState message="Membaca detail runtime…"/></>
-  if (!runtime || runtime.profiles.availability === 'unavailable') return <><PageTitle eyebrow="TIM" title="Agent"/><EmptyState title="Tidak tersedia">Daftar profil Hermes tidak bisa dibaca. Apakah <code>hermes</code> ada di PATH server?</EmptyState></>
+  if (!runtime || runtime.profiles.availability === 'unavailable') return <><PageTitle eyebrow="TIM" title="Agent"/><EmptyState title="Tidak tersedia">Daftar profil Hermes tidak bisa dibaca. Apakah <code>hermes</code> ada di PATH server?</EmptyState><RosterTable/></>
   const states = new Map(office.status === 'ready' ? office.data.stations.map((station) => [station.id, station]) : [])
   const openCode = runtime.openCode.availability === 'available' ? runtime.openCode.data : undefined
   const claudeCode = runtime.claudeCode?.availability === 'available' ? runtime.claudeCode.data : undefined
@@ -34,5 +53,6 @@ export function Agents({ runtime, pending = false }: { runtime: RuntimeSnapshot 
         </div>
       </article>
     })}</section>
+    <RosterTable/>
   </>
 }

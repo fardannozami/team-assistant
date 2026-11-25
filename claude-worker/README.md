@@ -19,6 +19,24 @@ Begitu sebuah kartu masuk review, worker langsung meminta API daily mengirim Wha
 serah terima ke PIC (lihat env di bawah). Tanpa env itu, WhatsApp tetap terkirim lewat
 pengecekan 10 menit di worker daily.
 
+## Roster agent
+
+Setiap bagian kartu dikerjakan oleh satu agent dari roster Naya (blueprint v3), yaitu
+[`packages/shared/src/naya-roster.json`](../packages/shared/src/naya-roster.json). Saat memecah,
+Claude bertindak sebagai Naya Core: ia memilih agent untuk tiap subtugas dan untuk penyusun hasil
+akhir, berdasarkan input dan output di kontraknya. Kode agent menjadi assignee task di Hermes.
+Saat mengerjakan task, kontrak agent itu (peran, input, output, siapa yang mereview, dan
+instruksinya) masuk ke system prompt. Agent bertanda `available: false` (butuh internet, GitHub,
+dan sebagainya) tidak pernah dipilih. Assignee yang tidak dikenal, misalnya profil Hermes lama,
+dikerjakan oleh Generalis.
+
+Di server, salin roster ke sebelah skrip dengan nama `roster.json`. Tanpa file itu, semua task
+dikerjakan Generalis seperti sebelumnya:
+
+```sh
+scp -P <port> packages/shared/src/naya-roster.json root@<host>:/root/team-assistant/claude-worker/roster.json
+```
+
 Claude dijalankan tanpa tool (`--tools ""`): teks tugas hanyalah data, dan tidak ada
 akses kode, shell, maupun internet.
 

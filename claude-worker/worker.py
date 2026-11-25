@@ -8,6 +8,8 @@ Each run (cron, every minute) works the board until nothing is left, under a loc
   1. a task in triage  -> Claude decomposes it (one task, or chained subtasks)
   2. else a ready task -> Claude works it: comment the result, then complete /
      request-review (when the task asks for human review) / block (needs input)
+Each task goes to an agent from Naya's roster (blueprint v3, packages/shared/src/naya-roster.json):
+the splitter picks one per subtask, and the agent's contract becomes the system prompt.
 A card sent to review pings daily's API right away, so its PIC gets the WhatsApp
 handover now instead of at the next 10-minute check.
 
@@ -39,6 +41,38 @@ UPSTREAM_BUDGET = 80_000             # characters of upstream results handed to 
 NOTIFY_URL = os.environ.get("NAYA_NOTIFY_URL", "")        # e.g. http://localhost:4000/naya/notify
 INTERNAL_TOKEN = os.environ.get("INTERNAL_API_TOKEN", "")
 WORKSPACE_ID = os.environ.get("NAYA_WORKSPACE_ID", "")
+
+
+def load_roster() -> dict:
+    """Naya's roster: next to this script on the server (roster.json), or in the repo."""
+    for path in (os.environ.get("NAYA_ROSTER"), HERE / "roster.json",
+                 HERE.parent / "packages" / "shared" / "src" / "naya-roster.json"):
+        if path and Path(path).is_file():
+            return json.loads(Path(path).read_text())
+    # No roster: everything goes to the generalist, as before.
+    return {"fallback": AUTHOR, "agents": [{"code": AUTHOR, "label": "UM", "name": "Generalis", "pillar": "Umum",
+            "input": "", "output": "", "pic": "PIC kartu", "available": True, "prompt": ""}]}
+
+
+ROSTER = load_roster()
+AGENTS = {a["code"]: a for a in ROSTER["agents"]}
+FALLBACK = ROSTER.get("fallback") or AUTHOR
+AVAILABLE = [a for a in ROSTER["agents"] if a.get("available")]
+
+
+def agent_of(code: str | None) -> dict:
+    """The roster agent for a task's assignee; Hermes profiles and unknown names get the generalist."""
+    agent = AGENTS.get(code or "")
+    return agent if agent and agent.get("available") else AGENTS.get(FALLBACK) or AVAILABLE[0]
+
+
+def roster_table() -> str:
+    rows = [f"- {a['code']} ({a['label']} {a['name']}, {a['pillar']}): input {a['input']} -> output {a['output']}"
+            for a in AVAILABLE]
+    off = [f"- {a['label']} {a['name']}: {a.get('reason', 'not available')}"
+           for a in ROSTER["agents"] if not a.get("available")]
+    return "\n".join(rows) + ("\n\nNot available yet (never assign these; if the work needs them, say so in the reason):\n"
+                              + "\n".join(off) if off else "")
 
 
 def log(msg: str) -> None:
@@ -94,21 +128,23 @@ internet and no shell: work only from the task text and the upstream results you
 work truly needs something you do not have (code, logs, access, a decision), say exactly what is
 needed instead of guessing or pretending you did it."""
 
+AGENT_CODES = {"type": "string", "enum": [a["code"] for a in AVAILABLE]}
 DECOMPOSE_SCHEMA = {
     "type": "object",
     "properties": {
         "mode": {"type": "string", "enum": ["single", "split"]},
         "reason": {"type": "string"},
+        "agent": {**AGENT_CODES, "description": "Who does the task itself (single) or assembles the final answer (split)."},
         "subtasks": {
             "type": "array",
             "items": {
                 "type": "object",
-                "properties": {"title": {"type": "string"}, "body": {"type": "string"}},
-                "required": ["title", "body"],
+                "properties": {"title": {"type": "string"}, "body": {"type": "string"}, "agent": AGENT_CODES},
+                "required": ["title", "body", "agent"],
             },
         },
     },
-    "required": ["mode", "reason", "subtasks"],
+    "required": ["mode", "reason", "agent", "subtasks"],
 }
 
 WORK_SCHEMA = {
@@ -130,28 +166,35 @@ def decompose(task: dict) -> None:
     plan = claude(
         BASE_SYSTEM + """
 
-Decide how to run this new task. Prefer "single" unless the work clearly has 2-5 sequential steps
-that each produce something a later step needs. Every subtask must be doable by you alone with no
-tools (analysis, specs, plans, writing, reviews of pasted material). Subtasks run in the order given,
-each seeing the previous results; the original task runs last and assembles the final answer. Keep
-"subtasks" empty for "single".""",
+You are Naya Core: decide how to run this new task and which agent of the roster does each part.
+Prefer "single" unless the work clearly has 2-5 sequential steps that each produce something a later
+step needs. Every subtask must be doable with no tools (analysis, specs, plans, writing, reviews of
+pasted material). Subtasks run in the order given, each seeing the previous results in full; the
+original task runs last and assembles the final answer. Keep "subtasks" empty for "single".
+
+Pick each agent by matching the work to its input and output. Use the generalist only when no
+specialist fits. Roster:
+""" + roster_table(),
         f"<task>\n{show}\n</task>",
         DECOMPOSE_SCHEMA,
     )
     subs = (plan.get("subtasks") or [])[:5] if plan["mode"] == "split" else []
+    root = agent_of(plan.get("agent"))["code"]
     # Hermes's own triage exits (the same ones its decomposer uses): atomic, and they move the task
     # triage -> todo. Split: children chained in order, the root waits on all of them.
-    children = [{"title": s["title"], "body": s["body"], "assignee": AUTHOR,
+    children = [{"title": s["title"], "body": s["body"], "assignee": agent_of(s.get("agent"))["code"],
                  "parents": [i - 1] if i else []} for i, s in enumerate(subs)]
-    payload = json.dumps({"task": tid, "children": children, "author": AUTHOR})
+    payload = json.dumps({"task": tid, "children": children, "author": AUTHOR, "root": root})
     out = hermes_py(TRIAGE_EXIT, payload)
     res = json.loads(out.strip().splitlines()[-1])
     if not res.get("ok"):
         raise RuntimeError(f"triage exit failed for {tid}: {res}")
+    label = lambda code: f"{AGENTS[code]['label']} {AGENTS[code]['name']}"
     if res.get("child_ids"):
-        note = f"Dipecah oleh Claude menjadi {len(res['child_ids'])} subtugas: {', '.join(res['child_ids'])}. {plan['reason']}"
+        parts = ", ".join(f"{cid} → {label(c['assignee'])}" for cid, c in zip(res["child_ids"], children))
+        note = f"Dipecah oleh Naya Core menjadi {len(res['child_ids'])} subtugas: {parts}. Hasil akhir disusun oleh {label(root)}. {plan['reason']}"
     else:
-        note = f"Dikerjakan langsung oleh Claude tanpa dipecah. {plan['reason']}"
+        note = f"Dikerjakan langsung oleh {label(root)} tanpa dipecah. {plan['reason']}"
     hk("comment", "--author", AUTHOR, tid, note)
     log(f"decompose {tid}: {note}")
 
@@ -163,11 +206,11 @@ from hermes_cli.kanban_db_graph import decompose_triage_task
 a = json.loads(sys.stdin.read())
 with kbc.connect_closing() as conn:
     if a["children"]:
-        ids = decompose_triage_task(conn, a["task"], root_assignee=a["author"],
+        ids = decompose_triage_task(conn, a["task"], root_assignee=a["root"],
                                     children=a["children"], author=a["author"])
         print(json.dumps({"ok": bool(ids), "child_ids": ids or []}))
     else:
-        ok = kb.specify_triage_task(conn, a["task"], assignee=a["author"], author=a["author"])
+        ok = kb.specify_triage_task(conn, a["task"], assignee=a["root"], author=a["author"])
         print(json.dumps({"ok": bool(ok), "child_ids": []}))
 """
 
@@ -222,7 +265,8 @@ def upstream_results(tid: str) -> str:
 
 def work(task: dict) -> None:
     tid = task["id"]
-    log(f"work {tid}: {task['title']} (assignee {task.get('assignee')})")
+    agent = agent_of(task.get("assignee"))
+    log(f"work {tid}: {task['title']} (assignee {task.get('assignee')}, agent {agent['code']})")
     hk("claim", "--ttl", str(CLAIM_TTL), tid)
     try:
         ctx = hk("context", tid)
@@ -230,8 +274,11 @@ def work(task: dict) -> None:
         upstream = upstream_results(tid)
         body = (task.get("body") or "").lower()
         wants_review = any(m in body for m in REVIEW_MARKERS)
+        contract = (f"\n\nYour role on this task: {agent['label']} {agent['name']} ({agent['pillar']}). "
+                    f"Expected input: {agent['input']}. Expected output: {agent['output']}. "
+                    f"A {agent['pic']} reviews your work.\n{agent['prompt']}")
         ans = claude(
-            BASE_SYSTEM + """
+            BASE_SYSTEM + contract + """
 
 Do this task now and return the finished deliverable in "result" (Markdown). The full results of the
 tasks this one builds on are in <upstream> blocks: use them, not only the summaries in the context.

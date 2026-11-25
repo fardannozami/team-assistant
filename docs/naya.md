@@ -25,6 +25,12 @@ The Hermes Kanban is the source of truth:
 | Feedback / revisi | Checklist items with *Feedback* (and none *Ditolak*): `reopen-review --reason "…"` listing each item's note. The agent sees it as a comment when it reworks |
 | Ditolak | A checklist item *Ditolak*, or *Tolak seluruh kartu*: `block --kind needs_input "[Ditolak oleh …] …"` |
 
+### The agent roster
+
+`packages/shared/src/naya-roster.json` lists the blueprint's agents: code, input, output, the human role that reviews them, and the instructions each one works by. When `claude-worker` splits a card, it acts as Naya Core and assigns each subtask, and the final assembly, to an agent from this roster. The agent's code becomes the Hermes assignee, and its contract becomes the system prompt.
+
+Agents that need tools the worker does not have yet (web research for 1A/1B/4A/4B, GitHub for 3C/3D) are marked `available: false` and are never picked. The Agent page lists the roster. Labels such as "2B · Transcript-to-PRD & Backlog" appear on the board and in the checklist, together with the reviewer role from the blueprint.
+
 ### The human half: PIC and checklist
 
 Hermes keeps the AI side of a card; daily's Postgres keeps the people (`naya_cards`, `naya_checklist_items`, `naya_learned_rules`, in `apps/api/src/modules/naya/checklist.ts`):

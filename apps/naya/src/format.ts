@@ -1,3 +1,5 @@
+import { rosterAgent } from '@repo/shared/naya-roster'
+
 const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 })
 const whole = new Intl.NumberFormat('en')
 
@@ -62,10 +64,12 @@ export function formatBytes(bytes: number): string {
 /** The coding tools (Claude Code, its Kanban worker, OpenCode) share the office name "Coder". */
 const CODER_IDS = new Set(['claude', 'claude-code', 'opencode'])
 
-/** Display name for an agent: "Coder" for the coding tools, else its office name (e.g. a Hermes display name) or the profile id. */
+/** Display name for an agent: "Coder" for the coding tools, "2B · Transcript-to-PRD & Backlog" for a roster agent, else its office name (e.g. a Hermes display name) or the profile id. */
 export function agentLabel(profile: string | undefined, names?: Record<string, string>): string {
   if (!profile) return 'Hermes'
   if (CODER_IDS.has(profile)) return 'Coder'
+  const agent = rosterAgent(profile)
+  if (agent) return `${agent.label} · ${agent.name}`
   return names?.[profile] ?? profile
 }
 

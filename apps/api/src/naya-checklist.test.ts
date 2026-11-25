@@ -3,7 +3,7 @@
  * handoff and reminder messages.
  */
 import { describe, expect, test } from "bun:test";
-import { nayaChecklistDecisionSchema } from "@repo/shared";
+import { HERMES_PROFILE, NAYA_ROSTER, ROSTER_FALLBACK, nayaChecklistDecisionSchema, rosterAgent } from "@repo/shared";
 import { cardOutcome, handoffNote, inboxEntries, seedItems, STALE_MS } from "./modules/naya/checklist.js";
 import { noticeText, planNotices } from "./modules/naya/notify.js";
 
@@ -127,5 +127,23 @@ describe("whatsapp handoff", () => {
     } finally {
       process.env.NAYA_WEB_URL = previous;
     }
+  });
+});
+
+describe("agent roster", () => {
+  test("every code is a usable Hermes assignee, once", () => {
+    const codes = NAYA_ROSTER.map((agent) => agent.code);
+    expect(new Set(codes).size).toBe(codes.length);
+    for (const code of codes) expect(code).toMatch(HERMES_PROFILE);
+  });
+
+  test("agents the splitter may pick have a contract; the others say why they are off", () => {
+    for (const agent of NAYA_ROSTER) {
+      if (agent.available) expect(agent.prompt.length).toBeGreaterThan(40);
+      else expect(agent.reason).toBeTruthy();
+      expect(agent.pic).toBeTruthy();
+    }
+    expect(rosterAgent(ROSTER_FALLBACK)?.available).toBe(true);
+    expect(rosterAgent("naya-2b")?.label).toBe("2B");
   });
 });

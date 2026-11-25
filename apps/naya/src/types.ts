@@ -132,7 +132,7 @@ export interface MemorySnapshot { agents: AgentMemory[]; fetchedAt: string }
 
 /* The human half of a card (blueprint v3): PIC, checklist and Tugas Saya, kept by daily's API. */
 export type ChecklistStatus = 'in_progress' | 'done' | 'feedback' | 'rejected'
-export interface ChecklistItem { id: string; title: string; sourceTaskId: string | null; picUserId: string | null; status: ChecklistStatus; note: string | null; version: number; decidedAt: string | null; handedAt: string | null; updatedAt: string }
+export interface ChecklistItem { id: string; title: string; agent: string | null; sourceTaskId: string | null; picUserId: string | null; status: ChecklistStatus; note: string | null; version: number; decidedAt: string | null; handedAt: string | null; updatedAt: string }
 export interface Checklist { status: string; pic: string | null; items: ChecklistItem[] }
 export interface Person { id: string; name: string; role: string | null }
 export interface InboxEntry { id: string; board: string; title: string; assignee: string | null; pending: number; total: number; waitingSince: string | null; stale: boolean }
