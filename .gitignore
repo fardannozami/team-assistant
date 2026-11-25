@@ -40,3 +40,9 @@ yarn-error.log*
 # Runtime data (WhatsApp auth state, etc.)
 data/
 *.sqlite
+
+# claude-worker runtime files (server only)
+claude-worker/work/
+claude-worker/.lock
+claude-worker/state.json
+claude-worker/worker.log

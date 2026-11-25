@@ -97,9 +97,11 @@ done
 for p in "${WORKERS[@]}"; do
   set_cfg "$p" delegation.orchestrator_enabled false
 done
-# Dispatcher Kanban berjalan di gateway; pengaturan global dibaca dari profile default.
-set_cfg default kanban.dispatch_in_gateway true
-set_cfg default kanban.auto_decompose true
+# Pengaturan Kanban global dibaca dari profile default. Dispatch dan auto-decompose
+# Hermes dimatikan: claude-worker/ (cron di host) yang memecah dan mengerjakan tugas.
+# Jangan nyalakan keduanya bersamaan, nanti satu tugas bisa dikerjakan dua kali.
+set_cfg default kanban.dispatch_in_gateway false
+set_cfg default kanban.auto_decompose false
 set_cfg default kanban.orchestrator_profile default
 set_cfg default kanban.default_assignee default
 

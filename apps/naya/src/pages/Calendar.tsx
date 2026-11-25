@@ -63,7 +63,7 @@ export function MonthView({ jobs: allJobs }: { jobs: ScheduledJob[] }) {
 }
 
 function FailedProfiles({ profiles }: { profiles: string[] }) {
-  return <p className="file-notice" role="status">Cron job milik {profiles.map(agentLabel).join(', ')} tidak bisa dibaca, jadi tidak tampil di sini.</p>
+  return <p className="file-notice" role="status">Cron job milik {profiles.map((profile) => agentLabel(profile)).join(', ')} tidak bisa dibaca, jadi tidak tampil di sini.</p>
 }
 
 /** The cron month view with its own data, for the Office overlay. */

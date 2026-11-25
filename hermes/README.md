@@ -56,7 +56,9 @@ Skrip akan:
 5. Menyetel `model.provider: gemini`, `model.default: gemini-3.5-flash-lite`,
    serta aturan delegasi: `default`/`ceo` sebagai orkestrator, `pm`
    sebagai leaf worker (`orchestrator_enabled: false`, `max_spawn_depth: 1`).
-6. Menyetel Kanban global di profil `default`: `auto_decompose: true`,
+6. Menyetel Kanban global di profil `default`: `dispatch_in_gateway: false`,
+   `auto_decompose: false` (tugas dipecah dan dikerjakan oleh
+   [`claude-worker/`](../claude-worker/README.md), bukan Hermes),
    `orchestrator_profile: default`, `default_assignee: default`,
    `review_dispatch: false` (review tetap dilakukan manusia di Naya).
 7. Mengaktifkan toolset `kanban` hanya untuk `default` dan `ceo`.
@@ -94,17 +96,16 @@ docker compose exec hermes hermes tools list
 
 Contoh alur:
 
-1. Kirim permintaan ke Asisten Umum (`default`).
-2. Asisten Umum membuat card Kanban di `triage` dan memecahnya.
-3. Decomposer membaca deskripsi profil lalu menugaskan ke `pm` atau mengerjakannya
-   di `default`.
-4. CEO dapat dipanggil untuk keputusan prioritas/strategi dan ikut mendelegasikan.
+1. Pengguna membuat tugas lewat "Instruksi ke Naya"; tugas masuk ke `triage`.
+2. [`claude-worker`](../claude-worker/README.md) (cron tiap 10 menit) memutuskan
+   tugas dikerjakan langsung atau dipecah menjadi subtugas berurutan.
+3. Claude mengerjakan tugas `ready` satu per satu, menulis hasilnya sebagai komentar,
+   lalu menandai selesai, mengirim ke review, atau menahan jika butuh masukan.
+4. Manusia melakukan review di dashboard Naya (`review_dispatch: false`).
 
 Profil `designer` dan `developer` sempat dibuat lalu dihapus agar beban CPU
 container `hermes` tetap rendah (setiap profil menambah gateway dan memperlambat
 `hermes profile list`).
-5. Worker menyelesaikan tugas lewat tool `kanban_*`; manusia melakukan review
-   di dashboard Naya (`review_dispatch: false`).
 
 ## Catatan
 

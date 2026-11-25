@@ -59,9 +59,14 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
-/** Display name for an agent: its Hermes profile name as-is. */
-export function agentLabel(profile: string | undefined): string {
-  return profile ?? 'Hermes'
+/** The coding tools (Claude Code, its Kanban worker, OpenCode) share the office name "Coder". */
+const CODER_IDS = new Set(['claude', 'claude-code', 'opencode'])
+
+/** Display name for an agent: "Coder" for the coding tools, else its office name (e.g. a Hermes display name) or the profile id. */
+export function agentLabel(profile: string | undefined, names?: Record<string, string>): string {
+  if (!profile) return 'Hermes'
+  if (CODER_IDS.has(profile)) return 'Coder'
+  return names?.[profile] ?? profile
 }
 
 /** Hermes task statuses as the Task Board names them (the status values stay as Hermes sends them). */

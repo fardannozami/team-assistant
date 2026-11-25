@@ -4,7 +4,7 @@ import { apiPost, useMe } from '../access.ts'
 import { agentLabel, formatDateTime, formatRelative } from '../format.ts'
 import { usePolling } from '../polling.ts'
 import { loadSnapshot, type RequestState } from '../request-state.ts'
-import type { Task, TaskBoardSnapshot, TaskDetailSnapshot } from '../types.ts'
+import type { OfficeSnapshot, Task, TaskBoardSnapshot, TaskDetailSnapshot } from '../types.ts'
 import { PILLS, pillOf, STAGES, stageOf, type Pill } from '../pipeline.ts'
 import { Dialog, EmptyState, PageTitle, SearchInput, SourceStatus, Unavailable } from '../ui.tsx'
 
@@ -16,6 +16,15 @@ const STATUS_LABEL: Record<string, string> = {
   blocked: 'Ditolak / tertahan', review: 'Menunggu review', done: 'Selesai', archived: 'Diarsipkan',
 }
 const statusLabel = (status: string) => STATUS_LABEL[status] ?? status
+
+type AgentName = (id: string | undefined) => string
+
+/** Agents by their office names (Hermes display names such as "Asisten Umum", "Coder"), as the office shows them. */
+function useAgentName(): AgentName {
+  const office = usePolling<OfficeSnapshot>('/api/office', 60_000)
+  const names = office.status === 'ready' ? Object.fromEntries(office.data.stations.map((station) => [station.id, station.name])) : {}
+  return (id) => agentLabel(id, names)
+}
 
 const FILTERS: { id: string; label: string; statuses?: string[] }[] = [
   { id: 'all', label: 'Semua' },
@@ -211,7 +220,7 @@ function TaskStory({ createdAt, createdBy, startedAt, completedAt }: { createdAt
   return parts.length ? <p className="task-story">{parts.flatMap((part, index) => index ? [' · ', part] : [part])}</p> : null
 }
 
-export function TaskDetailDialog({ task, onClose, onOpenTask, onChanged, titleOf }: { task: Task; onClose: () => void; onOpenTask?: (id: string) => void; onChanged?: () => void; titleOf?: (id: string) => string | undefined }) {
+export function TaskDetailDialog({ task, onClose, onOpenTask, onChanged, titleOf, agentName = agentLabel }: { task: Task; onClose: () => void; onOpenTask?: (id: string) => void; onChanged?: () => void; titleOf?: (id: string) => string | undefined; agentName?: AgentName }) {
   const [state, setState] = useState<RequestState<TaskDetailSnapshot>>({ status: 'pending' })
   const [version, setVersion] = useState(0)
   useEffect(() => {
@@ -231,7 +240,7 @@ export function TaskDetailDialog({ task, onClose, onOpenTask, onChanged, titleOf
   return <Dialog labelledBy="task-detail-title" onClose={onClose} closeLabel={`Tutup detail ${task.title}`} className="task-detail">
     <p className="eyebrow">TUGAS{task.board ? ` · ${task.board.toUpperCase()}` : ''}</p>
     <h2 id="task-detail-title">{detail?.title ?? task.title}</h2>
-    <div className="task-meta"><span className={`pill pill-${pillOf(status)}`}>{status === 'blocked' && detail ? (blocked === 'rejected' ? '✕ Ditolak' : '✕ Tertahan') : PILLS[pillOf(status)].label}</span><span className={`chip ${assignee ? '' : 'chip-muted'}`}>{assignee ? `PIC: ${agentLabel(assignee)}` : 'Belum ditugaskan'}</span>{priority ? <span className="chip chip-priority">Prioritas {priority}</span> : null}</div>
+    <div className="task-meta"><span className={`pill pill-${pillOf(status)}`}>{status === 'blocked' && detail ? (blocked === 'rejected' ? '✕ Ditolak' : '✕ Tertahan') : PILLS[pillOf(status)].label}</span><span className={`chip ${assignee ? '' : 'chip-muted'}`}>{assignee ? `PIC: ${agentName(assignee)}` : 'Belum ditugaskan'}</span>{priority ? <span className="chip chip-priority">Prioritas {priority}</span> : null}</div>
     {detail && <TaskStory {...detail}/>}
     <StageSteps status={status}/>
     {state.status === 'pending' && task.id && <p className="muted">Memuat detail tugas…</p>}
@@ -243,14 +252,14 @@ export function TaskDetailDialog({ task, onClose, onOpenTask, onChanged, titleOf
       <TaskAttachments task={task} version={version}/>
       {related('BAGIAN DARI', detail.parents)}
       {related('TUGAS TURUNAN', detail.children)}
-      {detail.comments.length > 0 && <section className="task-section"><p className="eyebrow">DISKUSI</p><ul className="task-timeline">{detail.comments.map((comment, index) => <li key={index}><b>{agentLabel(comment.author)}</b><small title={formatDateTime(comment.createdAt)}>{formatRelative(comment.createdAt)}</small><p>{commentText(comment.body)}</p></li>)}</ul></section>}
+      {detail.comments.length > 0 && <section className="task-section"><p className="eyebrow">DISKUSI</p><ul className="task-timeline">{detail.comments.map((comment, index) => <li key={index}><b>{agentName(comment.author)}</b><small title={formatDateTime(comment.createdAt)}>{formatRelative(comment.createdAt)}</small><p>{commentText(comment.body)}</p></li>)}</ul></section>}
     </>}
     <ReviewPanel task={task} status={status} blocked={blocked} onDone={() => { setVersion((value) => value + 1); onChanged?.() }}/>
   </Dialog>
 }
 
 /** The four flow columns of cards (Masuk → Dikerjakan AI → Review → Selesai). */
-export function PipelineColumns({ tasks, multiBoard, onOpen }: { tasks: Task[]; multiBoard: boolean; onOpen: (task: Task, trigger: HTMLButtonElement) => void }) {
+export function PipelineColumns({ tasks, multiBoard, onOpen, agentName = agentLabel }: { tasks: Task[]; multiBoard: boolean; onOpen: (task: Task, trigger: HTMLButtonElement) => void; agentName?: AgentName }) {
   return <div className="pipeline-scroll"><section className="pipeline" aria-label="Alur tugas">{STAGES.map((stage, index) => {
     const items = tasks.filter((task) => stageOf(task.status) === index).sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
     return <section key={stage.id} className="pipe-col" aria-label={`Kolom ${index + 1} ${stage.label}`}>
@@ -261,7 +270,7 @@ export function PipelineColumns({ tasks, multiBoard, onOpen }: { tasks: Task[]; 
           <span className="pipe-card-head"><span className={`pill pill-${pill}`}>{PILLS[pill].label}</span>{task.id && <span className="mono">#{task.id}</span>}</span>
           <strong>{task.title}</strong>
           <span className={`pipe-bar pill-${pill}`}><span style={{ width: `${((stageOf(task.status) + 1) / STAGES.length) * 100}%` }}/></span>
-          <span className="pipe-card-foot"><span>PIC: {task.assignee ?? 'belum ditugaskan'}</span><span className="mono">{multiBoard && task.board ? `${task.board} · ` : ''}{task.priority ? `P${task.priority}` : ''}</span></span>
+          <span className="pipe-card-foot"><span>PIC: {task.assignee ? agentName(task.assignee) : 'belum ditugaskan'}</span><span className="mono">{multiBoard && task.board ? `${task.board} · ` : ''}{task.priority ? `P${task.priority}` : ''}</span></span>
         </button>
       })}</div>
     </section>
@@ -277,6 +286,7 @@ export function TaskBoard() {
   const [filter, setFilter] = useState('all')
   const [instructing, setInstructing] = useState(false)
   const me = useMe()
+  const agentName = useAgentName()
   const trigger = useRef<HTMLButtonElement | null>(null)
   const closeTask = () => { setOpenTask(undefined); trigger.current?.focus() }
   const data = snapshot.status === 'ready' ? snapshot.data : undefined
@@ -287,7 +297,7 @@ export function TaskBoard() {
   const multiBoard = boards.length > 1
   const needle = query.trim().toLowerCase()
   const statuses = FILTERS.find((item) => item.id === filter)?.statuses
-  const visible = all.filter((task) => (!statuses || statuses.includes(task.status)) && (assignee === 'all' || (task.assignee ?? UNASSIGNED) === assignee) && (board === 'all' || task.board === board) && (!needle || `${task.title} ${task.id ?? ''} ${task.assignee ?? ''}`.toLowerCase().includes(needle)))
+  const visible = all.filter((task) => (!statuses || statuses.includes(task.status)) && (assignee === 'all' || (task.assignee ?? UNASSIGNED) === assignee) && (board === 'all' || task.board === board) && (!needle || `${task.title} ${task.id ?? ''} ${task.assignee ?? ''} ${task.assignee ? agentName(task.assignee) : ''}`.toLowerCase().includes(needle)))
   return <><PageTitle eyebrow="HERMES KANBAN" title="Papan tugas">Semua tugas tim AI dari Kanban Hermes, diperbarui tiap 10 detik. Buka kartu untuk menyetujui, meminta revisi, atau menolak hasil kerja agent.</PageTitle>
     {me?.can.instruct && <div className="toolbar"><button type="button" className="primary-button" onClick={() => setInstructing(true)}>＋ Instruksi ke Naya</button></div>}
     {instructing && <InstructionDialog boards={boards} onClose={() => setInstructing(false)} onCreated={snapshot.refresh}/>}
@@ -295,10 +305,10 @@ export function TaskBoard() {
     {data?.failedBoards && <p className="file-notice">Board {data.failedBoards.join(', ')} tidak bisa dibaca; menampilkan board lain.</p>}
     {tasks?.availability === 'available' && (all.length === 0 ? <EmptyState title="Belum ada tugas">{multiBoard ? `Tidak ada tugas terbuka di ${boards.length} board Kanban.` : 'Kanban Hermes masih kosong.'} {me?.can.instruct ? 'Mulai dengan tombol "Instruksi ke Naya".' : 'Tugas baru dibuat oleh Owner, Admin, atau PM.'}</EmptyState> : <>
       <div className="pipe-filters" role="group" aria-label="Saring status">{FILTERS.map((item) => <button type="button" key={item.id} className={`pipe-filter${item.statuses ? ` pill-${item.id}` : ''}`} aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>{item.label} <b className="mono">{item.statuses ? all.filter((task) => item.statuses!.includes(task.status)).length : all.length}</b></button>)}</div>
-      <div className="toolbar"><SearchInput value={query} onChange={setQuery} label="Cari tugas"/><label className="select-label">PIC <select value={assignee} onChange={(event) => setAssignee(event.target.value)}><option value="all">Semua ({all.length})</option>{assignees.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>{multiBoard && <label className="select-label">Board <select value={board} onChange={(event) => setBoard(event.target.value)}><option value="all">Semua board</option>{boards.map((item) => <option key={item.slug} value={item.slug}>{item.name}{item.current ? ' (aktif)' : ''}</option>)}</select></label>}<span className="toolbar-count">{visible.length} tampil</span></div>
-      <PipelineColumns tasks={visible} multiBoard={multiBoard} onOpen={(task, trigger_) => { trigger.current = trigger_; setOpenTask(task) }}/>
+      <div className="toolbar"><SearchInput value={query} onChange={setQuery} label="Cari tugas"/><label className="select-label">PIC <select value={assignee} onChange={(event) => setAssignee(event.target.value)}><option value="all">Semua ({all.length})</option>{assignees.map((name) => <option key={name} value={name}>{name === UNASSIGNED ? name : agentName(name)}</option>)}</select></label>{multiBoard && <label className="select-label">Board <select value={board} onChange={(event) => setBoard(event.target.value)}><option value="all">Semua board</option>{boards.map((item) => <option key={item.slug} value={item.slug}>{item.name}{item.current ? ' (aktif)' : ''}</option>)}</select></label>}<span className="toolbar-count">{visible.length} tampil</span></div>
+      <PipelineColumns tasks={visible} multiBoard={multiBoard} agentName={agentName} onOpen={(task, trigger_) => { trigger.current = trigger_; setOpenTask(task) }}/>
       <section className="pipe-legend" aria-label="Legenda"><span className="eyebrow">LEGENDA</span>{(Object.keys(PILLS) as Pill[]).map((pill) => <span key={pill}><span className={`pill pill-${pill}`}>{PILLS[pill].label}</span> {PILLS[pill].legend}</span>)}</section>
     </>)}
-    {openTask && <TaskDetailDialog key={`${openTask.board ?? ''}-${openTask.id ?? openTask.title}`} task={openTask} onClose={closeTask} onChanged={snapshot.refresh} titleOf={(id) => all.find((task) => task.id === id && task.board === openTask.board)?.title} onOpenTask={(id) => setOpenTask(all.find((task) => task.id === id && task.board === openTask.board) ?? { id, title: id, status: 'unknown', ...(openTask.board ? { board: openTask.board } : {}) })}/>}
+    {openTask && <TaskDetailDialog key={`${openTask.board ?? ''}-${openTask.id ?? openTask.title}`} task={openTask} onClose={closeTask} onChanged={snapshot.refresh} agentName={agentName} titleOf={(id) => all.find((task) => task.id === id && task.board === openTask.board)?.title} onOpenTask={(id) => setOpenTask(all.find((task) => task.id === id && task.board === openTask.board) ?? { id, title: id, status: 'unknown', ...(openTask.board ? { board: openTask.board } : {}) })}/>}
   </>
 }

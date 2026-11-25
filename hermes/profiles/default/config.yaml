@@ -9,10 +9,11 @@ delegation:
   orchestrator_enabled: true
   max_spawn_depth: 1
 
-# Pengaturan Kanban global dibaca oleh dispatcher di gateway (profil default).
+# Pengaturan Kanban global (profil default). Hermes hanya menyimpan papan;
+# claude-worker/ yang memecah dan mengerjakan tugas, jadi dispatch-nya dimatikan.
 kanban:
-  dispatch_in_gateway: true
-  auto_decompose: true
+  dispatch_in_gateway: false
+  auto_decompose: false
   orchestrator_profile: default
   default_assignee: default
   review_dispatch: false
