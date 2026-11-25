@@ -91,6 +91,10 @@ services:
   # (set up once with `docker compose exec hermes hermes setup`; see docs/naya.md).
   hermes:
     image: ${IMAGE_PREFIX}-hermes:${IMAGE_TAG:-latest}
+    # Kanban claims carry the host name, and Hermes only re-queues a task whose worker died when
+    # the claim is from its own host. Docker gives every new container a new random host name, so
+    # without a fixed one each deploy left the tasks that were running stuck in "running" forever.
+    hostname: hermes
     restart: unless-stopped
     command: ["gateway", "run"]
     environment:
