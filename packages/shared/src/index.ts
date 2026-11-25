@@ -408,7 +408,6 @@ export const nayaInstructionSchema = z.object({
   body: z.string().max(4000).optional(),
   board: z.string().max(64).optional(),
   assignee: z.string().regex(HERMES_PROFILE).optional(),
-  decompose: z.boolean().default(true),
   /** The person in charge once the AI hands the card over; defaults to whoever gave the instruction. */
   pic: z.string().uuid().optional(),
 });

@@ -148,8 +148,9 @@ export async function seedChecklist(workspaceId: string, board: string, task: Bo
   const taskId = task.id!;
   const existing = await db.select({ id: nayaChecklistItems.id }).from(nayaChecklistItems).where(and(eq(nayaChecklistItems.workspaceId, workspaceId), eq(nayaChecklistItems.board, board), eq(nayaChecklistItems.taskId, taskId))).limit(1);
   if (existing.length) return;
-  const detail = (await bridge.task(taskId, board)) as { task?: { availability: string; data: { children?: string[] } | null } };
-  const childIds = detail.task?.availability === "available" ? (detail.task.data?.children ?? []) : [];
+  // Hermes links a split card to its subtasks as its parents: the card waits on them.
+  const detail = (await bridge.task(taskId, board)) as { task?: { availability: string; data: { parents?: string[] } | null } };
+  const childIds = detail.task?.availability === "available" ? (detail.task.data?.parents ?? []) : [];
   const snapshot = await boardSnapshot();
   const children = childIds.map((id) => ({ id, title: snapshot.tasks.data.find((item) => item.id === id && boardOf(item.board) === board)?.title }));
   await db.transaction(async (tx) => {

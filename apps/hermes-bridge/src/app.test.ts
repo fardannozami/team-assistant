@@ -35,7 +35,7 @@ describe('hermes-bridge', () => {
 
   it('creates instructions and reviews tasks for the given person', async () => {
     const { post, calls } = bridge()
-    const created = await post('/tasks', { title: 'Carikan 20 prospek FMCG', decompose: false, actor })
+    const created = await post('/tasks', { title: 'Carikan 20 prospek FMCG', actor })
     expect(await created.json()).toEqual({ id: 't_new' })
     expect((await post('/tasks/t_review/approve', { note: 'Oke', actor })).status).toBe(200)
     const changed = await post('/tasks/t_design/changes', { note: 'Kontras kurang', board: 'design', actor })

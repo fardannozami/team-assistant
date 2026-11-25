@@ -21,16 +21,15 @@ describe('instructions', () => {
     expect(calls[0]!.options).toMatchObject({ timeoutMs: WRITE_TIMEOUT_MS, logAs: 'hermes kanban --board sales create' })
   })
 
-  it('assigns straight to an agent, or splits a triage task in the background', async () => {
+  it('assigns straight to an agent, or parks in triage for claude-worker (never Hermes decompose)', async () => {
     const direct = recorder([JSON.stringify({ id: 't_1' })])
     await createInstruction({ title: 'Audit website', assignee: 'sales' }, actor, direct.run)
     expect(direct.calls[0]!.args).toEqual(['kanban', 'create', 'Audit website', '--body', REVIEW_NOTE, '--assignee', 'sales', '--created-by', 'Fardan (PM)', '--json'])
 
     const split = recorder([JSON.stringify({ id: 't_2' })])
-    await createInstruction({ title: 'Kampanye FMCG', decompose: true }, actor, split.run)
+    await createInstruction({ title: 'Kampanye FMCG', decompose: true } as Parameters<typeof createInstruction>[0], actor, split.run)
     expect(split.calls.map((call) => call.args)).toEqual([
       ['kanban', 'create', 'Kampanye FMCG', '--body', REVIEW_NOTE, '--triage', '--created-by', 'Fardan (PM)', '--json'],
-      ['kanban', 'decompose', 't_2', '--author', 'Fardan (PM)'],
     ])
   })
 

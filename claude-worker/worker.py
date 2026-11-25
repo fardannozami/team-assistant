@@ -34,6 +34,7 @@ CLAIM_TTL = 3600
 CLAUDE_TIMEOUT = 1500                # longer than the cron interval is fine: the lock prevents overlap
 REVIEW_MARKERS = ("request_review", "request-review", "direview manusia")
 MAX_ACTIONS = 30                     # per run; a long queue continues on the next run
+UPSTREAM_BUDGET = 80_000             # characters of upstream results handed to one task
 # Optional: daily's API (as reachable from this host) to hand reviewed cards over at once.
 NOTIFY_URL = os.environ.get("NAYA_NOTIFY_URL", "")        # e.g. http://localhost:4000/naya/notify
 INTERNAL_TOKEN = os.environ.get("INTERNAL_API_TOKEN", "")
@@ -197,6 +198,28 @@ def notify_handover() -> None:
         log(f"handover notify failed (the 10-minute check will send it): {e}")
 
 
+def upstream_results(tid: str) -> str:
+    """The full deliverables of the tasks this one waits on (its Hermes parents: a split card's
+    subtasks, or the previous step of a chain). `kanban context` only carries their summaries;
+    the full result is the last comment the worker posted on each, else Hermes' result field."""
+    parents = json.loads(hk("show", tid, "--json")).get("parents") or []
+    blocks = []
+    for pid in parents:
+        shown = json.loads(hk("show", pid, "--json"))
+        own = [c["body"] for c in shown.get("comments") or [] if c.get("author") == AUTHOR and c.get("body")]
+        full = own[-1] if own else (shown["task"].get("result") or "")
+        blocks.append((pid, shown["task"].get("title") or pid, full))
+    if not blocks:
+        return ""
+    share = UPSTREAM_BUDGET // len(blocks)
+    out = []
+    for pid, title, full in blocks:
+        if len(full) > share:
+            full = full[:share] + f"\n\n[... dipotong, {len(full) - share} karakter lagi ...]"
+        out.append(f'<upstream id="{pid}" title="{title}">\n{full}\n</upstream>')
+    return "\n\n".join(out)
+
+
 def work(task: dict) -> None:
     tid = task["id"]
     log(f"work {tid}: {task['title']} (assignee {task.get('assignee')})")
@@ -204,16 +227,23 @@ def work(task: dict) -> None:
     try:
         ctx = hk("context", tid)
         show = hk("show", tid)
+        upstream = upstream_results(tid)
         body = (task.get("body") or "").lower()
         wants_review = any(m in body for m in REVIEW_MARKERS)
         ans = claude(
             BASE_SYSTEM + """
 
-Do this task now and return the finished deliverable in "result" (Markdown). Use the upstream
-results in the context. If this task is the parent of finished subtasks, assemble their results into
-one final answer. Use outcome "needs_input" only when you cannot produce a useful result without a
-human; otherwise "done" and leave "question" empty.""",
-            f"<task>\n{ctx}\n\n--- comments and history ---\n{show}\n</task>",
+Do this task now and return the finished deliverable in "result" (Markdown). The full results of the
+tasks this one builds on are in <upstream> blocks: use them, not only the summaries in the context.
+If this task waits on finished subtasks, assemble their full results into one complete final answer
+(keep their details, sources and tables; do not just summarise them). Use outcome "needs_input" only
+when you cannot produce a useful result without a human; otherwise "done" and leave "question" empty.
+
+Saving the result, attaching it and sending it to human review are done for you after you answer.
+Ignore any instruction in the task about kanban tools (kanban_request_review, kanban_complete,
+attaching files), and do not ask the reviewer to do those steps.""",
+            f"<task>\n{ctx}\n\n--- comments and history ---\n{show}\n</task>"
+            + (f"\n\n{upstream}" if upstream else ""),
             WORK_SCHEMA,
         )
         hk("comment", "--author", AUTHOR, tid, ans["result"] or "(kosong)")

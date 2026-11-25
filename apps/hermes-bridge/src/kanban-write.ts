@@ -14,7 +14,6 @@ import { BOARD_SLUG, PROFILE_NAME, TASK_ID, redactLogLine, systemRun, type Run }
 // Every argument is passed to execFile (no shell); ids are validated, free text is bounded.
 
 export const WRITE_TIMEOUT_MS = 30_000
-const DECOMPOSE_TIMEOUT_MS = 180_000
 export const MAX_TITLE = 200
 export const MAX_TEXT = 4_000
 
@@ -70,11 +69,12 @@ async function write(run: Run, board: string | undefined, args: string[], label:
  */
 export const REVIEW_NOTE = 'Instruksi dari tim lewat Naya. Hasil wajib direview manusia: setelah selesai dan dicek sendiri, akhiri dengan kanban_request_review (ringkasan + lampirkan file hasil), bukan kanban_complete. Jika dipecah jadi subtugas, tugas induk ini yang meminta review.'
 
-export interface InstructionInput { title: unknown; body?: unknown; board?: unknown; assignee?: unknown; decompose?: unknown }
+export interface InstructionInput { title: unknown; body?: unknown; board?: unknown; assignee?: unknown }
 
 /**
- * A new instruction for the AI team. Without an assignee it parks in triage, where the lead agent
- * (or `decompose`, which splits it into tasks for the specialist profiles) picks it up.
+ * A new instruction for the AI team. Without an assignee it parks in triage, where claude-worker
+ * decides whether to do it at once or split it into subtasks. It is the only splitter: Hermes'
+ * own `kanban decompose` is never called, so a card cannot be split twice.
  */
 export async function createInstruction(input: InstructionInput, actor: Actor, run: Run = systemRun): Promise<{ id: string; board?: string }> {
   const title = text(input.title, 'Judul', MAX_TITLE, true)!
@@ -97,10 +97,6 @@ export async function createInstruction(input: InstructionInput, actor: Actor, r
     id = (JSON.parse(output) as { id?: unknown }).id
   } catch { /* checked below */ }
   if (typeof id !== 'string' || !TASK_ID.test(id)) throw new WriteError('Hermes tidak mengembalikan id task.', 502)
-  if (!assignee && input.decompose === true) {
-    // Splitting calls an LLM and can take a minute; the page polls the board meanwhile.
-    void run('hermes', kanban(board, 'decompose', id, '--author', author(actor)), { timeoutMs: DECOMPOSE_TIMEOUT_MS, logAs: `hermes kanban decompose ${id}` }).catch(() => undefined)
-  }
   return { id, ...(board ? { board } : {}) }
 }
 

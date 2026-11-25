@@ -108,7 +108,6 @@ function InstructionDialog({ boards, onClose, onCreated }: { boards: { slug: str
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [board, setBoard] = useState(boards.find((item) => item.current)?.slug ?? '')
-  const [decompose, setDecompose] = useState(true)
   const me = useMe()
   const people = usePeople()
   const [pic, setPic] = useState<string | null>(me?.user.id ?? null)
@@ -118,7 +117,7 @@ function InstructionDialog({ boards, onClose, onCreated }: { boards: { slug: str
     event.preventDefault()
     if (!title.trim()) { setError('Judul wajib diisi.'); return }
     setBusy(true)
-    const result = await apiPost<{ id: string }>('/api/tasks', { title, body, decompose, ...(pic ? { pic } : {}), ...(board ? { board } : {}) })
+    const result = await apiPost<{ id: string }>('/api/tasks', { title, body, ...(pic ? { pic } : {}), ...(board ? { board } : {}) })
     setBusy(false)
     if (!result.ok) { setError(result.message); return }
     onCreated()
@@ -134,10 +133,9 @@ function InstructionDialog({ boards, onClose, onCreated }: { boards: { slug: str
       <textarea id="instruction-body" value={body} onChange={(event) => setBody(event.target.value)} maxLength={4000} placeholder="Target, kriteria, format hasil, tenggat…"/>
       {boards.length > 1 && <label className="select-label">Board <select value={board} onChange={(event) => setBoard(event.target.value)}>{boards.map((item) => <option key={item.slug} value={item.slug}>{item.name}</option>)}</select></label>}
       <PicSelect label="PIC (yang memutuskan hasilnya)" value={pic} people={people} onChange={setPic}/>
-      <label className="check-label"><input type="checkbox" checked={decompose} onChange={(event) => setDecompose(event.target.checked)}/> Pecah otomatis menjadi tugas untuk agent spesialis</label>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="review-actions"><button type="submit" className="primary-button" disabled={busy}>{busy ? 'Mengirim…' : 'Kirim ke Naya'}</button><button type="button" className="secondary-button" onClick={onClose}>Batal</button></div>
-      <p className="small-note">Tugas masuk ke kolom Triase. Setelah AI selesai, PIC menerima WhatsApp dan memutuskan tiap item checklist di Tugas Saya.</p>
+      <p className="small-note">Tugas masuk ke kolom Triase; AI memutuskan sendiri apakah dikerjakan langsung atau dipecah menjadi subtugas. Setelah AI selesai, PIC menerima WhatsApp dan memutuskan tiap item checklist di Tugas Saya.</p>
     </form>
   </Dialog>
 }
@@ -248,8 +246,9 @@ export function TaskDetailDialog({ task, onClose, onOpenTask, onChanged, titleOf
       <section className="task-section"><p className="eyebrow">INSTRUKSI</p>{detail.body ? <Markdown className="task-prose" text={detail.body}/> : <p className="muted">Tidak ada instruksi tambahan selain judul.</p>}</section>
       {detail.result && <section className="task-section"><p className="eyebrow">HASIL KERJA</p><Markdown className="task-prose" text={detail.result}/></section>}
       <TaskAttachments task={task} version={version}/>
-      {related('BAGIAN DARI', detail.parents)}
-      {related('TUGAS TURUNAN', detail.children)}
+      {/* Hermes parents are what this card waits on (a split card's subtasks, a chain's previous step). */}
+      {related('MEMAKAI HASIL DARI', detail.parents)}
+      {related('HASILNYA DIPAKAI OLEH', detail.children)}
       {task.id && <ChecklistPanel taskId={task.id} board={task.board} version={version} onDone={() => { setVersion((value) => value + 1); onChanged?.() }}/>}
       {detail.comments.length > 0 && <section className="task-section"><p className="eyebrow">DISKUSI</p><ul className="task-timeline">{detail.comments.map((comment, index) => <li key={index}><b>{agentName(comment.author)}</b><small title={formatDateTime(comment.createdAt)}>{formatRelative(comment.createdAt)}</small><Markdown className="md-compact" text={commentText(comment.body)}/></li>)}</ul></section>}
     </>}

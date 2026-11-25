@@ -18,7 +18,7 @@ The Hermes Kanban is the source of truth:
 
 | Blueprint | Hermes |
 |---|---|
-| Instruction to the AI CEO | *Instruksi ke Naya* creates a task in **triage**; the decomposer splits it into tasks for the specialist profiles (`kanban.auto_decompose`, default on) |
+| Instruction to the AI CEO | *Instruksi ke Naya* creates a task in **triage**. `claude-worker` is the only splitter: it works the task at once or splits it into 2–5 subtasks. Hermes' own decomposer is off (`kanban.auto_decompose: false`) and is never called |
 | In progress | todo / ready / running: agents claim and work |
 | Waiting for review | **review**: the agent called `request-review` |
 | Selesai (approved) | Every checklist item *Selesai*: `complete --result "Disetujui oleh …"` |
