@@ -33,6 +33,16 @@ describe('instructions', () => {
     ])
   })
 
+  it('creates a follow-up card that waits on the card it continues, once per key', async () => {
+    const next = recorder([JSON.stringify({ id: 't_9' })])
+    await createInstruction({ title: 'PRD', assignee: 'naya-2b', parent: 't_1', idempotencyKey: 'naya-continue-t_1-development' }, actor, next.run)
+    expect(next.calls[0]!.args).toEqual(['kanban', 'create', 'PRD', '--body', REVIEW_NOTE, '--assignee', 'naya-2b', '--parent', 't_1', '--idempotency-key', 'naya-continue-t_1-development', '--created-by', 'Fardan (PM)', '--json'])
+    const { calls, run } = recorder()
+    await expect(createInstruction({ title: 'x', parent: '--all' }, actor, run)).rejects.toThrow('Task tidak dikenal.')
+    await expect(createInstruction({ title: 'x', idempotencyKey: 'a b' }, actor, run)).rejects.toThrow('idempotensi')
+    expect(calls).toEqual([])
+  })
+
   it('validates input before running anything', async () => {
     const { calls, run } = recorder()
     await expect(createInstruction({ title: '   ' }, actor, run)).rejects.toThrow('Judul wajib diisi.')

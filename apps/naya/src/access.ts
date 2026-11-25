@@ -5,7 +5,8 @@ import { apiFetch, LOCKED_EVENT } from './api.ts'
 
 export { LOCKED_EVENT }
 
-export interface SessionUser { id: string; name: string; email: string; role: string | null }
+/** `employeeId`: their team member record, when their account is linked to one (then they can be a PIC). */
+export interface SessionUser { id: string; name: string; email: string; role: string | null; employeeId?: string | null }
 export interface Permissions { instruct: boolean; review: boolean; comment: boolean; manageAgents: boolean; chat: string[] }
 export interface NayaAgent { profile: string; displayName: string; description: string | null; chatRoles: string[]; isLead: boolean; hasKey: boolean }
 export interface Me { user: SessionUser; can: Permissions; agents: NayaAgent[]; hermes: boolean }

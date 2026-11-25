@@ -1,7 +1,7 @@
 // Shared package: Zod schemas, types, constants, time-zone helpers.
 
 import { z } from "zod";
-import { EMPLOYEE_LEADS, FEE_GROUPS } from "./fees.js";
+import { EMPLOYEE_LEADS, FEE_GROUPS, type EmployeeLead } from "./fees.js";
 
 export * from "./fees.js";
 export * from "./naya-roster.js";
@@ -409,8 +409,8 @@ export const nayaInstructionSchema = z.object({
   body: z.string().max(4000).optional(),
   board: z.string().max(64).optional(),
   assignee: z.string().regex(HERMES_PROFILE).optional(),
-  /** The person in charge once the AI hands the card over; defaults to whoever gave the instruction. */
-  pic: z.string().uuid().optional(),
+  /** Who reviews the result: a team member's id, or "auto" (the most available sales/PM member). */
+  pic: z.union([z.literal("auto"), z.string().uuid()]).default("auto"),
 });
 
 export const nayaReviewSchema = z.object({
@@ -434,9 +434,44 @@ export const nayaChecklistDecisionSchema = z
     path: ["note"],
   });
 
-/** Hand a card, or one item of it, to someone else on the team. */
+/** Hand a card, or one item of it, to someone else on the team (an employee id). */
 export const nayaPicSchema = z.object({
   pic: z.string().uuid().nullable(),
+  board: z.string().max(64).optional(),
+});
+
+/**
+ * Who picks up a card at each stage: sales/PM review what the AI made; a reviewed card continues to
+ * design or development. An employee's position (employees.lead) decides; without one, the name of
+ * their team, matched in this order.
+ */
+export const NAYA_POOLS = {
+  design: { label: "Designer", pattern: /desain|design|\bui\b|\bux\b|ui\/ux|kreatif|creative|grafis/i },
+  development: { label: "Developer", pattern: /dev|engineer|program|front.?end|back.?end|full.?stack|mobile|software|\bit\b|tech/i },
+  review: { label: "Sales/PM", pattern: /sales|\bpm\b|project|product|bisnis|business|marketing|account|manager/i },
+} as const;
+export type NayaPool = keyof typeof NAYA_POOLS;
+
+const POOL_OF_LEAD: Record<EmployeeLead, NayaPool> = {
+  pm_sales: "review",
+  design: "design",
+  designer: "design",
+  development: "development",
+  developer: "development",
+};
+
+/** The pool a member belongs to, from their position, else their team's name; null when neither fits. */
+export function nayaPoolOf(lead: string | null | undefined, team?: string | null): NayaPool | null {
+  if (lead && lead in POOL_OF_LEAD) return POOL_OF_LEAD[lead as EmployeeLead];
+  if (!team) return null;
+  for (const pool of Object.keys(NAYA_POOLS) as NayaPool[]) if (NAYA_POOLS[pool].pattern.test(team)) return pool;
+  return null;
+}
+
+/** Continue a reviewed card to design or development. */
+export const nayaContinueSchema = z.object({
+  step: z.enum(["design", "development"]),
+  note: z.string().trim().max(2000).optional(),
   board: z.string().max(64).optional(),
 });
 

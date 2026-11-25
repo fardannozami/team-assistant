@@ -3,8 +3,9 @@
  * handoff and reminder messages.
  */
 import { describe, expect, test } from "bun:test";
-import { HERMES_PROFILE, NAYA_ROSTER, ROSTER_FALLBACK, nayaChecklistDecisionSchema, rosterAgent } from "@repo/shared";
-import { cardOutcome, handoffNote, inboxEntries, seedItems, STALE_MS } from "./modules/naya/checklist.js";
+import { HERMES_PROFILE, NAYA_ROSTER, ROSTER_FALLBACK, nayaChecklistDecisionSchema, nayaInstructionSchema, nayaPoolOf, rosterAgent } from "@repo/shared";
+import { cardOutcome, continuation, handoffNote, inboxEntries, seedItems, STALE_MS } from "./modules/naya/checklist.js";
+import { mostAvailable, type Member } from "./modules/naya/members.js";
 import { noticeText, planNotices } from "./modules/naya/notify.js";
 
 const HOUR = 60 * 60 * 1000;
@@ -56,12 +57,12 @@ describe("tugas saya", () => {
     { id: "b", title: "Wireframe", status: "review", board: "default" },
     { id: "c", title: "Baru diserahkan", status: "review", board: "default" },
   ];
-  const item = (taskId: string, picUserId: string | null, status: string, hoursAgo: number) => ({ board: "default", taskId, picUserId, status, handedAt: at(hoursAgo), updatedAt: at(hoursAgo) });
+  const item = (taskId: string, picEmployeeId: string | null, status: string, hoursAgo: number) => ({ board: "default", taskId, picEmployeeId, status, handedAt: at(hoursAgo), updatedAt: at(hoursAgo) });
 
   test("lists my items still being checked, overdue first", () => {
     const entries = inboxEntries(
       tasks,
-      [{ board: "default", taskId: "c", picUserId: "me", updatedAt: at(1) }],
+      [{ board: "default", taskId: "c", picEmployeeId: "me", updatedAt: at(1) }],
       [item("a", "me", "in_progress", 2), item("a", "me", "done", 3), item("b", "me", "in_progress", 50), item("b", "other", "in_progress", 50)],
       "me",
       false,
@@ -91,7 +92,7 @@ describe("whatsapp handoff", () => {
     id,
     board: "default",
     taskId,
-    picUserId: pic,
+    picEmployeeId: pic,
     version,
     handedAt: handedHoursAgo === null ? null : new Date(now - handedHoursAgo * HOUR),
     remindedAt: remindedHoursAgo === null ? null : new Date(now - remindedHoursAgo * HOUR),
@@ -145,5 +146,55 @@ describe("agent roster", () => {
     }
     expect(rosterAgent(ROSTER_FALLBACK)?.available).toBe(true);
     expect(rosterAgent("naya-2b")?.label).toBe("2B");
+  });
+});
+
+describe("who picks up a card", () => {
+  const member = (name: string, lead: string | null, presence: Member["presence"], load = 0, team: string | null = null): Member =>
+    ({ id: name.toLowerCase(), name, team, lead, pool: nayaPoolOf(lead, team), presence, userId: null, load });
+
+  test("a member's position decides the pool; the team's name only when there is none", () => {
+    expect(nayaPoolOf("pm_sales")).toBe("review");
+    expect(nayaPoolOf("designer")).toBe("design");
+    expect(nayaPoolOf("design")).toBe("design");
+    expect(nayaPoolOf("developer", "Sales")).toBe("development");
+    expect(nayaPoolOf(null, "UI/UX")).toBe("design");
+    expect(nayaPoolOf(null, "Backend")).toBe("development");
+    expect(nayaPoolOf(null, "Finance")).toBeNull();
+    expect(nayaPoolOf(null, null)).toBeNull();
+  });
+
+  test("santai first, then working, then not in yet; never someone who checked out", () => {
+    const team = [
+      member("Andi", "pm_sales", "working"),
+      member("Bela", "pm_sales", "standby", 3),
+      member("Caca", "pm_sales", "resting"),
+      member("Dina", "designer", "standby"),
+    ];
+    expect(mostAvailable(team, "review")?.name).toBe("Bela");
+    expect(mostAvailable(team.filter((m) => m.name !== "Bela"), "review")?.name).toBe("Andi");
+    expect(mostAvailable([member("Caca", "pm_sales", "resting")], "review")).toBeUndefined();
+    expect(mostAvailable(team, "development")).toBeUndefined();
+  });
+
+  test("between equally available members, the one with less waiting on them", () => {
+    const team = [member("Eko", "developer", "working", 4), member("Fani", "developer", "working", 1), member("Gita", "developer", "absent", 0)];
+    expect(mostAvailable(team, "development")?.name).toBe("Fani");
+  });
+
+  test("instructions default to an automatic sales/PM reviewer", () => {
+    expect(nayaInstructionSchema.parse({ title: "Cari prospek" }).pic).toBe("auto");
+    expect(nayaInstructionSchema.safeParse({ title: "x", pic: "budi" }).success).toBe(false);
+  });
+
+  test("a reviewed card continues to the design or PRD agent, with the reviewer's note", () => {
+    const design = continuation("design", "Aplikasi kasir", "Fokus mobile");
+    expect(design.assignee).toBe("naya-3a");
+    expect(design.title).toBe("Design requirement: Aplikasi kasir");
+    expect(design.body).toContain("Catatan dari reviewer: Fokus mobile");
+    const dev = continuation("development", "Aplikasi kasir");
+    expect(dev.assignee).toBe("naya-2b");
+    expect(dev.body).toContain("acceptance criteria");
+    expect(rosterAgent(design.assignee)?.available && rosterAgent(dev.assignee)?.available).toBe(true);
   });
 });

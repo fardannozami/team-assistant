@@ -1,6 +1,7 @@
 import { boolean, index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { workspaceRef } from "./workspaces.js";
 import { users } from "./auth.js";
+import { employees } from "./employees.js";
 
 // Naya (naya.digdaya.co): the AI team's office on top of Hermes, sharing daily's API and login.
 
@@ -56,7 +57,12 @@ export const nayaAgents = pgTable(
 // running → review), these tables keep who on the team owns it and what they decided per item.
 // `board` is the Hermes board slug ("default" for the default board).
 
-/** The person in charge (PIC) of a Kanban card, set when it is created in Naya or later. */
+/**
+ * The person in charge (PIC) of a Kanban card: someone on the team (an employee, reached over
+ * WhatsApp), chosen when it is created in Naya or later. With `picPool` set and no PIC yet, the
+ * most available member of that pool (sales/PM, design, development) is picked when the AI hands
+ * the card over. A reviewed card can continue to design or development as a new card.
+ */
 export const nayaCards = pgTable(
   "naya_cards",
   {
@@ -64,7 +70,14 @@ export const nayaCards = pgTable(
     workspaceId: workspaceRef(),
     board: text("board").notNull().default(""),
     taskId: text("task_id").notNull(),
-    picUserId: uuid("pic_user_id").references(() => users.id, { onDelete: "set null" }),
+    picEmployeeId: uuid("pic_employee_id").references(() => employees.id, { onDelete: "set null" }),
+    /** "review" | "design" | "development": pick the PIC from this pool at handover. */
+    picPool: text("pic_pool"),
+    /** The card this one continues (a reviewed card handed to design or development). */
+    continuesFrom: text("continues_from"),
+    /** The card created to continue this one, and to which pool ("design" | "development"). */
+    continuedTo: text("continued_to"),
+    continuedStep: text("continued_step"),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -83,7 +96,7 @@ export const nayaChecklistItems = pgTable(
     /** The subtask whose result this item checks; null for the card's own result. */
     sourceTaskId: text("source_task_id"),
     title: text("title").notNull(),
-    picUserId: uuid("pic_user_id").references(() => users.id, { onDelete: "set null" }),
+    picEmployeeId: uuid("pic_employee_id").references(() => employees.id, { onDelete: "set null" }),
     status: text("status").notNull().default("in_progress"),
     /** Required for feedback (what to fix) and rejected (why); the agent reads it. */
     note: text("note"),

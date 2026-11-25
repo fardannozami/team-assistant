@@ -69,7 +69,9 @@ async function write(run: Run, board: string | undefined, args: string[], label:
  */
 export const REVIEW_NOTE = 'Instruksi dari tim lewat Naya. Hasil wajib direview manusia: setelah selesai dan dicek sendiri, akhiri dengan kanban_request_review (ringkasan + lampirkan file hasil), bukan kanban_complete. Jika dipecah jadi subtugas, tugas induk ini yang meminta review.'
 
-export interface InstructionInput { title: unknown; body?: unknown; board?: unknown; assignee?: unknown }
+export interface InstructionInput { title: unknown; body?: unknown; board?: unknown; assignee?: unknown; parent?: unknown; idempotencyKey?: unknown }
+
+const IDEMPOTENCY_KEY = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/
 
 /**
  * A new instruction for the AI team. Without an assignee it parks in triage, where claude-worker
@@ -85,10 +87,15 @@ export async function createInstruction(input: InstructionInput, actor: Actor, r
     if (typeof input.assignee !== 'string' || !PROFILE_NAME.test(input.assignee)) throw new WriteError('Agent tidak dikenal.')
     assignee = input.assignee
   }
+  // A follow-up card (e.g. design after a reviewed proposal) waits on the card it continues.
+  const parent = input.parent === undefined || input.parent === null || input.parent === '' ? undefined : taskId(input.parent)
+  if (input.idempotencyKey !== undefined && (typeof input.idempotencyKey !== 'string' || !IDEMPOTENCY_KEY.test(input.idempotencyKey))) throw new WriteError('Kunci idempotensi tidak valid.')
   const output = await write(run, board, [
     'create', title,
     '--body', body ? `${body}\n\n---\n${REVIEW_NOTE}` : REVIEW_NOTE,
     ...(assignee ? ['--assignee', assignee] : ['--triage']),
+    ...(parent ? ['--parent', parent] : []),
+    ...(typeof input.idempotencyKey === 'string' ? ['--idempotency-key', input.idempotencyKey] : []),
     '--created-by', author(actor),
     '--json',
   ], 'create')

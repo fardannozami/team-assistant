@@ -115,7 +115,7 @@ export function createBridge(options: BridgeOptions): Hono {
   app.post('/tasks', async (c) => {
     const input = await body(c)
     try {
-      return c.json(await createInstruction({ title: input.title, body: input.body, board: input.board, assignee: input.assignee }, actorOf(input.actor), run))
+      return c.json(await createInstruction({ title: input.title, body: input.body, board: input.board, assignee: input.assignee, parent: input.parent, idempotencyKey: input.idempotencyKey }, actorOf(input.actor), run))
     } finally {
       invalidateTasks()
     }

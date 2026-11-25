@@ -961,3 +961,14 @@ a.primary-button { display: inline-block; text-align: center; text-decoration: n
 .office-3d.crowded .agent-tag-3d .speech-3d { display: none; }
 .office-3d.crowded .agent-tag-3d:hover .speech-3d, .office-3d.crowded .agent-tag-3d:focus-visible .speech-3d { display: block; }
 .office-3d.crowded .agent-tag-3d:hover, .office-3d.crowded .agent-tag-3d:focus-visible { z-index: 5; }
+
+/* Copy buttons on code, and the follow-up email template the AI writes for the PM. */
+.md-code { position: relative; }
+.md-code .md-copy { position: absolute; right: 6px; top: 6px; }
+.md-email { background: var(--surface-2); border: 1px solid var(--border-strong); border-left: 3px solid var(--accent); border-radius: 4px; margin: 0.8em 0; padding: 10px 12px; }
+.md-email-head { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
+.md-email-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.md-email-subject { border-bottom: 1px solid var(--border); font-weight: 600; margin: 8px 0 0; padding-bottom: 6px; }
+.md-email-subject span { color: var(--text-muted); font-size: 12px; font-weight: 400; margin-right: 8px; }
+.md .md-email-body { background: none; border: 0; font: inherit; margin: 8px 0 0; padding: 0; white-space: pre-wrap; }
+.continue-box { border-top: 1px dashed var(--border-strong); margin-top: 14px; padding-top: 12px; }

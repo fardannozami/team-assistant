@@ -108,16 +108,16 @@ function InstructionDialog({ boards, onClose, onCreated }: { boards: { slug: str
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [board, setBoard] = useState(boards.find((item) => item.current)?.slug ?? '')
-  const me = useMe()
   const people = usePeople()
-  const [pic, setPic] = useState<string | null>(me?.user.id ?? null)
+  // "auto": the most available sales/PM member reviews it when the AI is done.
+  const [pic, setPic] = useState<string>('auto')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (!title.trim()) { setError('Judul wajib diisi.'); return }
     setBusy(true)
-    const result = await apiPost<{ id: string }>('/api/tasks', { title, body, ...(pic ? { pic } : {}), ...(board ? { board } : {}) })
+    const result = await apiPost<{ id: string }>('/api/tasks', { title, body, pic, ...(board ? { board } : {}) })
     setBusy(false)
     if (!result.ok) { setError(result.message); return }
     onCreated()
@@ -132,10 +132,10 @@ function InstructionDialog({ boards, onClose, onCreated }: { boards: { slug: str
       <label className="field-label" htmlFor="instruction-body">Detail (opsional)</label>
       <textarea id="instruction-body" value={body} onChange={(event) => setBody(event.target.value)} maxLength={4000} placeholder="Target, kriteria, format hasil, tenggat…"/>
       {boards.length > 1 && <label className="select-label">Board <select value={board} onChange={(event) => setBoard(event.target.value)}>{boards.map((item) => <option key={item.slug} value={item.slug}>{item.name}</option>)}</select></label>}
-      <PicSelect label="PIC (yang memutuskan hasilnya)" value={pic} people={people} onChange={setPic}/>
+      <PicSelect label="PIC (yang mereview hasilnya)" value={pic === 'auto' ? null : pic} people={people} autoPool="review" onChange={(next) => setPic(next ?? 'auto')}/>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="review-actions"><button type="submit" className="primary-button" disabled={busy}>{busy ? 'Mengirim…' : 'Kirim ke Naya'}</button><button type="button" className="secondary-button" onClick={onClose}>Batal</button></div>
-      <p className="small-note">Tugas masuk ke kolom Triase; AI memutuskan sendiri apakah dikerjakan langsung atau dipecah menjadi subtugas. Setelah AI selesai, PIC menerima WhatsApp dan memutuskan tiap item checklist di Tugas Saya.</p>
+      <p className="small-note">Tugas masuk ke kolom Triase; AI memutuskan sendiri apakah dikerjakan langsung atau dipecah menjadi subtugas. Setelah AI selesai, PIC (atau Sales/PM yang paling tersedia) menerima WhatsApp dan mereview tiap item di Tugas Saya. Dari sana kartu bisa dilanjutkan ke Designer atau Developer.</p>
     </form>
   </Dialog>
 }

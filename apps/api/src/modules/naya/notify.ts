@@ -36,15 +36,15 @@ export function noticeText(kind: "handoff" | "reminder", cards: CardNotice[]): s
   return [head, "", ...lines, "", "Tandai tiap item: Selesai, Feedback (dengan catatan), atau Ditolak (dengan alasan)."].join("\n");
 }
 
-type Waiting = { id: string; board: string; taskId: string; picUserId: string | null; version: number; handedAt: Date | null; remindedAt: Date | null };
+type Waiting = { id: string; board: string; taskId: string; picEmployeeId: string | null; version: number; handedAt: Date | null; remindedAt: Date | null };
 
 /** Splits the items waiting on people into new handoffs and overdue reminders, per person. */
 export function planNotices(items: Waiting[], titles: Map<string, string>, now: number) {
   const handoff = new Map<string, Waiting[]>();
   const reminder = new Map<string, Waiting[]>();
   for (const item of items) {
-    if (!item.picUserId) continue;
-    const add = (into: Map<string, Waiting[]>) => into.set(item.picUserId!, [...(into.get(item.picUserId!) ?? []), item]);
+    if (!item.picEmployeeId) continue;
+    const add = (into: Map<string, Waiting[]>) => into.set(item.picEmployeeId!, [...(into.get(item.picEmployeeId!) ?? []), item]);
     if (!item.handedAt) add(handoff);
     else if (now - item.handedAt.getTime() > STALE_MS && (!item.remindedAt || now - item.remindedAt.getTime() > REMIND_EVERY_MS)) add(reminder);
   }
@@ -77,7 +77,7 @@ export async function notifyHandoffs(workspaceId: string, now = Date.now()) {
       id: nayaChecklistItems.id,
       board: nayaChecklistItems.board,
       taskId: nayaChecklistItems.taskId,
-      picUserId: nayaChecklistItems.picUserId,
+      picEmployeeId: nayaChecklistItems.picEmployeeId,
       version: nayaChecklistItems.version,
       handedAt: nayaChecklistItems.handedAt,
       remindedAt: nayaChecklistItems.remindedAt,
@@ -89,10 +89,10 @@ export async function notifyHandoffs(workspaceId: string, now = Date.now()) {
 
   const pics = [...new Set([...plan.handoff, ...plan.reminder].map((entry) => entry.pic))];
   const phones = pics.length
-    ? await db.select({ userId: employees.userId, phone: employees.phone }).from(employees).where(and(eq(employees.workspaceId, workspaceId), eq(employees.isActive, true), inArray(employees.userId, pics)))
+    ? await db.select({ id: employees.id, phone: employees.phone }).from(employees).where(and(eq(employees.workspaceId, workspaceId), eq(employees.isActive, true), inArray(employees.id, pics)))
     : [];
   const jidOf = (pic: string) => {
-    const phone = phones.find((row) => row.userId === pic)?.phone;
+    const phone = phones.find((row) => row.id === pic)?.phone;
     try {
       return phone ? `${normalizePhoneNumber(phone)}@s.whatsapp.net` : null;
     } catch {

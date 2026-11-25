@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
 import { loadSnapshot } from './request-state.ts'
-import type { Person } from './types.ts'
+import type { Member } from './types.ts'
 
-let people: Promise<Person[]> | undefined
+let people: Promise<Member[]> | undefined
 
-/** Everyone on the team who can be a PIC, loaded once per page load. */
-export function usePeople(): Person[] {
-  const [list, setList] = useState<Person[]>([])
+/** The team members who can be a PIC (with today's presence), loaded once per page load. */
+export function usePeople(): Member[] {
+  const [list, setList] = useState<Member[]>([])
   useEffect(() => {
     let active = true
-    people ??= loadSnapshot<Person[]>('/api/people').then((state) => (state.status === 'ready' ? state.data : []))
+    people ??= loadSnapshot<Member[]>('/api/people').then((state) => (state.status === 'ready' ? state.data : []))
     void people.then((next) => { if (active) setList(next) })
     return () => { active = false }
   }, [])

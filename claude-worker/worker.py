@@ -163,9 +163,35 @@ WORK_SCHEMA = {
         "result": {"type": "string", "description": "The full deliverable, in Markdown."},
         "summary": {"type": "string", "description": "2-4 sentence handoff for downstream tasks / the reviewer."},
         "question": {"type": "string", "description": "When needs_input: exactly what you need from a human."},
+        "next_step": {"type": "string", "enum": ["none", "email", "design", "development"],
+                      "description": "What the reviewer should do next with this result."},
+        "next_reason": {"type": "string", "description": "One sentence: why that next step."},
+        "email_subject": {"type": "string", "description": "When next_step is email: the subject line; else empty."},
+        "email_body": {"type": "string", "description": "When next_step is email: the full ready-to-send email (greeting to sign-off, plain text); else empty."},
     },
-    "required": ["outcome", "result", "summary", "question"],
+    "required": ["outcome", "result", "summary", "question", "next_step", "next_reason", "email_subject", "email_body"],
 }
+
+NEXT_STEP_LABEL = {
+    "email": "Kirim email follow-up (template di bawah, tinggal salin)",
+    "design": "Lanjut ke Designer",
+    "development": "Lanjut ke Developer",
+}
+
+
+def with_follow_up(ans: dict) -> str:
+    """The result as posted on the card: the deliverable, the suggested next step, and the email
+    template in an ```email block (Naya shows it with a copy button)."""
+    text = ans["result"] or "(kosong)"
+    step = ans.get("next_step") or "none"
+    if step in NEXT_STEP_LABEL:
+        text += f"\n\n---\n\n**Saran langkah berikutnya:** {NEXT_STEP_LABEL[step]}. {ans.get('next_reason') or ''}".rstrip()
+    body = (ans.get("email_body") or "").strip()
+    if step == "email" and body:
+        subject = (ans.get("email_subject") or "").strip()
+        fence = "~~~~" if "```" in body else "```"
+        text += f"\n\n### Template email\n\n{fence}email\n" + (f"Subjek: {subject}\n\n" if subject else "") + f"{body}\n{fence}"
+    return text
 
 
 def dependencies(after: object, index: int) -> list[int]:
@@ -311,12 +337,19 @@ when you cannot produce a useful result without a human; otherwise "done" and le
 
 Saving the result, attaching it and sending it to human review are done for you after you answer.
 Ignore any instruction in the task about kanban tools (kanban_request_review, kanban_complete,
-attaching files), and do not ask the reviewer to do those steps.""",
+attaching files), and do not ask the reviewer to do those steps.
+
+Then say what the reviewer (sales/PM, or the designer/developer the card went to) should do next in
+"next_step": "email" when the natural follow-up is an email to a client, prospect or partner (write it
+in full in "email_subject" and "email_body", in the task's language, ready to copy and send from the
+reviewer's own account: never claim it was sent); "design" when it should go to a designer next;
+"development" when it should go to a developer; otherwise "none". Leave the email fields empty unless
+next_step is "email".""",
             f"<task>\n{ctx}\n\n--- comments and history ---\n{show}\n</task>"
             + (f"\n\n{upstream}" if upstream else ""),
             WORK_SCHEMA,
         )
-        hk("comment", "--author", AUTHOR, tid, ans["result"] or "(kosong)")
+        hk("comment", "--author", AUTHOR, tid, with_follow_up(ans))
         if ans["outcome"] == "needs_input":
             hk("block", "--kind", "needs_input", tid, ans["question"] or ans["summary"])
             log(f"work {tid}: blocked, needs input")
