@@ -1,4 +1,5 @@
 import { CHAT_LINK_TTL_MS, appUrl, createLoginLink } from "../auth/login-links.js";
+import { ensureEmployeeAccount, type EmployeeRef } from "./accounts.js";
 
 // "NAYA" over WhatsApp: a one-time link that opens Naya signed in, valid for 10 minutes.
 
@@ -8,13 +9,15 @@ export function isNayaKeyword(body: string): boolean {
   return body.trim().toUpperCase() === NAYA_KEYWORD;
 }
 
-/** The reply to "NAYA" from a registered employee, or null when Naya is not set up. */
-export async function nayaLoginReply(employee: { userId: string | null; name: string }): Promise<string | null> {
+/**
+ * The reply to "NAYA" from a registered employee, or null when Naya is not set up. Their daily
+ * account is made (role Employee) the first time: the WhatsApp number is enough to sign in.
+ */
+export async function nayaLoginReply(employee: EmployeeRef): Promise<string | null> {
   if (!appUrl("naya")) return null;
-  if (!employee.userId) {
-    return "Nomor ini belum terhubung ke akun web daily, jadi belum bisa masuk Naya. Minta admin mengundang email Anda di Pengaturan › Pengguna.";
-  }
-  const url = await createLoginLink(employee.userId, "naya", CHAT_LINK_TTL_MS);
+  const userId = await ensureEmployeeAccount(employee);
+  if (!userId) return "Akun Naya Anda sedang dinonaktifkan. Hubungi admin.";
+  const url = await createLoginLink(userId, "naya", CHAT_LINK_TTL_MS);
   return [
     `Link masuk Naya untuk ${employee.name}:`,
     url,

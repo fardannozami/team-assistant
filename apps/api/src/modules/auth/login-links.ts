@@ -16,6 +16,8 @@ export type LoginApp = (typeof LOGIN_APPS)[number];
 export const LINK_TTL_MS = 60_000;
 /** Sent over WhatsApp: the person may tap it a little later. */
 export const CHAT_LINK_TTL_MS = 10 * 60_000;
+/** In a card handover over WhatsApp: opened some time that day. Still used once. */
+export const HANDOVER_LINK_TTL_MS = 12 * 60 * 60_000;
 
 const trim = (url: string | undefined) => (url ?? "").replace(/\/+$/, "") || null;
 
@@ -43,12 +45,19 @@ export function safeEqual(a: string, b: string): boolean {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
-/** `<app>/#login=<code>`: the app redeems the code for a session (POST /auth/link/redeem). */
-export async function createLoginLink(userId: string, app: LoginApp, ttlMs = LINK_TTL_MS): Promise<string> {
+/** A page inside the app a link may open after signing in, e.g. "/my-tasks/default/t_1". */
+export const NEXT_PATH = /^\/(?!\/)[A-Za-z0-9/_.%-]{0,200}$/;
+
+/**
+ * `<app>/#login=<code>`: the app redeems the code for a session (POST /auth/link/redeem), then
+ * opens `next` (one of its own pages) when given.
+ */
+export async function createLoginLink(userId: string, app: LoginApp, ttlMs = LINK_TTL_MS, next?: string): Promise<string> {
   await db.delete(loginLinks).where(lt(loginLinks.expiresAt, new Date(Date.now() - 60 * 60_000)));
   const code = newSecret("ta_login");
   await db.insert(loginLinks).values({ codeHash: sha256Hex(code), userId, app, expiresAt: new Date(Date.now() + ttlMs) });
-  return `${appUrl(app)}/#login=${encodeURIComponent(code)}`;
+  const page = next && NEXT_PATH.test(next) ? `&next=${encodeURIComponent(next)}` : "";
+  return `${appUrl(app)}/#login=${encodeURIComponent(code)}${page}`;
 }
 
 /** Uses up a code for the given app: valid once, before it expires, for an active user. */

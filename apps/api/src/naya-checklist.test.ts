@@ -6,7 +6,9 @@ import { describe, expect, test } from "bun:test";
 import { HERMES_PROFILE, NAYA_ROSTER, ROSTER_FALLBACK, nayaChecklistDecisionSchema, nayaInstructionSchema, nayaPoolOf, rosterAgent } from "@repo/shared";
 import { cardOutcome, continuation, handoffNote, inboxEntries, seedItems, STALE_MS } from "./modules/naya/checklist.js";
 import { mostAvailable, type Member } from "./modules/naya/members.js";
-import { noticeText, planNotices } from "./modules/naya/notify.js";
+import { cardPath, noticeText, planNotices } from "./modules/naya/notify.js";
+import { whatsappEmail } from "./modules/naya/accounts.js";
+import { NEXT_PATH } from "./modules/auth/login-links.js";
 
 const HOUR = 60 * 60 * 1000;
 
@@ -196,5 +198,25 @@ describe("who picks up a card", () => {
     expect(dev.assignee).toBe("naya-2b");
     expect(dev.body).toContain("acceptance criteria");
     expect(rosterAgent(design.assignee)?.available && rosterAgent(dev.assignee)?.available).toBe(true);
+  });
+});
+
+describe("signing in from WhatsApp", () => {
+  test("an account made from a number has a placeholder email, distinct per workspace", () => {
+    const a = whatsappEmail("0812-3456-7890", "9864c638-5d06-4768-9f6d-4a18880ee152");
+    expect(a).toBe("wa.081234567890.9864c6385d06@naya.invalid");
+    expect(whatsappEmail("0812-3456-7890", "3eab9caf-e9fb-4679-b32f-ed754784b2d3")).not.toBe(a);
+  });
+
+  test("a link opens only a page of Naya", () => {
+    expect(NEXT_PATH.test(cardPath("default", "t_9"))).toBe(true);
+    for (const bad of ["//evil.example", "https://evil.example", "/x?y=1", "/a b", "my-tasks"]) expect(NEXT_PATH.test(bad)).toBe(false);
+  });
+
+  test("the handover message carries each card's own sign-in link and says how long it lasts", () => {
+    const text = noticeText("handoff", [{ board: "default", taskId: "t_9", title: "PRD kasir", items: 1, version: 1, link: "https://naya.digdaya.co/#login=ta_login_x&next=%2Fmy-tasks%2Fdefault%2Ft_9" }]);
+    expect(text).toContain("#login=ta_login_x&next=");
+    expect(text).toContain("berlaku 12 jam");
+    expect(noticeText("handoff", [{ board: "default", taskId: "t_9", title: "PRD", items: 1, version: 1 }])).not.toContain("berlaku 12 jam");
   });
 });

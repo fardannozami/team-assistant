@@ -162,6 +162,8 @@ Clicking the avatar shows today's work as a small kanban: *Dikerjakan* (each lin
 - **daily → Naya:** **Naya ↗** in the dashboard header opens Naya already signed in. It uses a one-time link that is valid for a minute.
 - **Directly:** *Masuk dengan Google* on naya.digdaya.co uses the same Google login as daily.
 - **Phone:** send `NAYA` to the WhatsApp bot to get a one-time link, valid for 10 minutes.
+- **From a handover:** every card link in a WhatsApp handover or reminder signs its PIC in and opens that card (`#login=<code>&next=/my-tasks/<board>/<id>`). The link is made for that person, can be used once, and lasts 12 hours. After that, `NAYA` gets a fresh one.
+- **Team members need no invite.** Their WhatsApp number already identifies them. The first time a member gets a link (a handover or `NAYA`), Naya makes them a daily account with the Employee role and links it to their employee record (`employees.user_id`). It has a placeholder email `wa.<number>.<workspace>@naya.invalid` (`apps/api/src/modules/naya/accounts.ts`). An admin can raise the role or deactivate it in Settings › Users, or still invite the member's Google email.
 - **Signing out:** *Keluar* signs this browser out.
   - The session is daily's JWT, which lasts 7 days.
   - Deactivating someone in daily blocks them right away.

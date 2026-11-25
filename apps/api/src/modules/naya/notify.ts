@@ -1,13 +1,14 @@
 import { createDbClient, employees, nayaChecklistItems } from "@repo/database";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { normalizePhoneNumber, sendText } from "../whatsapp/service.js";
-import { appUrl } from "../auth/login-links.js";
+import { appUrl, createLoginLink, HANDOVER_LINK_TTL_MS } from "../auth/login-links.js";
+import { ensureEmployeeAccount, employeeRef } from "./accounts.js";
 import { boardOf, boardSnapshot, seedChecklist, STALE_MS } from "./checklist.js";
 
 // WhatsApp for the hybrid flow (run by the worker every 10 minutes): when the AI hands a card
 // over, its PIC gets a message with a link straight to the card; work left waiting longer than
-// 48 hours is nudged once a day. People without a phone on their employee record only see it in
-// Tugas Saya.
+// 48 hours is nudged once a day. Each link signs its PIC in on the way (a one-time code, made for
+// them, good for 12 hours), so a tap opens the card; their daily account is made on first use.
 
 const db = createDbClient(
   process.env.DATABASE_URL ?? "postgres://teamassistant:teamassistant@localhost:5432/teamassistant",
@@ -15,13 +16,17 @@ const db = createDbClient(
 
 const REMIND_EVERY_MS = 24 * 60 * 60 * 1000;
 
-/** The card in Naya's Tugas Saya; null while Naya is off (no NAYA_WEB_URL). */
+/** The card's page in Naya's Tugas Saya. */
+export const cardPath = (board: string, taskId: string) => `/my-tasks/${encodeURIComponent(board)}/${encodeURIComponent(taskId)}`;
+
+/** The card in Naya's Tugas Saya, without signing in; null while Naya is off (no NAYA_WEB_URL). */
 export function cardLink(board: string, taskId: string): string | null {
   const base = appUrl("naya");
-  return base ? `${base}/#/my-tasks/${encodeURIComponent(board)}/${encodeURIComponent(taskId)}` : null;
+  return base ? `${base}/#${cardPath(board, taskId)}` : null;
 }
 
-export interface CardNotice { board: string; taskId: string; title: string; items: number; version: number }
+/** `link`: the card's sign-in link for this person, when one could be made. */
+export interface CardNotice { board: string; taskId: string; title: string; items: number; version: number; link?: string | null }
 
 /** One message per person: every card handed to them (or overdue) in this run, each with its link. */
 export function noticeText(kind: "handoff" | "reminder", cards: CardNotice[]): string {
@@ -29,11 +34,14 @@ export function noticeText(kind: "handoff" | "reminder", cards: CardNotice[]): s
     ? `Naya: ${cards.length === 1 ? "1 kartu" : `${cards.length} kartu`} selesai dikerjakan AI dan menunggu keputusan Anda.`
     : `Naya: ${cards.length === 1 ? "1 kartu" : `${cards.length} kartu`} sudah menunggu keputusan Anda lebih dari 48 jam.`;
   const lines = cards.map((card) => {
-    const link = cardLink(card.board, card.taskId);
+    const link = card.link ?? cardLink(card.board, card.taskId);
     const version = card.version > 1 ? ` · v${card.version}` : "";
     return `• ${card.title} (${card.items} item${version})${link ? `\n  ${link}` : ""}`;
   });
-  return [head, "", ...lines, "", "Tandai tiap item: Selesai, Feedback (dengan catatan), atau Ditolak (dengan alasan)."].join("\n");
+  const signIn = cards.some((card) => card.link)
+    ? ["Ketuk link untuk langsung masuk ke kartunya. Link hanya untuk Anda, sekali pakai, berlaku 12 jam; setelah itu ketik NAYA untuk link baru."]
+    : [];
+  return [head, "", ...lines, "", "Tandai tiap item: Selesai, Feedback (dengan catatan), atau Ditolak (dengan alasan).", ...signIn].join("\n");
 }
 
 type Waiting = { id: string; board: string; taskId: string; picEmployeeId: string | null; version: number; handedAt: Date | null; remindedAt: Date | null };
@@ -102,17 +110,25 @@ export async function notifyHandoffs(workspaceId: string, now = Date.now()) {
 
   let unreachable = 0;
   const at = new Date(now);
+  // Each card's link signs the PIC in (their account is made on first use), opening that card.
+  const withLinks = async (pic: string, cards: CardNotice[]): Promise<CardNotice[]> => {
+    if (!appUrl("naya")) return cards;
+    const employee = await employeeRef(workspaceId, pic);
+    const userId = employee ? await ensureEmployeeAccount(employee).catch(() => null) : null;
+    if (!userId) return cards;
+    return Promise.all(cards.map(async (card) => ({ ...card, link: await createLoginLink(userId, "naya", HANDOVER_LINK_TTL_MS, cardPath(card.board, card.taskId)) })));
+  };
   for (const entry of plan.handoff) {
     const jid = jidOf(entry.pic);
     // Handed over either way: Tugas Saya counts the wait from now, and a failed send is not retried.
-    if (jid) await sendText(workspaceId, jid, noticeText("handoff", entry.cards)).catch(() => { unreachable += 1; });
+    if (jid) await sendText(workspaceId, jid, noticeText("handoff", await withLinks(entry.pic, entry.cards))).catch(() => { unreachable += 1; });
     else unreachable += 1;
     await db.update(nayaChecklistItems).set({ handedAt: at }).where(and(inArray(nayaChecklistItems.id, entry.ids), isNull(nayaChecklistItems.handedAt)));
   }
   for (const entry of plan.reminder) {
     const jid = jidOf(entry.pic);
     if (!jid) continue;
-    await sendText(workspaceId, jid, noticeText("reminder", entry.cards)).catch(() => undefined);
+    await sendText(workspaceId, jid, noticeText("reminder", await withLinks(entry.pic, entry.cards))).catch(() => undefined);
     await db.update(nayaChecklistItems).set({ remindedAt: at }).where(inArray(nayaChecklistItems.id, entry.ids));
   }
   return { handoffs: plan.handoff.length, reminders: plan.reminder.length, unreachable };

@@ -43,6 +43,9 @@ export const googleLoginUrl = () => `${API_BASE}/auth/google?app=naya`
  * Reads what daily put in the address after sign-in: `#token=` (Google), `#login=` (a one-time
  * link from "Buka Naya" or WhatsApp, swapped here for a token) or `#auth_error=`.
  */
+/** A page of this app a sign-in link may open (same rule as the API's NEXT_PATH). */
+const NEXT_PAGE = /^\/(?!\/)[A-Za-z0-9/_.%-]{0,200}$/
+
 export async function consumeAuthRedirect(): Promise<string | undefined> {
   if (typeof window === 'undefined') return undefined
   const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
@@ -50,7 +53,9 @@ export async function consumeAuthRedirect(): Promise<string | undefined> {
   const code = params.get('login')
   const error = params.get('auth_error') ?? undefined
   if (!token && !code && !error) return undefined
-  window.history.replaceState(null, '', window.location.pathname + window.location.search)
+  // A sign-in link may name the page to open, e.g. the card a WhatsApp handover is about.
+  const next = params.get('next')
+  window.history.replaceState(null, '', window.location.pathname + window.location.search + (next && NEXT_PAGE.test(next) ? `#${next}` : ''))
   if (token) setToken(token)
   if (code) {
     try {
