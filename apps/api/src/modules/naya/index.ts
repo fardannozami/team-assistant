@@ -19,6 +19,7 @@ import { getActorId, getActorRole, getWorkspaceId } from "../../lib/tenant.js";
 import { bridge, hermesConfigured, type Actor } from "./bridge.js";
 import { chatKey, deleteNayaAgent, listNayaAgents, nayaPermissions, saveNayaAgent } from "./agents.js";
 import { proxyChat } from "./chat.js";
+import { teamToday } from "./team.js";
 
 // Naya (naya.digdaya.co): the AI team's office. Reads and Kanban writes go to hermes-bridge,
 // chat to Hermes' API server; roles come from daily and every write is in audit_logs.
@@ -78,6 +79,10 @@ nayaApi.get("/calendar", anyone, async (c) => c.json(await bridge.calendar()));
 nayaApi.get("/dashboard", anyone, async (c) => c.json(await bridge.dashboard(fresh(c))));
 nayaApi.get("/activity", anyone, async (c) => c.json(await bridge.activity(fresh(c))));
 nayaApi.get("/channels", anyone, async (c) => c.json(await bridge.channels(fresh(c))));
+
+/* ---------- The human team: avatars follow today's standup ---------- */
+
+nayaApi.get("/team", anyone, async (c) => c.json(await teamToday(getWorkspaceId(c))));
 
 /* ---------- Instructions and reviews on the Hermes Kanban ---------- */
 

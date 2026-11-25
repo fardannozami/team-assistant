@@ -2,11 +2,11 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { officeStateBadge } from '../office-state.ts'
 import { agentLook } from '../agents.ts'
 import { clampTarget, createLayout, FLOOR_HEIGHT, floorOf, GAME_ROOM, idlePlan, placementFor, walkPath3, type Floor, type OfficeLayout, type Placement, type Vec3 } from '../office3d-layout.ts'
 import { Environment } from '../scene3d/environment.tsx'
 import { RBox, WorkDesk } from '../scene3d/props.tsx'
+import { isResting, stationBadge } from '../team.ts'
 import type { OfficeStation } from '../types.ts'
 
 // 3D view of the same Office snapshot the 2D view renders. Positions come from each station's
@@ -99,6 +99,12 @@ function Character({ station, placement, layout, floor, onSelect, anchor }: { st
       <mesh ref={leftLeg} position={[-0.11, 0.66, 0]} castShadow geometry={legGeometry}><meshStandardMaterial color={tint(colors.pants)} roughness={0.8}/></mesh>
       <mesh ref={rightLeg} position={[0.11, 0.66, 0]} castShadow geometry={legGeometry}><meshStandardMaterial color={tint(colors.pants)} roughness={0.8}/></mesh>
       <RBox position={[0, 0.98, 0]} size={[0.48, 0.58, 0.3]} radius={0.07} color={tint(colors.shirt)} roughness={0.85}/>
+      {station.employee && <>
+        {/* People wear an ID lanyard, so they stand apart from the AI agents. */}
+        <RBox position={[-0.07, 1.1, 0.155]} size={[0.035, 0.3, 0.01]} radius={0.004} color="#c0392b" shadow={false}/>
+        <RBox position={[0.07, 1.1, 0.155]} size={[0.035, 0.3, 0.01]} radius={0.004} color="#c0392b" shadow={false}/>
+        <RBox position={[0, 0.88, 0.165]} size={[0.16, 0.2, 0.02]} radius={0.01} color="#f4f1e8" shadow={false}/>
+      </>}
       <mesh ref={leftArm} position={[-0.31, 1.2, 0]} castShadow geometry={armGeometry}><meshStandardMaterial color={tint(colors.shirt)} roughness={0.85}/></mesh>
       <mesh ref={rightArm} position={[0.31, 1.2, 0]} castShadow geometry={armGeometry}><meshStandardMaterial color={tint(colors.shirt)} roughness={0.85}/></mesh>
       <RBox position={[0, 1.5, 0]} size={[0.4, 0.4, 0.37]} radius={0.08} color={tint(colors.skin)} roughness={0.7}/>
@@ -308,9 +314,9 @@ export default function Office3D({ stations, onSelect }: { stations: OfficeStati
   const layout = useMemo(() => createLayout(stations.length), [stations.length])
   // Idle agents wander between the lounge, the game room, the pantry, the street food and
   // lantai 2 (decorative only), spread so no two share a spot. With sleep mode on, every idle
-  // agent goes to bed upstairs instead.
+  // agent goes to bed upstairs instead. People who have checked out always rest there.
   const idleSeats = stations.filter((station) => station.state === 'Idle' && station.room === 'Lounge').map((station) => station.seat)
-  const plan = idlePlan(idleSeats, now, layout, sleepMode ? idleSeats : [])
+  const plan = idlePlan(idleSeats, now, layout, sleepMode ? idleSeats : stations.filter(isResting).map((station) => station.seat))
   const wandering = (station: OfficeStation) => station.state === 'Idle' && station.room === 'Lounge' ? plan.get(station.seat) : undefined
   // Agents at the meeting table take the next free place around it.
   const meetingOrder = stations.filter((station) => station.roomPosition === 'meeting-area').map((station) => station.id)
@@ -330,12 +336,13 @@ export default function Office3D({ stations, onSelect }: { stations: OfficeStati
     </Canvas>
     <div className="office-3d-labels">
       {stations.map((station) => {
-        const badge = officeStateBadge(station.state)
+        const badge = stationBadge(station)
         const busy = ['Working', 'Reviewing', 'Collaborating'].includes(station.state)
         const idle = wandering(station)
-        return <button key={station.id} ref={register(labels, `agent-${station.id}`)} type="button" className={`agent-tag-3d state-${station.state.toLowerCase()}`} onClick={(event) => onSelect(station, event.currentTarget)} aria-label={`${station.name}. ${badge.label}.${station.activity ? ` ${station.activity}.` : ''}${idle ? ` ${idle.placement.label ?? idle.stop.label}.` : ''} Buka detail.`}>
+        const idleLabel = idle && (isResting(station) ? 'Istirahat · sudah checkout' : idle.placement.label ?? idle.stop.label)
+        return <button key={station.id} ref={register(labels, `agent-${station.id}`)} type="button" className={`agent-tag-3d state-${station.state.toLowerCase()}${station.employee ? ' employee' : ''}`} onClick={(event) => onSelect(station, event.currentTarget)} aria-label={`${station.name}. ${badge.label}.${station.activity ? ` ${station.activity}.` : ''}${idleLabel ? ` ${idleLabel}.` : ''} Buka detail.`}>
           {busy && station.activity && <span className="speech speech-3d">{station.activity}</span>}
-          {idle && <span className={`speech speech-3d speech-idle${idle.placement.pose === 'lie' ? ' speech-sleep' : ''}`}>{idle.placement.pose === 'lie' ? '💤 ' : ''}{idle.placement.label ?? idle.stop.label}</span>}
+          {idle && <span className={`speech speech-3d speech-idle${idle.placement.pose === 'lie' ? ' speech-sleep' : ''}`}>{idle.placement.pose === 'lie' ? '💤 ' : ''}{idleLabel}</span>}
           <span className="agent-tag-row"><span className="pixel-station-name">{station.privacy === 'locked' ? '🔒 ' : ''}{station.name}</span><span className={`badge ${badge.tone}`}>{badge.label}</span></span>
         </button>
       })}

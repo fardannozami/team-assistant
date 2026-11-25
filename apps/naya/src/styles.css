@@ -834,3 +834,14 @@ a.primary-button { display: inline-block; text-align: center; text-decoration: n
 .chat-message.assistant { background: var(--surface); border: 1px solid var(--border); justify-self: start; }
 .chat-tool { color: var(--text-muted); font-size: 12px; justify-self: start; }
 .chat-input { display: grid; gap: 8px; }
+/* People on the team: name tag with an ID-card stripe, and today's standup as a small kanban. */
+.agent-tag-3d.employee .pixel-station-name::before { content: "🪪 "; }
+.team-kanban { display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 14px 0; }
+.team-kanban-column { background: var(--surface-2); border: 1px solid var(--border); border-top-width: 3px; display: grid; align-content: start; gap: 6px; padding: 10px; }
+.team-kanban-column.doing { border-top-color: var(--accent); }
+.team-kanban-column.done { border-top-color: var(--active-border); }
+.team-kanban-column.blocked { border-top-color: #e76f51; }
+.team-kanban-column h3 { font-size: 12px; letter-spacing: .04em; margin: 0 0 4px; text-transform: uppercase; }
+.team-kanban-column .muted { margin: 0; }
+.team-kanban-card { background: var(--surface); border: 1px solid var(--border-strong); font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; padding: 8px; }
+@media (max-width: 700px) { .team-kanban { grid-template-columns: 1fr; } }

@@ -11,6 +11,7 @@ import { demuxLogs, opsServices, opsStatus, redactSecrets } from "./modules/ops/
 import { nayaPermissions, type NayaAgent } from "./modules/naya/agents.js";
 import { chatEndpoint, relayStream } from "./modules/naya/chat.js";
 import { isNayaKeyword } from "./modules/naya/login.js";
+import { splitTasks, teamPresence, teamTasks } from "./modules/naya/team.js";
 
 describe("sign-in link secrets", () => {
   test("codes are prefixed, url-safe and unique; only their hash is kept", () => {
@@ -280,5 +281,41 @@ describe("naya attachments", () => {
       if (env.url === undefined) delete process.env.HERMES_BRIDGE_URL;
       if (env.token === undefined) delete process.env.BRIDGE_TOKEN;
     }
+  });
+});
+
+describe("team avatars from today's standup", () => {
+  test("a plan splits into one card per line, bullet or number", () => {
+    expect(splitTasks("Hari ini:\n- Fix login\n- Review PR #12")).toEqual(["Fix login", "Review PR #12"]);
+    expect(splitTasks("1. Invoice export 2. Deploy staging")).toEqual(["Invoice export", "Deploy staging"]);
+    expect(splitTasks("Slicing dashboard; meeting klien")).toEqual(["Slicing dashboard", "meeting klien"]);
+    expect(splitTasks("")).toEqual([]);
+  });
+
+  test("exploration or standby only means santai; any real task means working", () => {
+    expect(teamPresence(undefined, { today: "Standby" })).toBe("standby");
+    expect(teamPresence(undefined, { today: "- Eksplorasi Three.js\n- stand by nunggu klien" })).toBe("standby");
+    expect(teamPresence(undefined, { today: "Belum ada task" })).toBe("standby");
+    expect(teamPresence(undefined, { today: "- Fix invoice bug\n- explore chart libs" })).toBe("working");
+    expect(teamPresence(undefined, {})).toBe("absent");
+  });
+
+  test("checking out (or missing it) ends the shift", () => {
+    expect(teamPresence({ checkoutStatus: "completed" }, { today: "Fix login" })).toBe("resting");
+    expect(teamPresence({ checkoutStatus: "missed" }, { today: "Fix login" })).toBe("resting");
+    expect(teamPresence({ checkoutStatus: "pending" }, { today: "Fix login" })).toBe("working");
+  });
+
+  test("the kanban moves done work and adds blockers at checkout", () => {
+    const answers = { today: "- Fix login\n- Invoice export", done: "- Fix login", blockers: "Menunggu akses server" };
+    expect(teamTasks(answers, false)).toEqual([
+      { title: "Fix login", status: "doing" },
+      { title: "Invoice export", status: "doing" },
+      { title: "Menunggu akses server", status: "blocked" },
+    ]);
+    expect(teamTasks({ ...answers, blockers: "tidak ada kendala" }, true)).toEqual([
+      { title: "Invoice export", status: "doing" },
+      { title: "Fix login", status: "done" },
+    ]);
   });
 });

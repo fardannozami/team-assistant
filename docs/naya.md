@@ -49,6 +49,16 @@ When `claude --version` works where the bridge runs, Claude Code gets its own de
 - **Data read:** only session-file times and the newest session's working-folder name. Transcripts are never read.
 - **Where it appears:** in development (Hermes on your machine) it shows up right away. In production, the Hermes image does not include Claude Code yet, so there is no desk.
 
+## The team in the office
+
+People on the team (daily's standup targets) get an avatar next to the agents, with an ID lanyard. It follows their standup for today (their shift's date), from `GET /naya/team`:
+- **No standup yet:** not in the office. The HUD's *Tim hadir* counts them as *belum standup*.
+- **Standup sent:** at a desk, working. The speech bubble shows the first item of the plan.
+- **Plan is only exploration or standby** (e.g. "Standby", "Eksplorasi Three.js", "Belum ada task"): *Standby*, santai around the office like an idle agent. One real task in the plan is enough to sit at a desk.
+- **Checked out** (or the checkout was missed): *Istirahat*, in bed upstairs.
+
+Clicking the avatar shows today's work as a small kanban: *Dikerjakan* (each line of the plan), *Selesai* (each line of the checkout's done answer; a plan item it mentions moves here) and *Kendala* (the blockers). Everyone who can open Naya sees it; phone numbers are not sent.
+
 ## Isolation
 
 - The `hermes` container is only on the Docker network `agents`.

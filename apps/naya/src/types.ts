@@ -40,7 +40,14 @@ export interface OfficeStation {
   seat: number
   provenance: string
   freshness: string
+  /** Set for a person on the team (not an AI agent): their standup today. */
+  employee?: { presence: TeamPresence; team: string | null; tasks: TeamTask[] }
 }
+/** absent: no standup yet today · working · standby: exploration/standby only · resting: checked out. */
+export type TeamPresence = 'absent' | 'working' | 'standby' | 'resting'
+export interface TeamTask { title: string; status: 'doing' | 'done' | 'blocked' }
+export interface TeamMember { id: string; name: string; team: string | null; shift: string; date: string; presence: TeamPresence; tasks: TeamTask[] }
+export interface TeamSnapshot { members: TeamMember[]; fetchedAt: string }
 export interface OfficeSummary { declared: number; active: number; idle: number; offline: number; unknown: number; gatewaysReachable: number; gatewaysDeclared: number }
 export interface OfficeSnapshot { stations: OfficeStation[]; summary: OfficeSummary; fetchedAt: string }
 export interface UsageInsights {

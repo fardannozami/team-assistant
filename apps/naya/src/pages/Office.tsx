@@ -1,10 +1,10 @@
 import { Component, lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
 import { agentLook } from '../agents.ts'
-import { officeStateBadge, officeStateLabel as stateLabel } from '../office-state.ts'
 import { usePolling } from '../polling.ts'
 import { formatCompact, formatDateTime, formatNumber } from '../format.ts'
 import { pageLabel, type Page } from '../routes.ts'
-import type { ActivitySnapshot, ChannelSnapshot, DashboardSnapshot, OfficeRoom, OfficeSnapshot, OfficeStation, UsageSnapshot } from '../types.ts'
+import type { ActivitySnapshot, ChannelSnapshot, DashboardSnapshot, OfficeRoom, OfficeSnapshot, OfficeStation, TeamSnapshot, TeamTask, UsageSnapshot } from '../types.ts'
+import { stationBadge, teamStations } from '../team.ts'
 import { LoadingState, SourceStatus } from '../ui.tsx'
 import { CalendarOverlayView } from './Calendar.tsx'
 import { Stats } from './Stats.tsx'
@@ -63,8 +63,27 @@ export function PixelCharacter({ agent }: { agent: string }) {
 }
 
 function officeStateLabel(station: OfficeStation): string {
-  return stateLabel(station.state)
+  return stationBadge(station).label
 }
+
+const KANBAN: { status: TeamTask['status']; label: string }[] = [
+  { status: 'doing', label: 'Dikerjakan' },
+  { status: 'done', label: 'Selesai' },
+  { status: 'blocked', label: 'Kendala' },
+]
+
+/** Today's work of a person on the team, from their standup (plan) and checkout (done, blockers). */
+export function TeamKanban({ tasks }: { tasks: TeamTask[] }) {
+  return <div className="team-kanban">{KANBAN.map((column) => {
+    const cards = tasks.filter((task) => task.status === column.status)
+    return <section key={column.status} className={`team-kanban-column ${column.status}`} aria-label={`${column.label} (${cards.length})`}>
+      <h3>{column.label} <span className="room-count">{cards.length}</span></h3>
+      {cards.length === 0 ? <p className="muted">—</p> : cards.map((task, index) => <article key={index} className="team-kanban-card">{task.title}</article>)}
+    </section>
+  })}</div>
+}
+
+const PRESENCE_NOTE = { absent: '', working: 'Sedang mengerjakan rencana hari ini.', standby: 'Hari ini eksplorasi / standby, jadi santai di sekitar kantor.', resting: 'Sudah checkout, sedang istirahat.' } as const
 
 /** This agent's tokens over the last 7 days and its rank in the crew (Hermes profiles only). */
 function AgentTokens({ agent }: { agent: string }) {
@@ -92,8 +111,9 @@ export function OfficeDetail({ station, onClose }: { station: OfficeStation; onC
   const canChat = Boolean(me?.can.chat.includes(station.id))
   const tabs: DetailTab[] = ['Overview', ...(canChat ? ['Chat' as const] : [])]
   useEffect(() => { closeRef.current?.focus() }, [])
-  const badge = officeStateBadge(station.state)
-  const profile = station.id
+  const badge = stationBadge(station)
+  const employee = station.employee
+  const profile = employee ? undefined : station.id
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key === 'Escape') { event.stopPropagation(); onClose(); return }
     if (event.key !== 'Tab') return
@@ -108,12 +128,17 @@ export function OfficeDetail({ station, onClose }: { station: OfficeStation; onC
     }
   }
   return <div className="office-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-    <section className={`office-detail${tab === 'Overview' ? '' : ' wide'}`} ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="office-detail-title" onKeyDown={onKeyDown}>
+    <section className={`office-detail${tab === 'Overview' && !employee ? '' : ' wide'}`} ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="office-detail-title" onKeyDown={onKeyDown}>
       <button className="office-close" ref={closeRef} onClick={onClose} aria-label={`Tutup detail ${station.name}`}>Tutup</button>
-      <div className="detail-head"><div className="detail-avatar"><PixelCharacter agent={station.id}/></div><div><p className="eyebrow">DETAIL AGENT</p><h2 id="office-detail-title">{station.name}</h2><span className={`badge ${badge.tone}`}>{officeStateLabel(station)}</span>{station.privacy === 'locked' && <span className="badge muted">🔒 Terkunci</span>}</div></div>
+      <div className="detail-head"><div className="detail-avatar"><PixelCharacter agent={station.id}/></div><div><p className="eyebrow">{employee ? 'ANGGOTA TIM' : 'DETAIL AGENT'}</p><h2 id="office-detail-title">{station.name}</h2><span className={`badge ${badge.tone}`}>{officeStateLabel(station)}</span>{station.privacy === 'locked' && <span className="badge muted">🔒 Terkunci</span>}</div></div>
       {profile && <div className="detail-tabs" role="tablist" aria-label={`Detail ${station.name}`}>{tabs.map((item) => <button type="button" role="tab" key={item} aria-selected={tab === item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{DETAIL_LABEL[item]}</button>)}</div>}
       <div role="tabpanel" aria-label={DETAIL_LABEL[tab]} className="detail-body">
-        {tab === 'Overview' && <>
+        {employee && <>
+          <p className="detail-activity">{PRESENCE_NOTE[employee.presence]}</p>
+          <TeamKanban tasks={employee.tasks}/>
+          <dl className="office-detail-grid"><div><dt>Tim</dt><dd>{employee.team ?? '—'}</dd></div><div><dt>Sumber data</dt><dd>{station.provenance}</dd></div><div><dt>Kebaruan data</dt><dd>{station.freshness}</dd></div></dl>
+        </>}
+        {!employee && tab === 'Overview' && <>
           {station.activity && <p className="detail-activity">{station.activity}</p>}
           <dl className="office-detail-grid"><div><dt>Jenis agent</dt><dd>{station.role}</dd></div>{station.role !== 'OpenCode' && station.role !== 'Claude Code' && <AgentTokens agent={station.id}/>}<div><dt>Ruangan</dt><dd>{roomLabel(station.room)} / {station.roomPosition}</dd></div><div><dt>Tugas saat ini</dt><dd>{station.currentTask}</dd></div><div><dt>Aktivitas terakhir</dt><dd>{station.recentActivity}</dd></div><div><dt>Sumber data</dt><dd>{station.provenance}</dd></div><div><dt>Kebaruan data</dt><dd>{station.freshness}</dd></div></dl></>}
         {tab === 'Chat' && canChat && <AgentChat agent={station.id}/>}
@@ -151,9 +176,13 @@ function ChatOverlay() {
 interface HudItem { label: string; value: string; tone?: 'warn' | 'bad'; page?: Page; title?: string }
 
 /** The few numbers worth seeing at a glance, over the office like a game HUD. */
-function hudItems(office: OfficeSnapshot | undefined, dashboard: DashboardSnapshot | null | undefined): HudItem[] {
+function hudItems(office: OfficeSnapshot | undefined, dashboard: DashboardSnapshot | null | undefined, team: TeamSnapshot | undefined): HudItem[] {
   const summary = office?.summary ?? dashboard?.office
   const items: HudItem[] = []
+  if (team && team.members.length > 0) {
+    const count = (presence: string) => team.members.filter((member) => member.presence === presence).length
+    items.push({ label: 'Tim hadir', value: `${team.members.length - count('absent')}/${team.members.length}`, title: `${count('working')} bekerja · ${count('standby')} standby · ${count('resting')} istirahat · ${count('absent')} belum standup` })
+  }
   if (summary) {
     items.push({ label: 'Kru aktif', value: `${summary.active}/${summary.declared}`, title: `${summary.idle} santai · ${summary.offline} offline · ${summary.unknown} tidak diketahui` })
     items.push({ label: 'Gateway', value: `${summary.gatewaysReachable}/${summary.gatewaysDeclared}`, title: 'Profil yang gateway Hermes-nya berjalan (agent khusus CLI tidak butuh gateway)', page: 'Agents' })
@@ -173,10 +202,12 @@ export function Office({ dashboard, dashboardPending = false, onNavigate }: { da
   const snapshot = usePolling<OfficeSnapshot>('/api/office', 10_000)
   const activitySnapshot = usePolling<ActivitySnapshot>('/api/activity', 15_000)
   const channelsSnapshot = usePolling<ChannelSnapshot>('/api/channels', 30_000)
+  const teamSnapshot = usePolling<TeamSnapshot>('/api/team', 30_000)
+  const team = teamSnapshot.status === 'ready' ? teamSnapshot.data : undefined
   const office = snapshot.status === 'ready' ? snapshot.data : undefined
   const activity = activitySnapshot.status === 'ready' ? activitySnapshot.data : undefined
   const channels = channelsSnapshot.status === 'ready' ? channelsSnapshot.data : undefined
-  const [selectedName, setSelectedName] = useState<OfficeStation['name'] | undefined>()
+  const [selectedId, setSelectedId] = useState<OfficeStation['id'] | undefined>()
   const selectedTrigger = useRef<HTMLElement | null>(null)
   const [chosenRoom, setChosenRoom] = useState<OfficeRoom | undefined>()
   const [view, setView] = useState<OfficeView>(() => typeof window === 'undefined' ? '2d' : storedView())
@@ -192,24 +223,27 @@ export function Office({ dashboard, dashboardPending = false, onNavigate }: { da
     try { window.localStorage.setItem('mc.officeView', next) } catch { /* storage may be blocked */ }
   }
   const show3d = view === '3d' && webgl
-  const select3d = (station: OfficeStation, trigger: HTMLElement | null) => { selectedTrigger.current = trigger; setSelectedName(station.name) }
-  const counts = Object.fromEntries(ROOMS.map((item) => [item, office?.stations.filter((station) => station.room === item).length ?? 0])) as Record<OfficeRoom, number>
+  const select3d = (station: OfficeStation, trigger: HTMLElement | null) => { selectedTrigger.current = trigger; setSelectedId(station.id) }
+  // The agents, then the people who are in today (their avatars follow their standup).
+  const agents = office?.stations ?? []
+  const crew = [...agents, ...teamStations(team?.members ?? [], agents)]
+  const counts = Object.fromEntries(ROOMS.map((item) => [item, crew.filter((station) => station.room === item).length])) as Record<OfficeRoom, number>
   // Until the viewer picks a room, open wherever the crew currently is.
   const room: OfficeRoom = chosenRoom ?? (counts.Workspace === 0 && counts.Lounge > 0 ? 'Lounge' : 'Workspace')
-  const stations = office?.stations.filter((station) => station.room === room) ?? []
-  const selected = office?.stations.find((station) => station.name === selectedName)
+  const stations = crew.filter((station) => station.room === room)
+  const selected = crew.find((station) => station.id === selectedId)
   const sessions = activity?.sessions
   const channelSource = channels?.channels
   const closeDetail = () => {
-    setSelectedName(undefined)
+    setSelectedId(undefined)
     selectedTrigger.current?.focus()
   }
   if (snapshot.status === 'pending') return <LoadingState message="Membaca kondisi kantor…"/>
-  const hud = hudItems(office, dashboard)
-  // Hot desking: one unlabeled desk per agent.
-  const deskCount = office?.stations.length ?? 0
-  const stationButton2d = (station: OfficeStation) => { const badge = officeStateBadge(station.state); const busy = ['Working', 'Reviewing', 'Collaborating'].includes(station.state); return <button className={`pixel-station ${station.roomPosition} state-${station.state.toLowerCase()}`} key={station.id} onClick={(event) => { selectedTrigger.current = event.currentTarget; setSelectedName(station.name) }} aria-label={`${station.name}. ${officeStateLabel(station)}${station.activity ? `: ${station.activity}` : ''}. Buka detail.`} title={station.activity || officeStateLabel(station)}>{busy && station.activity && <span className="speech" aria-hidden="true">{station.activity}</span>}<span className="pixel-station-name">{station.privacy === 'locked' ? '🔒 ' : ''}{station.name}</span><span className={`badge ${badge.tone}`}>{officeStateLabel(station)}</span>{station.state === 'Unknown' && <span className="neutral-label">STATUS BELUM JELAS</span>}<PixelCharacter agent={station.id}/></button> }
-  const stationButton = (station: OfficeStation) => { const badge = officeStateBadge(station.state); return <button type="button" className="crew-row" key={station.name} onClick={(event) => { selectedTrigger.current = event.currentTarget; setSelectedName(station.name) }} aria-label={`Detail ${station.name}: ${officeStateLabel(station)}`}><PixelCharacter agent={station.id}/><span><strong>{station.name}</strong><small>{station.activity || station.role}</small></span><span className={`badge ${badge.tone}`}>{badge.label}</span></button> }
+  const hud = hudItems(office, dashboard, team)
+  // Hot desking: one unlabeled desk per agent and per person in today.
+  const deskCount = crew.length
+  const stationButton2d = (station: OfficeStation) => { const badge = stationBadge(station); const busy = ['Working', 'Reviewing', 'Collaborating'].includes(station.state); return <button className={`pixel-station ${station.roomPosition} state-${station.state.toLowerCase()}`} key={station.id} onClick={(event) => { selectedTrigger.current = event.currentTarget; setSelectedId(station.id) }} aria-label={`${station.name}. ${officeStateLabel(station)}${station.activity ? `: ${station.activity}` : ''}. Buka detail.`} title={station.activity || officeStateLabel(station)}>{busy && station.activity && <span className="speech" aria-hidden="true">{station.activity}</span>}<span className="pixel-station-name">{station.privacy === 'locked' ? '🔒 ' : ''}{station.name}</span><span className={`badge ${badge.tone}`}>{officeStateLabel(station)}</span>{station.state === 'Unknown' && <span className="neutral-label">STATUS BELUM JELAS</span>}<PixelCharacter agent={station.id}/></button> }
+  const stationButton = (station: OfficeStation) => { const badge = stationBadge(station); return <button type="button" className="crew-row" key={station.id} onClick={(event) => { selectedTrigger.current = event.currentTarget; setSelectedId(station.id) }} aria-label={`Detail ${station.name}: ${officeStateLabel(station)}`}><PixelCharacter agent={station.id}/><span><strong>{station.name}</strong><small>{station.activity || station.role}</small></span><span className={`badge ${badge.tone}`}>{badge.label}</span></button> }
   return <section className={`office-stage view-${show3d ? '3d' : '2d'}`} aria-label="Kantor visual">
     <div className="office-hud" role="list" aria-label="Statistik utama">{hud.map((item) => { const body = <><span>{item.label}</span><b>{item.value}</b></>; return <div role="listitem" key={item.label}>{item.page && onNavigate ? <button type="button" className={`hud-chip${item.tone ? ` ${item.tone}` : ''}`} title={item.title ?? `Buka ${pageLabel(item.page)}`} onClick={() => onNavigate(item.page!)}>{body}</button> : <span className={`hud-chip${item.tone ? ` ${item.tone}` : ''}`} title={item.title}>{body}</span>}</div> })}</div>
     <div className="office-stage-tools">
@@ -218,7 +252,7 @@ export function Office({ dashboard, dashboardPending = false, onNavigate }: { da
       <button type="button" className={`panel-toggle${panel ? ' active' : ''}`} aria-expanded={Boolean(panel)} aria-controls="office-panel" onClick={() => choosePanel(panel ? undefined : 'Crew')}>◧ Panel</button>
     </div>
     <div className="office-canvas">
-      {show3d ? <SceneBoundary fallback={<section className="empty-state"><h2>Tampilan 3D tidak tersedia</h2><p>Kantor 3D tidak bisa dijalankan di perangkat ini. Beralih ke 2D.</p></section>}><Suspense fallback={<LoadingState message="Memuat kantor 3D…"/>}><Office3D stations={office?.stations ?? []} onSelect={select3d}/></Suspense></SceneBoundary> : <>{view === '3d' && !webgl && <p className="muted office-note">3D butuh WebGL, yang tidak didukung browser ini. Menampilkan 2D.</p>}<div className="room-tabs" role="tablist" aria-label="Ruangan kantor">{ROOMS.map((item) => <button role="tab" aria-selected={room === item} className={room === item ? 'active' : ''} onClick={() => setChosenRoom(item)} key={item}>{roomLabel(item)} <span className="room-count">{counts[item]}</span></button>)}</div>
+      {show3d ? <SceneBoundary fallback={<section className="empty-state"><h2>Tampilan 3D tidak tersedia</h2><p>Kantor 3D tidak bisa dijalankan di perangkat ini. Beralih ke 2D.</p></section>}><Suspense fallback={<LoadingState message="Memuat kantor 3D…"/>}><Office3D stations={crew} onSelect={select3d}/></Suspense></SceneBoundary> : <>{view === '3d' && !webgl && <p className="muted office-note">3D butuh WebGL, yang tidak didukung browser ini. Menampilkan 2D.</p>}<div className="room-tabs" role="tablist" aria-label="Ruangan kantor">{ROOMS.map((item) => <button role="tab" aria-selected={room === item} className={room === item ? 'active' : ''} onClick={() => setChosenRoom(item)} key={item}>{roomLabel(item)} <span className="room-count">{counts[item]}</span></button>)}</div>
         <div className="room-scroll"><section className={`pixel-room flow ${room.toLowerCase()}`} aria-label={roomLabel(room)}><div className="room-label"><span>{roomLabel(room)}</span><small>{room === 'Workspace' ? `${deskCount} HOT DESK + RUANG RAPAT` : 'AREA ISTIRAHAT'}</small></div>
           {room === 'Workspace' ? <>
             <div className="flow-desks">{Array.from({ length: deskCount }, (_, index) => {
@@ -242,7 +276,7 @@ export function Office({ dashboard, dashboardPending = false, onNavigate }: { da
         {panel === 'Crew' && <>
           <SourceStatus source={office ? { availability: 'available', data: null } : undefined} fetchedAt={office?.fetchedAt} request={snapshot}/>
           <section className="office-summary"><p className="eyebrow">RINGKASAN KRU</p><strong>{office?.summary.active ?? 0} sedang bekerja</strong><span>{office?.summary.idle ?? 0} santai</span><span>{office?.summary.unknown ?? 0} tidak diketahui / {office?.summary.offline ?? 0} offline</span><hr/><span>Gateway berjalan: {office ? `${office.summary.gatewaysReachable} dari ${office.summary.gatewaysDeclared}` : 'Tidak tersedia'}</span></section>
-          <div className="crew-list">{office?.stations.map(stationButton)}</div>
+          <div className="crew-list">{crew.map(stationButton)}</div>
           <small className="muted">Hanya pekerjaan yang jelas sumbernya yang ditampilkan. Pilih agent untuk melihat sumber dan kebaruan datanya.</small>
         </>}
         {panel === 'Stats' && <Stats dashboard={dashboard ?? null} pending={dashboardPending} onNavigate={onNavigate}/>}
