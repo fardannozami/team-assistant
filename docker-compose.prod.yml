@@ -99,8 +99,13 @@ services:
       BRIDGE_TOKEN: ${BRIDGE_TOKEN:?set BRIDGE_TOKEN in .env}
       # Reachable from the api container; each profile's API_SERVER_KEY lives in hermes-data.
       API_SERVER_HOST: 0.0.0.0
+      # OpenCode runs on the host; Naya reads its session database (metadata only) from here.
+      OPENCODE_DATA_DIR: /opt/opencode
     volumes:
       - hermes-data:/opt/data
+      # The host's OpenCode data folder (OPENCODE_HOST_DATA, e.g. /root/.local/share/opencode),
+      # read-only. Unset: an empty folder, and OpenCode has no desk in the office.
+      - ${OPENCODE_HOST_DATA:-./opencode-data}:/opt/opencode:ro
     networks: [agents]
     # The browser tool (Chromium) needs 2 GB or more.
     mem_limit: 3g

@@ -52,4 +52,19 @@ describe('opencode sessions', () => {
     })
     expect(office.stations.find((station) => station.id === 'opencode')).toMatchObject({ state: 'Working', activity: 'Bekerja di team-assistant', room: 'Workspace' })
   })
+
+  it('finds OpenCode from its database alone, when it runs on the host and only its data is mounted', () => {
+    const runtime: RuntimeSnapshot = {
+      profiles: { availability: 'available', data: [{ name: 'ceo', model: 'gemini', gateway: 'Running' }] },
+      openCode: { availability: 'unavailable', data: 'Unknown', error: { code: 'COMMAND_FAILED', message: 'Read command was unavailable.' } },
+      fetchedAt: at,
+    }
+    const office = (sessions: ReturnType<typeof collectOpenCodeSessions>) => buildOfficeSnapshot(runtime, { tasks: { availability: 'available', data: [] }, fetchedAt: at }, { sessions: { availability: 'available', data: [] }, fetchedAt: at }, {
+      now: at,
+      agentActivity: { agents: [{ profile: 'ceo', availability: 'available', active: false, mentionsOpenCode: false }], fetchedAt: at },
+      openCodeSessions: sessions,
+    }).stations.find((station) => station.id === 'opencode')
+    expect(office(collectOpenCodeSessions(path, NOW))).toMatchObject({ state: 'Working', room: 'Workspace' })
+    expect(office(collectOpenCodeSessions(join(dir, 'missing.db'), NOW))).toBeUndefined()
+  })
 })

@@ -842,13 +842,18 @@ export async function collectAgentActivity(profiles: readonly string[], run: Run
 // ---------------------------------------------------------------------------
 // Office
 
-/** One office station per agent: every Hermes profile, plus OpenCode when it is installed. */
+/**
+ * One office station per agent: every Hermes profile, plus OpenCode when it is installed. OpenCode
+ * counts as installed when `opencode --version` runs or its session database is readable: on a
+ * server it runs on the host, and only its data folder is mounted into this container.
+ */
 interface AgentSpec { id: string; role: string; profile?: string; gateway?: GatewayState; aliases: string[]; displayName?: string }
 
-export function agentRoster(runtime: RuntimeSnapshot): AgentSpec[] {
+export function agentRoster(runtime: RuntimeSnapshot, openCodeSessions?: OpenCodeSessions): AgentSpec[] {
   const profiles = runtime.profiles.availability === 'available' ? runtime.profiles.data : []
   const agents: AgentSpec[] = profiles.filter((profile) => PROFILE_NAME.test(profile.name)).map((profile) => ({ id: profile.name, role: 'Hermes profile', profile: profile.name, gateway: profile.gateway, aliases: [profile.name.toLowerCase()], ...(profile.displayName ? { displayName: profile.displayName } : {}) }))
-  if (runtime.openCode.availability === 'available' && !agents.some((agent) => agent.id === 'opencode')) agents.push({ id: 'opencode', role: 'OpenCode', aliases: ['opencode', 'open-code'] })
+  const openCode = runtime.openCode.availability === 'available' || openCodeSessions?.availability === 'available'
+  if (openCode && !agents.some((agent) => agent.id === 'opencode')) agents.push({ id: 'opencode', role: 'OpenCode', aliases: ['opencode', 'open-code'] })
   if (runtime.claudeCode?.availability === 'available' && !agents.some((agent) => agent.id === CLAUDE_CODE_ID)) agents.push({ id: CLAUDE_CODE_ID, role: 'Claude Code', aliases: [CLAUDE_CODE_ID, 'claude'] })
   return agents
 }
@@ -951,7 +956,7 @@ export function buildOfficeSnapshot(runtime: RuntimeSnapshot, board: TaskBoardSn
   const freshActivity = activity.sessions.availability === 'available' && isFresh(activity.fetchedAt, now)
   const agentActivity = options.agentActivity && isFresh(options.agentActivity.fetchedAt, now) ? options.agentActivity : undefined
   const explicitStates = options.explicitStates ?? []
-  const stations = agentRoster(runtime).map((agent, index): OfficeStation => {
+  const stations = agentRoster(runtime, options.openCodeSessions).map((agent, index): OfficeStation => {
     const gateway = agent.gateway
     const task = freshBoard ? attributedTask(board.tasks.data, agent.aliases) : undefined
     const overlay = explicitState(agent, explicitStates, now)

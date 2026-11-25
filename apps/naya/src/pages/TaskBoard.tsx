@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { apiFetch } from '../api.ts'
 import { apiPost, useMe } from '../access.ts'
-import { formatDateTime, orderedStatuses, statusTone } from '../format.ts'
+import { formatDateTime, statusTone } from '../format.ts'
 import { usePolling } from '../polling.ts'
 import { loadSnapshot, type RequestState } from '../request-state.ts'
 import type { Task, TaskBoardSnapshot, TaskDetailSnapshot } from '../types.ts'
+import { PILLS, pillOf, STAGES, stageOf, type Pill } from '../pipeline.ts'
 import { Dialog, EmptyState, PageTitle, SearchInput, SourceStatus, Unavailable } from '../ui.tsx'
 
 const UNASSIGNED = '(belum ditugaskan)'
@@ -18,16 +19,19 @@ const statusLabel = (status: string) => STATUS_LABEL[status] ?? status
 
 const FILTERS: { id: string; label: string; statuses?: string[] }[] = [
   { id: 'all', label: 'Semua' },
-  { id: 'progress', label: 'In progress', statuses: ['triage', 'todo', 'scheduled', 'ready', 'running'] },
-  { id: 'review', label: 'Menunggu review', statuses: ['review'] },
-  { id: 'blocked', label: 'Ditolak / tertahan', statuses: ['blocked'] },
-  { id: 'done', label: 'Selesai', statuses: ['done'] },
+  ...(Object.keys(PILLS) as Pill[]).map((pill) => ({ id: pill, label: PILLS[pill].label, statuses: PILLS[pill].statuses })),
 ]
+
+/** Where the task is in the flow, as in the card detail of the design. */
+function StageSteps({ status }: { status: string }) {
+  const current = stageOf(status)
+  return <ol className="pipe-steps" aria-label="Alur tugas">{STAGES.map((stage, index) => <li key={stage.id} className={index < current || status === 'done' ? 'past' : index === current ? `now pill-${pillOf(status)}` : ''} aria-current={index === current ? 'step' : undefined}><span className="mono">{index + 1}</span>{stage.label}</li>)}</ol>
+}
 
 type ReviewMode = 'approve' | 'changes' | 'reject'
 const REVIEW: Record<ReviewMode, { label: string; field: string; required: boolean; submit: string; done: string }> = {
   approve: { label: '✓ Setujui', field: 'Catatan (opsional)', required: false, submit: 'Setujui & selesai', done: 'Disetujui. Task ditandai selesai.' },
-  changes: { label: '↻ Minta revisi', field: 'Apa yang perlu diperbaiki? (wajib)', required: true, submit: 'Kirim revisi', done: 'Revisi dikirim. Agent mengerjakan ulang dengan catatan Anda.' },
+  changes: { label: '↻ Beri feedback', field: 'Apa yang perlu diperbaiki? (wajib)', required: true, submit: 'Kirim revisi', done: 'Revisi dikirim. Agent mengerjakan ulang dengan catatan Anda.' },
   reject: { label: '✕ Tolak', field: 'Alasan penolakan (wajib)', required: true, submit: 'Tolak', done: 'Ditolak. Alasan Anda tercatat untuk agent.' },
 }
 
@@ -76,12 +80,12 @@ function ReviewPanel({ task, status, blocked, onDone }: { task: Task; status: st
   const retry = () => void send('retry', {}, 'Tugas dikembalikan ke antrean. Agent akan mengerjakannya lagi.')
   const modes = (Object.keys(REVIEW) as ReviewMode[]).filter((item) => item === 'reject' || status === 'review')
   return <section className="task-section" aria-label="Tindakan">
-    <p className="eyebrow">TINDAKAN</p>
+    <p className="eyebrow">KEPUTUSAN ANDA</p>
     {status === 'blocked' && <p className="file-notice">{blocked === 'rejected'
       ? 'Ditolak oleh anggota tim (alasannya di komentar). "Coba lagi" mengembalikan tugas ke agent untuk dikerjakan ulang.'
       : 'Tertahan: agent gagal (lihat Kegagalan terakhir, mis. API key model ditolak) atau menunggu masukan. Perbaiki penyebabnya, lalu "Coba lagi".'}</p>}
     {canRetry && <div className="review-actions"><button type="button" className="primary-button" disabled={busy} onClick={retry}>↻ Coba lagi</button></div>}
-    {canReview && <div className="review-actions">{modes.map((item) => <button type="button" key={item} className={item === 'approve' ? 'primary-button' : `secondary-button${item === 'reject' ? ' bad' : ''}`} aria-pressed={mode === item} disabled={busy} onClick={() => { setMode(mode === item ? undefined : item); setMessage(undefined) }}>{REVIEW[item].label}</button>)}</div>}
+    {canReview && <div className="review-actions">{modes.map((item) => <button type="button" key={item} className={item === 'approve' ? 'primary-button' : `secondary-button${item === 'reject' ? ' bad' : ' warn'}`} aria-pressed={mode === item} disabled={busy} onClick={() => { setMode(mode === item ? undefined : item); setMessage(undefined) }}>{REVIEW[item].label}</button>)}</div>}
     {mode && <form className="review-form" onSubmit={submitReview}>
       <label className="field-label" htmlFor="review-note">{REVIEW[mode].field}</label>
       <textarea id="review-note" value={note} onChange={(event) => setNote(event.target.value)} maxLength={4000} required={REVIEW[mode].required} autoFocus/>
@@ -215,7 +219,8 @@ export function TaskDetailDialog({ task, onClose, onOpenTask, onChanged }: { tas
   return <Dialog labelledBy="task-detail-title" onClose={onClose} closeLabel={`Tutup detail ${task.title}`} className="task-detail">
     <p className="eyebrow">TUGAS KANBAN{task.board ? ` · BOARD ${task.board.toUpperCase()}` : ''}{task.id ? ` · ${task.id}` : ''}</p>
     <h2 id="task-detail-title">{detail?.title ?? task.title}</h2>
-    <div className="task-meta"><span className={`badge ${statusTone(status)}`}>{status === 'blocked' && detail ? (blockedBy(detail.comments) === 'rejected' ? 'Ditolak' : 'Tertahan') : statusLabel(status)}</span><span className={`chip ${task.assignee ? '' : 'chip-muted'}`}>{detail?.assignee ?? task.assignee ?? 'belum ditugaskan'}</span>{(detail?.priority ?? task.priority) ? <span className="chip chip-priority">P{detail?.priority ?? task.priority}</span> : null}</div>
+    <StageSteps status={status}/>
+    <div className="task-meta"><span className={`pill pill-${pillOf(status)}`}>{status === 'blocked' && detail ? (blockedBy(detail.comments) === 'rejected' ? '✕ Ditolak' : '✕ Tertahan') : PILLS[pillOf(status)].label}</span><span className={`chip ${task.assignee ? '' : 'chip-muted'}`}>{detail?.assignee ?? task.assignee ?? 'belum ditugaskan'}</span>{(detail?.priority ?? task.priority) ? <span className="chip chip-priority">P{detail?.priority ?? task.priority}</span> : null}</div>
     {state.status === 'pending' && task.id && <p className="muted">Memuat detail tugas…</p>}
     {failed && <p className="file-notice">{task.id ? 'Detail lengkap belum bisa dibaca (hermes kanban show gagal). Menampilkan ringkasan dari papan.' : 'Tugas ini tidak punya id, jadi hanya ringkasan papan yang tersedia.'}</p>}
     <ReviewPanel task={task} status={status} blocked={detail ? blockedBy(detail.comments) : undefined} onDone={() => { setVersion((value) => value + 1); onChanged?.() }}/>
@@ -243,6 +248,25 @@ export function TaskDetailDialog({ task, onClose, onOpenTask, onChanged }: { tas
   </Dialog>
 }
 
+/** The four flow columns of cards (Masuk → Dikerjakan AI → Review → Selesai). */
+export function PipelineColumns({ tasks, multiBoard, onOpen }: { tasks: Task[]; multiBoard: boolean; onOpen: (task: Task, trigger: HTMLButtonElement) => void }) {
+  return <div className="pipeline-scroll"><section className="pipeline" aria-label="Alur tugas">{STAGES.map((stage, index) => {
+    const items = tasks.filter((task) => stageOf(task.status) === index).sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
+    return <section key={stage.id} className="pipe-col" aria-label={`Kolom ${index + 1} ${stage.label}`}>
+      <header className="pipe-col-head"><h2>{index + 1} · {stage.label}</h2><span className="mono">{items.length}</span></header>
+      <div className="pipe-col-body">{items.length === 0 ? <p className="column-empty">—</p> : items.map((task) => {
+        const pill = pillOf(task.status)
+        return <button type="button" className={`pipe-card card-${pill}`} key={`${task.board ?? ''}-${task.status}-${task.id ?? task.title}`} onClick={(event) => onOpen(task, event.currentTarget)} aria-label={`${task.title}. ${statusLabel(task.status)}. Buka detail tugas.`}>
+          <span className="pipe-card-head"><span className={`pill pill-${pill}`}>{PILLS[pill].label}</span>{task.id && <span className="mono">#{task.id}</span>}</span>
+          <strong>{task.title}</strong>
+          <span className={`pipe-bar pill-${pill}`}><span style={{ width: `${((stageOf(task.status) + 1) / STAGES.length) * 100}%` }}/></span>
+          <span className="pipe-card-foot"><span>PIC: {task.assignee ?? 'belum ditugaskan'}</span><span className="mono">{multiBoard && task.board ? `${task.board} · ` : ''}{task.priority ? `P${task.priority}` : ''}</span></span>
+        </button>
+      })}</div>
+    </section>
+  })}</section></div>
+}
+
 export function TaskBoard() {
   const snapshot = usePolling<TaskBoardSnapshot>('/api/tasks', 10_000)
   const [query, setQuery] = useState('')
@@ -253,10 +277,6 @@ export function TaskBoard() {
   const [instructing, setInstructing] = useState(false)
   const me = useMe()
   const trigger = useRef<HTMLButtonElement | null>(null)
-  const boardRef = useRef<HTMLElement | null>(null)
-  /** Scrolls the board sideways by about one column, or to a column. */
-  const scrollBoard = (direction: number) => boardRef.current?.scrollBy({ left: direction * 250, behavior: 'smooth' })
-  const showColumn = (status: string) => boardRef.current?.querySelector<HTMLElement>(`[data-status="${CSS.escape(status)}"]`)?.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' })
   const closeTask = () => { setOpenTask(undefined); trigger.current?.focus() }
   const data = snapshot.status === 'ready' ? snapshot.data : undefined
   const tasks = data?.tasks
@@ -267,26 +287,16 @@ export function TaskBoard() {
   const needle = query.trim().toLowerCase()
   const statuses = FILTERS.find((item) => item.id === filter)?.statuses
   const visible = all.filter((task) => (!statuses || statuses.includes(task.status)) && (assignee === 'all' || (task.assignee ?? UNASSIGNED) === assignee) && (board === 'all' || task.board === board) && (!needle || `${task.title} ${task.id ?? ''} ${task.assignee ?? ''}`.toLowerCase().includes(needle)))
-  const columns = orderedStatuses(all.map((task) => task.status), true)
   return <><PageTitle eyebrow="HERMES KANBAN" title="Papan tugas">Semua tugas tim AI dari Kanban Hermes, diperbarui tiap 10 detik. Buka kartu untuk menyetujui, meminta revisi, atau menolak hasil kerja agent.</PageTitle>
     {me?.can.instruct && <div className="toolbar"><button type="button" className="primary-button" onClick={() => setInstructing(true)}>＋ Instruksi ke Naya</button></div>}
     {instructing && <InstructionDialog boards={boards} onClose={() => setInstructing(false)} onCreated={snapshot.refresh}/>}
     <SourceStatus source={tasks} fetchedAt={data?.fetchedAt} request={snapshot}/><Unavailable source={tasks} request={snapshot}/>
     {data?.failedBoards && <p className="file-notice">Board {data.failedBoards.join(', ')} tidak bisa dibaca; menampilkan board lain.</p>}
     {tasks?.availability === 'available' && (all.length === 0 ? <EmptyState title="Belum ada tugas">{multiBoard ? `Tidak ada tugas terbuka di ${boards.length} board Kanban.` : 'Kanban Hermes masih kosong.'} {me?.can.instruct ? 'Mulai dengan tombol "Instruksi ke Naya".' : 'Tugas baru dibuat oleh Owner, Admin, atau PM.'}</EmptyState> : <>
-      <div className="quick-filters" role="group" aria-label="Saring status">{FILTERS.map((item) => <button type="button" key={item.id} className="chip chip-button" aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>{item.label} <b>{item.statuses ? all.filter((task) => item.statuses!.includes(task.status)).length : all.length}</b></button>)}</div>
-      <div className="toolbar"><SearchInput value={query} onChange={setQuery} label="Cari tugas"/><label className="select-label">Agent <select value={assignee} onChange={(event) => setAssignee(event.target.value)}><option value="all">Semua ({all.length})</option>{assignees.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>{multiBoard && <label className="select-label">Board <select value={board} onChange={(event) => setBoard(event.target.value)}><option value="all">Semua board</option>{boards.map((item) => <option key={item.slug} value={item.slug}>{item.name}{item.current ? ' (aktif)' : ''}</option>)}</select></label>}<span className="toolbar-count">{visible.length} tampil</span></div>
-      <nav className="board-nav" aria-label="Kolom Kanban">
-        <button type="button" className="refresh-button" onClick={() => scrollBoard(-1)} aria-label="Geser papan ke kiri">‹</button>
-        <div className="board-nav-chips">{columns.map((status) => <button type="button" key={status} className={`chip chip-button tone-border-${statusTone(status)}`} onClick={() => showColumn(status)}>{statusLabel(status)} <b>{visible.filter((task) => task.status === status).length}</b></button>)}</div>
-        <button type="button" className="refresh-button" onClick={() => scrollBoard(1)} aria-label="Geser papan ke kanan">›</button>
-      </nav>
-      <section className="board" aria-label="Papan Kanban" ref={boardRef}>{columns.map((status) => {
-        const items = visible.filter((task) => task.status === status).sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
-        return <article key={status} data-status={status} className={`column tone-border-${statusTone(status)}`} aria-label={`Kolom ${statusLabel(status)}`}><header className="column-head"><p className="eyebrow">{statusLabel(status)}</p><span className="column-count">{items.length}</span></header>
-          {items.length === 0 ? <p className="column-empty">—</p> : items.map((task) => <button type="button" className="task task-card" key={`${task.board ?? ''}-${task.status}-${task.id ?? task.title}`} onClick={(event) => { trigger.current = event.currentTarget; setOpenTask(task) }} aria-label={`${task.title}. ${statusLabel(task.status)}. Buka detail tugas.`}><strong>{task.title}</strong><div className="task-meta">{task.id && <small>{task.id}</small>}{multiBoard && task.board && <span className="chip chip-muted">{task.board}</span>}<span className={`chip ${task.assignee ? '' : 'chip-muted'}`}>{task.assignee ?? 'belum ditugaskan'}</span>{task.priority ? <span className="chip chip-priority">P{task.priority}</span> : null}</div></button>)}
-        </article>
-      })}</section>
+      <div className="pipe-filters" role="group" aria-label="Saring status">{FILTERS.map((item) => <button type="button" key={item.id} className={`pipe-filter${item.statuses ? ` pill-${item.id}` : ''}`} aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>{item.label} <b className="mono">{item.statuses ? all.filter((task) => item.statuses!.includes(task.status)).length : all.length}</b></button>)}</div>
+      <div className="toolbar"><SearchInput value={query} onChange={setQuery} label="Cari tugas"/><label className="select-label">PIC <select value={assignee} onChange={(event) => setAssignee(event.target.value)}><option value="all">Semua ({all.length})</option>{assignees.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>{multiBoard && <label className="select-label">Board <select value={board} onChange={(event) => setBoard(event.target.value)}><option value="all">Semua board</option>{boards.map((item) => <option key={item.slug} value={item.slug}>{item.name}{item.current ? ' (aktif)' : ''}</option>)}</select></label>}<span className="toolbar-count">{visible.length} tampil</span></div>
+      <PipelineColumns tasks={visible} multiBoard={multiBoard} onOpen={(task, trigger_) => { trigger.current = trigger_; setOpenTask(task) }}/>
+      <section className="pipe-legend" aria-label="Legenda"><span className="eyebrow">LEGENDA</span>{(Object.keys(PILLS) as Pill[]).map((pill) => <span key={pill}><span className={`pill pill-${pill}`}>{PILLS[pill].label}</span> {PILLS[pill].legend}</span>)}</section>
     </>)}
     {openTask && <TaskDetailDialog key={`${openTask.board ?? ''}-${openTask.id ?? openTask.title}`} task={openTask} onClose={closeTask} onChanged={snapshot.refresh} onOpenTask={(id) => setOpenTask(all.find((task) => task.id === id && task.board === openTask.board) ?? { id, title: id, status: 'unknown', ...(openTask.board ? { board: openTask.board } : {}) })}/>}
   </>
