@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { lastSessionActivity, readKanbanTasks, recentLogLines } from './hermes-files.js'
+import { lastSessionActivity, readKanban, recentLogLines } from './hermes-files.js'
 import { collectAgentActivityFromFiles, collectTaskBoardFast } from './mission-control.js'
 
 // Hermes' own files, read without starting the CLI.
@@ -36,19 +36,34 @@ describe('hermes files', () => {
   afterEach(async () => { await rm(home, { recursive: true, force: true }) })
 
   it('reads the open tasks of kanban.db, without archived ones', async () => {
-    expect(readKanbanTasks(home)).toEqual([
-      { id: 't_1', title: 'Riset prospek', status: 'running', assignee: 'pm', priority: 2 },
-      { id: 't_2', title: 'Draft email', status: 'todo', priority: 0 },
-    ])
+    expect(readKanban(home, {})).toEqual({
+      boards: [{ slug: 'default', name: 'Default', current: true, total: 2 }],
+      tasks: [
+        { id: 't_1', title: 'Riset prospek', status: 'running', assignee: 'pm', priority: 2, board: 'default' },
+        { id: 't_2', title: 'Draft email', status: 'todo', priority: 0, board: 'default' },
+      ],
+    })
     const board = await collectTaskBoardFast(home, async () => { throw new Error('the CLI is not needed') })
     expect(board.tasks).toMatchObject({ availability: 'available', data: [{ id: 't_1', board: 'default' }, { id: 't_2', board: 'default' }] })
   })
 
-  it('leaves more boards, or no kanban.db, to the CLI', async () => {
-    await mkdir(join(home, 'kanban', 'boards', 'sales'), { recursive: true })
-    await writeFile(join(home, 'kanban', 'boards', 'sales', 'kanban.db'), '')
-    expect(readKanbanTasks(home)).toBeUndefined()
-    expect(readKanbanTasks(join(home, 'missing'))).toBeUndefined()
+  it('reads every board, skips archived ones, and follows the current board', async () => {
+    const board = async (slug: string, meta: Record<string, unknown>, title?: string) => {
+      await mkdir(join(home, 'kanban', 'boards', slug), { recursive: true })
+      await writeFile(join(home, 'kanban', 'boards', slug, 'board.json'), JSON.stringify({ slug, ...meta }))
+      const db = new Database(join(home, 'kanban', 'boards', slug, 'kanban.db'))
+      db.run('create table tasks (id text primary key, title text not null, assignee text, status text not null, priority integer, created_at integer not null)')
+      if (title) db.run("insert into tasks values ('t_9', ?, 'sales', 'review', null, 1)", [title])
+      db.close()
+    }
+    await board('sales', { name: 'Sales' }, 'Proposal klien')
+    await board('old', { name: 'Old', archived: true }, 'Tidak terbaca')
+    await writeFile(join(home, 'kanban', 'current'), 'sales\n')
+    const kanban = readKanban(home, {})!
+    expect(kanban.boards).toEqual([{ slug: 'default', name: 'Default', current: false, total: 2 }, { slug: 'sales', name: 'Sales', current: true, total: 1 }])
+    expect(kanban.tasks.at(-1)).toEqual({ id: 't_9', title: 'Proposal klien', status: 'review', assignee: 'sales', board: 'sales' })
+    expect(readKanban(home, { HERMES_KANBAN_BOARD: 'missing' })!.boards.find((item) => item.current)?.slug).toBe('default')
+    expect(readKanban(join(home, 'missing'), {})).toBeUndefined()
   })
 
   it('keeps only the log lines of the last minutes', () => {

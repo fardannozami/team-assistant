@@ -1,8 +1,8 @@
 import { Database } from 'bun:sqlite'
-import { closeSync, existsSync, fstatSync, openSync, readdirSync, readSync } from 'node:fs'
+import { closeSync, existsSync, fstatSync, openSync, readdirSync, readFileSync, readSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { Task } from './mission-control.js'
+import type { KanbanBoard, Task } from './mission-control.js'
 
 // Hermes keeps its Kanban, sessions and logs in files under HERMES_HOME. Reading them directly
 // takes milliseconds; the same read through the `hermes` CLI starts Python and takes 4-25 s (and
@@ -18,20 +18,16 @@ export function profileHome(home: string, profile: string): string {
   return profile === 'default' ? home : join(home, 'profiles', profile)
 }
 
-/** Any Kanban database besides the default board's (more boards: the CLI reads those). */
-function hasOtherBoards(home: string): boolean {
-  const walk = (dir: string, depth: number): boolean => {
-    let entries
-    try { entries = readdirSync(dir, { withFileTypes: true }) } catch { return false }
-    return entries.some((entry) => entry.isFile() ? entry.name.endsWith('.db') : entry.isDirectory() && depth > 0 && entry.name !== 'workspaces' && entry.name !== 'logs' && walk(join(dir, entry.name), depth - 1))
-  }
-  return walk(join(home, 'kanban'), 2)
+export interface KanbanFiles { boards: KanbanBoard[]; tasks: Task[] }
+
+const BOARD_SLUG = /^[a-z0-9][a-z0-9_-]{0,63}$/
+
+function readJson(path: string): Record<string, unknown> {
+  try { return JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown> } catch { return {} }
 }
 
-/** Open tasks (not archived) of the default board in kanban.db; undefined when the CLI should read them. */
-export function readKanbanTasks(home: string): Task[] | undefined {
-  const path = join(home, 'kanban.db')
-  if (!existsSync(path) || hasOtherBoards(home)) return undefined
+/** Open tasks (not archived) of one board's kanban.db, tagged with the board. */
+function readBoardTasks(path: string, board: string): Task[] {
   const db = new Database(path, { readonly: true })
   try {
     const rows = db.query("select id, title, status, assignee, priority from tasks where status != 'archived' order by created_at").all() as { id: string; title: string; status: string; assignee: string | null; priority: number | null }[]
@@ -41,9 +37,39 @@ export function readKanbanTasks(home: string): Task[] | undefined {
       ...(/^[A-Za-z0-9_-]+$/.test(row.id) ? { id: row.id } : {}),
       ...(row.assignee ? { assignee: row.assignee } : {}),
       ...(typeof row.priority === 'number' ? { priority: row.priority } : {}),
+      board,
     }))
   } finally {
     db.close()
+  }
+}
+
+/**
+ * Every Kanban board and its open tasks, as `hermes kanban boards list` and `kanban list` give them:
+ * `default` is `<home>/kanban.db`, the others `<home>/kanban/boards/<slug>/kanban.db` with a
+ * `board.json` (archived ones are left out). The current board is `HERMES_KANBAN_BOARD`, else the
+ * slug in `<home>/kanban/current`, else `default`. Undefined without kanban.db (no Kanban here).
+ */
+export function readKanban(home: string, env: NodeJS.ProcessEnv = process.env): KanbanFiles | undefined {
+  const root = join(home, 'kanban', 'boards')
+  if (!existsSync(join(home, 'kanban.db'))) return undefined
+  const found: { slug: string; name: string; path: string }[] = [{ slug: 'default', name: 'Default', path: join(home, 'kanban.db') }]
+  let dirs: string[] = []
+  try { dirs = readdirSync(root, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort() } catch { dirs = [] }
+  for (const slug of dirs) {
+    const meta = readJson(join(root, slug, 'board.json'))
+    const path = join(root, slug, 'kanban.db')
+    if (!BOARD_SLUG.test(slug) || slug === 'default' || meta.archived === true || !existsSync(path)) continue
+    found.push({ slug, name: typeof meta.name === 'string' && meta.name ? meta.name : slug, path })
+  }
+  let current = 'default'
+  try { current = readFileSync(join(home, 'kanban', 'current'), 'utf8').trim() } catch { /* no current file: default */ }
+  const wanted = (env.HERMES_KANBAN_BOARD ?? '').trim() || current
+  current = found.some((board) => board.slug === wanted) ? wanted : 'default'
+  const perBoard = found.map((board) => readBoardTasks(board.path, board.slug))
+  return {
+    boards: found.map((board, index) => ({ slug: board.slug, name: board.name, current: board.slug === current, total: perBoard[index].length })),
+    tasks: perBoard.flat(),
   }
 }
 

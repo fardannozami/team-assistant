@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { collectClaudeSessions, type ClaudeSessions } from './claude-code.js'
 import { collectOpenCodeSessions, type OpenCodeSessions } from './opencode.js'
-import { hermesHome, lastSessionActivity, profileHome, readKanbanTasks, recentLogLines } from './hermes-files.js'
+import { hermesHome, lastSessionActivity, profileHome, readKanban, recentLogLines } from './hermes-files.js'
 
 const execFile = promisify(execFileCallback)
 const CACHE_MS = 10_000
@@ -865,12 +865,12 @@ export function collectAgentActivityFromFiles(profiles: readonly string[], home 
   return { agents, fetchedAt: new Date(now).toISOString() }
 }
 
-/** The default board straight from kanban.db; more boards (or an unreadable database) go through the CLI. */
+/** Every board straight from its kanban.db; without one (or if it cannot be read) through the CLI. */
 export async function collectTaskBoardFast(home = hermesHome(), run: Run = systemRun): Promise<TaskBoardSnapshot> {
-  let tasks: Task[] | undefined
-  try { tasks = readKanbanTasks(home) } catch { tasks = undefined }
-  if (!tasks) return collectTaskBoard(run)
-  return { tasks: { availability: 'available', data: tasks.map((task) => ({ ...task, board: 'default' })) }, boards: [{ slug: 'default', name: 'default', current: true, total: tasks.length }], fetchedAt: new Date().toISOString() }
+  let kanban: ReturnType<typeof readKanban>
+  try { kanban = readKanban(home) } catch { kanban = undefined }
+  if (!kanban) return collectTaskBoard(run)
+  return { tasks: { availability: 'available', data: kanban.tasks }, boards: kanban.boards, fetchedAt: new Date().toISOString() }
 }
 
 // ---------------------------------------------------------------------------
