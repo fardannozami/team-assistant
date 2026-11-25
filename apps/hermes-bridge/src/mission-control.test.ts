@@ -166,7 +166,7 @@ describe('Office snapshot', () => {
     expect(office.stations).toMatchObject([
       { name: 'default', room: 'Lounge', roomPosition: 'lounge-seat-1', state: 'Idle' },
       { name: 'coder', room: 'Lounge', roomPosition: 'lounge-seat-2', state: 'Idle' },
-      { name: 'opencode', room: 'Lounge', roomPosition: 'lounge-seat-3', state: 'Idle' },
+      { name: 'Coder', room: 'Lounge', roomPosition: 'lounge-seat-3', state: 'Idle' },
     ])
     expect(office.stations[2].provenance).toContain('OpenCode version availability is not a state signal')
     expect(office.stations[0].provenance).toContain('Naya managed-idle placement policy')
@@ -185,7 +185,7 @@ describe('Office snapshot', () => {
     expect(office.stations).toMatchObject([
       { id: 'default', name: 'default', role: 'Hermes profile', room: 'Lounge', state: 'Idle', currentTask: 'No attributed task', recentActivity: 'No attributed recent activity' },
       { name: 'coder', room: 'Workspace', state: 'Reviewing', currentTask: 'Review the office', recentActivity: 'No attributed recent activity' },
-      { name: 'opencode', room: 'Lounge', state: 'Idle', currentTask: 'No attributed task' },
+      { name: 'Coder', room: 'Lounge', state: 'Idle', currentTask: 'No attributed task' },
     ])
   })
 
@@ -202,7 +202,7 @@ describe('Office snapshot', () => {
     expect(office.stations).toMatchObject([
       { name: 'default', room: 'Lounge', roomPosition: 'lounge-seat-1' },
       { name: 'coder', room: 'Lounge', roomPosition: 'lounge-seat-2' },
-      { name: 'opencode', room: 'Lounge', roomPosition: 'lounge-seat-3' },
+      { name: 'Coder', room: 'Lounge', roomPosition: 'lounge-seat-3' },
     ])
   })
 
@@ -222,7 +222,7 @@ describe('Office snapshot', () => {
 
     expect(office.stations[0]).toMatchObject({ name: 'default', state: 'Working', currentTask: 'Active lead work', recentActivity: 'Not Available' })
     expect(office.stations.some((station) => station.state === 'Offline')).toBe(false)
-    expect(office.stations[2]).toMatchObject({ name: 'opencode', state: 'Unknown' })
+    expect(office.stations[2]).toMatchObject({ name: 'Coder', state: 'Unknown' })
   })
 
   it('does not turn unassigned work, generic sessions, gateway Running, or a version into active state', () => {

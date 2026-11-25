@@ -68,7 +68,7 @@ describe('claude code in the office', () => {
 
   it('gets a desk when installed and works while a session is active', () => {
     expect(station({ agentActivity: quiet, claudeSessions: { availability: 'available', active: true, activeSessions: 2, project: 'team-assistant', fetchedAt: at } })).toMatchObject({
-      name: 'Claude Code', role: 'Claude Code', state: 'Working', activity: 'Bekerja di team-assistant (2 sesi)',
+      name: 'Coder', role: 'Claude Code', state: 'Working', activity: 'Bekerja di team-assistant (2 sesi)',
     })
   })
 

@@ -892,6 +892,9 @@ export async function collectTaskBoardFast(home = hermesHome(), run: Run = syste
 // ---------------------------------------------------------------------------
 // Office
 
+/** The office name of the coding tools (OpenCode, Claude Code); their role still says which one. */
+const CODER_NAME = 'Coder'
+
 /**
  * One office station per agent: every Hermes profile, plus OpenCode when it is installed. OpenCode
  * counts as installed when `opencode --version` runs or its session database is readable: on a
@@ -903,8 +906,8 @@ export function agentRoster(runtime: RuntimeSnapshot, openCodeSessions?: OpenCod
   const profiles = runtime.profiles.availability === 'available' ? runtime.profiles.data : []
   const agents: AgentSpec[] = profiles.filter((profile) => PROFILE_NAME.test(profile.name)).map((profile) => ({ id: profile.name, role: 'Hermes profile', profile: profile.name, gateway: profile.gateway, aliases: [profile.name.toLowerCase()], ...(profile.displayName ? { displayName: profile.displayName } : {}) }))
   const openCode = runtime.openCode.availability === 'available' || openCodeSessions?.availability === 'available'
-  if (openCode && !agents.some((agent) => agent.id === 'opencode')) agents.push({ id: 'opencode', role: 'OpenCode', aliases: ['opencode', 'open-code'] })
-  if (runtime.claudeCode?.availability === 'available' && !agents.some((agent) => agent.id === CLAUDE_CODE_ID)) agents.push({ id: CLAUDE_CODE_ID, role: 'Claude Code', aliases: [CLAUDE_CODE_ID, 'claude'] })
+  if (openCode && !agents.some((agent) => agent.id === 'opencode')) agents.push({ id: 'opencode', role: 'OpenCode', displayName: CODER_NAME, aliases: ['opencode', 'open-code'] })
+  if (runtime.claudeCode?.availability === 'available' && !agents.some((agent) => agent.id === CLAUDE_CODE_ID)) agents.push({ id: CLAUDE_CODE_ID, role: 'Claude Code', displayName: CODER_NAME, aliases: [CLAUDE_CODE_ID, 'claude'] })
   return agents
 }
 
@@ -1037,7 +1040,7 @@ export function buildOfficeSnapshot(runtime: RuntimeSnapshot, board: TaskBoardSn
     const liveProvenance = options.agentActivity ? `; live activity (${agent.profile ? `hermes -p ${agent.profile} logs/sessions` : 'agent logs mentioning OpenCode'}, last ${ACTIVITY_WINDOW}): ${!agentActivity || !live.known ? 'unavailable' : live.state !== 'Unknown' ? live.probe?.kind ?? 'active' : 'none'}` : ''
     return {
       id: agent.id,
-      name: agent.id === CLAUDE_CODE_ID ? 'Claude Code' : agent.displayName ?? agent.id,
+      name: agent.displayName ?? agent.id,
       role: agent.role,
       ...roomForState(state, index),
       seat: index + 1,
