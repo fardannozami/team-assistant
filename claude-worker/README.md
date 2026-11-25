@@ -5,13 +5,19 @@ menyimpan papan dan kantor Naya (`kanban.dispatch_in_gateway: false`,
 `kanban.auto_decompose: false`, lihat [`hermes/`](../hermes/README.md)); skrip ini
 yang berpikir.
 
-Setiap kali jalan, satu aksi saja (dengan lock agar tidak tumpang tindih):
+Setiap kali jalan (tiap menit, dengan lock agar tidak tumpang tindih), papan dikerjakan
+sampai habis, maksimal 30 aksi:
 
 1. Ada tugas di `triage` → Claude memutuskan dikerjakan langsung atau dipecah menjadi
    2–5 subtugas berurutan.
 2. Jika tidak, satu tugas `ready` (prioritas tertinggi dulu) → Claude mengerjakannya,
    menulis hasil sebagai komentar, lalu `complete`, `request-review` (jika instruksi
    meminta review manusia), atau `block` (butuh masukan).
+
+Tugas yang gagal dikembalikan ke antrean dan baru dicoba lagi pada run berikutnya.
+Begitu sebuah kartu masuk review, worker langsung meminta API daily mengirim WhatsApp
+serah terima ke PIC (lihat env di bawah). Tanpa env itu, WhatsApp tetap terkirim lewat
+pengecekan 10 menit di worker daily.
 
 Claude dijalankan tanpa tool (`--tools ""`): teks tugas hanyalah data, dan tidak ada
 akses kode, shell, maupun internet.
@@ -25,8 +31,15 @@ dan folder ini berada di sebelah `docker-compose.prod.yml` (mis.
 Crontab `root`:
 
 ```cron
-*/10 * * * * cd /root/team-assistant/claude-worker && PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin /usr/bin/python3 worker.py >> worker.log 2>&1
+* * * * * cd /root/team-assistant/claude-worker && PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin NAYA_NOTIFY_URL=http://localhost:4000/naya/notify INTERNAL_API_TOKEN=… NAYA_WORKSPACE_ID=… /usr/bin/python3 worker.py >> worker.log 2>&1
 ```
+
+Saat antrean kosong, satu run hanya menjalankan satu `kanban list`. Tiga env terakhir
+opsional:
+
+- `NAYA_NOTIFY_URL`: endpoint `/naya/notify` API daily, dilihat dari host.
+- `INTERNAL_API_TOKEN`: sama dengan yang dipakai API.
+- `NAYA_WORKSPACE_ID`: id workspace Naya.
 
 File yang dibuat saat berjalan (tidak masuk git): `worker.log`, `.lock`, `state.json`
 (tugas yang sedang diklaim; jika proses mati, run berikutnya mengembalikannya ke

@@ -4,10 +4,12 @@
 Hermes is on standby (kanban.dispatch_in_gateway: false, auto_decompose: false):
 it keeps the board and Naya's office, and this script does the thinking.
 
-One action per run (cron, every 10 minutes), under a lock:
+Each run (cron, every minute) works the board until nothing is left, under a lock:
   1. a task in triage  -> Claude decomposes it (one task, or chained subtasks)
   2. else a ready task -> Claude works it: comment the result, then complete /
      request-review (when the task asks for human review) / block (needs input)
+A card sent to review pings daily's API right away, so its PIC gets the WhatsApp
+handover now instead of at the next 10-minute check.
 
 Claude runs with no tools (--tools ""): task text is data, never instructions
 it can act on, and it has no code access.
@@ -20,6 +22,7 @@ import os
 import subprocess
 import sys
 import time
+import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -31,6 +34,11 @@ AUTHOR = "claude"
 CLAIM_TTL = 3600
 CLAUDE_TIMEOUT = 1500                # longer than the cron interval is fine: the lock prevents overlap
 REVIEW_MARKERS = ("request_review", "request-review", "direview manusia")
+MAX_ACTIONS = 30                     # per run; a long queue continues on the next run
+# Optional: daily's API (as reachable from this host) to hand reviewed cards over at once.
+NOTIFY_URL = os.environ.get("NAYA_NOTIFY_URL", "")        # e.g. http://localhost:4000/naya/notify
+INTERNAL_TOKEN = os.environ.get("INTERNAL_API_TOKEN", "")
+WORKSPACE_ID = os.environ.get("NAYA_WORKSPACE_ID", "")
 
 
 def log(msg: str) -> None:
@@ -165,6 +173,22 @@ def hermes_py(code: str, stdin: str) -> str:
     return p.stdout
 
 
+def notify_handover() -> None:
+    """Ask daily's API to send the WhatsApp handover now; the worker's 10-minute job is the fallback."""
+    if not (NOTIFY_URL and INTERNAL_TOKEN and WORKSPACE_ID):
+        return
+    req = urllib.request.Request(NOTIFY_URL, data=b"{}", method="POST", headers={
+        "content-type": "application/json",
+        "x-internal-token": INTERNAL_TOKEN,
+        "x-workspace-id": WORKSPACE_ID,
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=60) as res:
+            log(f"handover notified: {res.read(300).decode(errors='replace')}")
+    except Exception as e:
+        log(f"handover notify failed (the 10-minute check will send it): {e}")
+
+
 def work(task: dict) -> None:
     tid = task["id"]
     log(f"work {tid}: {task['title']} (assignee {task.get('assignee')})")
@@ -192,6 +216,7 @@ human; otherwise "done" and leave "question" empty.""",
         elif wants_review:
             hk("request-review", "--force", "--summary", ans["summary"], tid)
             log(f"work {tid}: sent to human review")
+            notify_handover()
         else:
             hk("complete", "--force", "--result", ans["summary"], "--summary", ans["summary"], tid)
             log(f"work {tid}: done")
@@ -216,14 +241,27 @@ def main() -> int:
         hk("reclaim", "--reason", "claude-worker restarted", held, check=False)
         STATE.unlink(missing_ok=True)
 
-    tasks = json.loads(hk("list", "--json") or "[]")
-    triage = [t for t in tasks if t["status"] == "triage"]
-    if triage:
-        decompose(sorted(triage, key=lambda t: t["created_at"])[0])
-        return 0
-    ready = [t for t in tasks if t["status"] == "ready"]
-    if ready:
-        work(sorted(ready, key=lambda t: (-(t.get("priority") or 0), t["created_at"]))[0])
+    failed: set[str] = set()
+    for _ in range(MAX_ACTIONS):
+        # Re-read every time: a finished subtask makes the next one ready.
+        tasks = json.loads(hk("list", "--json") or "[]")
+        triage = [t for t in tasks if t["status"] == "triage" and t["id"] not in failed]
+        ready = [t for t in tasks if t["status"] == "ready" and t["id"] not in failed]
+        if triage:
+            task = sorted(triage, key=lambda t: t["created_at"])[0]
+            try:
+                decompose(task)
+            except Exception as e:
+                log(f"decompose {task['id']}: FAILED {e}")
+                failed.add(task["id"])
+        elif ready:
+            task = sorted(ready, key=lambda t: (-(t.get("priority") or 0), t["created_at"]))[0]
+            work(task)
+            # A failed run hands the task back to ready; leave it for the next run, not a tight loop.
+            if task["id"] in {t["id"] for t in json.loads(hk("list", "--json") or "[]") if t["status"] == "ready"}:
+                failed.add(task["id"])
+        else:
+            break
     return 0
 
 
