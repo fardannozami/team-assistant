@@ -27,7 +27,6 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 COMPOSE = os.environ.get("COMPOSE_FILE", str(HERE.parent / "docker-compose.prod.yml"))
-STATE = HERE / "state.json"          # the task this worker holds a claim on
 LOCK = HERE / ".lock"
 WORKDIR = HERE / "work"              # Claude's cwd: empty, no CLAUDE.md
 AUTHOR = "claude"
@@ -45,9 +44,18 @@ def log(msg: str) -> None:
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}", flush=True)
 
 
-def hk(*args: str, check: bool = True) -> str:
+def hk(*args: str, check: bool = True, tries: int = 4) -> str:
+    """Run `hermes kanban ...` in the container. Retries cover a deploy restarting the container
+    (exec killed with 143, or 'not running'); worst case a comment is posted twice."""
     cmd = ["docker", "compose", "-f", COMPOSE, "exec", "-T", "hermes", "hermes", "kanban", *args]
-    p = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    for attempt in range(tries):
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        if p.returncode == 0:
+            break
+        transient = p.returncode in (125, 126, 137, 143) or "is not running" in p.stderr
+        if not transient or attempt == tries - 1:
+            break
+        time.sleep(20)
     if check and p.returncode != 0:
         raise RuntimeError(f"hermes kanban {args[0]} failed ({p.returncode}): {p.stderr.strip()[-500:]}")
     return p.stdout
@@ -193,7 +201,6 @@ def work(task: dict) -> None:
     tid = task["id"]
     log(f"work {tid}: {task['title']} (assignee {task.get('assignee')})")
     hk("claim", "--ttl", str(CLAIM_TTL), tid)
-    STATE.write_text(json.dumps({"task": tid, "since": int(time.time())}))
     try:
         ctx = hk("context", tid)
         show = hk("show", tid)
@@ -222,9 +229,8 @@ human; otherwise "done" and leave "question" empty.""",
             log(f"work {tid}: done")
     except Exception as e:
         log(f"work {tid}: FAILED {e}")
+        # If this fails too (Hermes down), the next run's orphan sweep in main() picks it up.
         hk("reclaim", "--reason", f"claude-worker failed: {str(e)[:300]}", tid, check=False)
-    finally:
-        STATE.unlink(missing_ok=True)
 
 
 def main() -> int:
@@ -234,12 +240,13 @@ def main() -> int:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
         return 0  # a run is still working
-    # A previous run died while holding a claim: hand the task back.
-    if STATE.exists():
-        held = json.loads(STATE.read_text()).get("task")
-        log(f"previous run died holding {held}; reclaiming")
-        hk("reclaim", "--reason", "claude-worker restarted", held, check=False)
-        STATE.unlink(missing_ok=True)
+    # Hermes no longer dispatches, and we hold the lock, so nothing is legitimately working:
+    # any "running" task is a claim left by a run that died (deploy, crash). Hand it back.
+    # NOTE: if Hermes dispatch is ever turned back on, remove this sweep.
+    for t in json.loads(hk("list", "--json") or "[]"):
+        if t["status"] == "running":
+            log(f"orphaned claim on {t['id']}; reclaiming")
+            hk("reclaim", "--reason", "claude-worker: previous run died", t["id"], check=False)
 
     failed: set[str] = set()
     for _ in range(MAX_ACTIONS):

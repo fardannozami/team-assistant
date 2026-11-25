@@ -6,7 +6,7 @@ import {
   createDbClient,
   figmaConnections,
   jobExecutions,
-  nayaAgents,
+  nayaCards,
   schedules,
   scheduledJobs,
   whatsappSessions,
@@ -270,11 +270,12 @@ async function desiredRepeatables(): Promise<DesiredRepeatable[]> {
     });
   }
 
-  // Naya hands cards the AI finished to their PIC over WhatsApp, for workspaces using Naya.
+  // Naya hands cards the AI finished to their PIC over WhatsApp, for workspaces whose people
+  // give Naya instructions (a card gets a PIC row when it is created there).
   const nayaWorkspaces = await db
-    .selectDistinct({ workspaceId: nayaAgents.workspaceId })
-    .from(nayaAgents)
-    .innerJoin(workspaces, eq(nayaAgents.workspaceId, workspaces.id))
+    .selectDistinct({ workspaceId: nayaCards.workspaceId })
+    .from(nayaCards)
+    .innerJoin(workspaces, eq(nayaCards.workspaceId, workspaces.id))
     .where(eq(workspaces.isActive, true));
   for (const row of nayaWorkspaces) {
     desired.push({

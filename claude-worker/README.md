@@ -41,6 +41,7 @@ opsional:
 - `INTERNAL_API_TOKEN`: sama dengan yang dipakai API.
 - `NAYA_WORKSPACE_ID`: id workspace Naya.
 
-File yang dibuat saat berjalan (tidak masuk git): `worker.log`, `.lock`, `state.json`
-(tugas yang sedang diklaim; jika proses mati, run berikutnya mengembalikannya ke
-antrean), dan `work/` (direktori kerja Claude yang sengaja kosong).
+File yang dibuat saat berjalan (tidak masuk git): `worker.log`, `.lock`, dan `work/`
+(direktori kerja Claude yang sengaja kosong). Tugas yang masih `running` saat run baru
+mulai adalah klaim dari run yang mati (deploy, crash) dan dikembalikan ke antrean;
+`hermes kanban` dicoba ulang beberapa kali saat container Hermes sedang di-restart.
