@@ -41,6 +41,12 @@ Every action is checked against the person's daily role and written to `audit_lo
 | comment | everyone |
 | chat | per agent |
 
+## OpenCode in the office
+
+OpenCode gets a desk when `opencode --version` works where the bridge runs, or when its session database (`opencode.db`) is readable there. It is **Working** while one of its sessions got a message in the last 3 minutes; only times and the newest session's folder name are read.
+- **Local development:** the bridge runs on your machine, so it finds your own OpenCode.
+- **Production:** OpenCode runs on the host, outside the `hermes` container. Set `OPENCODE_HOST_DATA` in `.env` to its data folder on the host (`~/.local/share/opencode` of the user who runs it, e.g. `/root/.local/share/opencode`). Then run `docker compose -f docker-compose.prod.yml up -d hermes`. The folder is mounted read-only. The container's user (uid 10000) must be able to read it: the folder itself needs `r-x` for others, and `opencode.db*` need `r--`.
+
 ## Claude Code in the office
 
 When `claude --version` works where the bridge runs, Claude Code gets its own desk.

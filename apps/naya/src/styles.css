@@ -845,3 +845,45 @@ a.primary-button { display: inline-block; text-align: center; text-decoration: n
 .team-kanban-column .muted { margin: 0; }
 .team-kanban-card { background: var(--surface); border: 1px solid var(--border-strong); font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; padding: 8px; }
 @media (max-width: 700px) { .team-kanban { grid-template-columns: 1fr; } }
+/* Task Board as a pipeline (after the FM27 "Pipeline" design, simplified): four flow columns,
+   cards with a status pill, id, progress through the flow and PIC, and the same pills in the detail. */
+:root { --pill-queue: #bdbcdd; --pill-ai: #b3b1ea; --pill-review: #fcd34d; --pill-blocked: #fca5a5; --pill-done: #5ee0ae; }
+:root[data-theme="light"] { --pill-queue: #4a4870; --pill-ai: #615fab; --pill-review: #8a5a00; --pill-blocked: #b42323; --pill-done: #0e7a52; }
+.pill { align-items: center; border-radius: 4px; display: inline-flex; font-size: 12px; font-weight: 600; gap: 6px; padding: 3px 8px; white-space: nowrap; }
+.pill-queue { --pill: var(--pill-queue); } .pill-ai { --pill: var(--pill-ai); } .pill-review { --pill: var(--pill-review); } .pill-blocked { --pill: var(--pill-blocked); } .pill-done { --pill: var(--pill-done); }
+.pill[class*="pill-"] { background: color-mix(in srgb, var(--pill) 16%, transparent); color: var(--pill); }
+.mono { font-family: ui-monospace, 'DM Mono', monospace; font-variant-numeric: tabular-nums; }
+.pipe-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.pipe-filter { background: var(--surface); border: 1px solid var(--border-strong); border-radius: 999px; color: var(--text-muted); cursor: pointer; font: 600 13px inherit; min-height: 34px; padding: 6px 12px; }
+.pipe-filter[class*="pill-"] { color: var(--pill); }
+.pipe-filter b { margin-left: 4px; }
+.pipe-filter[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--surface-3); }
+.pipeline-scroll { overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x proximity; }
+.pipeline { align-items: start; display: grid; gap: 12px; grid-template-columns: repeat(4, minmax(240px, 1fr)); margin-top: 16px; min-width: 1000px; }
+.pipe-col { background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; display: flex; flex-direction: column; max-height: max(320px, calc(100dvh - 260px)); min-width: 0; scroll-snap-align: start; }
+.pipe-col-head { align-items: center; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; padding: 10px 12px; }
+.pipe-col-head h2 { font-size: 15px; font-weight: 700; letter-spacing: .04em; margin: 0; text-transform: uppercase; }
+.pipe-col-head .mono { color: var(--text-muted); font-size: 12px; }
+.pipe-col-body { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; overscroll-behavior: contain; padding: 10px; }
+.pipe-col-body .column-empty { margin: 4px 2px; }
+.pipe-card { background: var(--surface); border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text); cursor: pointer; display: grid; font: inherit; gap: 8px; padding: 12px; text-align: left; width: 100%; }
+.pipe-card:hover, .pipe-card:focus-visible { border-color: var(--text-muted); }
+.pipe-card.card-review { border-color: color-mix(in srgb, var(--pill-review) 55%, transparent); }
+.pipe-card.card-blocked { border-color: color-mix(in srgb, var(--pill-blocked) 55%, transparent); }
+.pipe-card.card-done { opacity: .85; }
+.pipe-card strong { font-size: 14px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.pipe-card-head, .pipe-card-foot { align-items: center; display: flex; gap: 8px; justify-content: space-between; }
+.pipe-card-head .mono, .pipe-card-foot { color: var(--text-muted); font-size: 11px; }
+.pipe-card-foot { font-size: 12px; }
+.pipe-bar { background: var(--border); border-radius: 2px; display: block; height: 4px; overflow: hidden; }
+.pipe-bar > span { background: var(--pill); display: block; height: 100%; }
+.pipe-legend { align-items: center; color: var(--text-muted); display: flex; flex-wrap: wrap; font-size: 12px; gap: 10px 16px; margin-top: 16px; }
+.pipe-legend .eyebrow { margin: 0; }
+.pipe-steps { counter-reset: none; display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 4px 0 12px; padding: 0; }
+.pipe-steps li { align-items: center; border: 1px solid var(--border-strong); border-radius: 999px; color: var(--text-muted); display: inline-flex; font-size: 12px; font-weight: 600; gap: 6px; padding: 4px 10px 4px 4px; }
+.pipe-steps li .mono { background: var(--border); border-radius: 50%; display: inline-grid; font-size: 11px; height: 20px; place-items: center; width: 20px; }
+.pipe-steps li.past { border-color: color-mix(in srgb, var(--pill-done) 50%, transparent); color: var(--pill-done); }
+.pipe-steps li.now { border-color: var(--pill); color: var(--pill); }
+.pipe-steps li.now .mono { background: var(--pill); color: var(--surface-3); }
+.secondary-button.warn { border-color: color-mix(in srgb, var(--pill-review) 55%, transparent); color: var(--pill-review); }
+.office-overlay .pipe-col { max-height: max(240px, calc(100dvh - 470px)); }
