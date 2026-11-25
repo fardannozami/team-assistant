@@ -21,9 +21,19 @@ The Hermes Kanban is the source of truth:
 | Instruction to the AI CEO | *Instruksi ke Naya* creates a task in **triage**; the decomposer splits it into tasks for the specialist profiles (`kanban.auto_decompose`, default on) |
 | In progress | todo / ready / running: agents claim and work |
 | Waiting for review | **review**: the agent called `request-review` |
-| Selesai (approved) | *Setujui*: `complete --result "Disetujui oleh …"` |
-| Feedback / revisi | *Minta revisi*: `reopen-review --reason "…"`. The note becomes a comment the agent sees when it reworks |
-| Ditolak | *Tolak*: `block --kind needs_input "[Ditolak oleh …] …"` |
+| Selesai (approved) | Every checklist item *Selesai*: `complete --result "Disetujui oleh …"` |
+| Feedback / revisi | Checklist items with *Feedback* (and none *Ditolak*): `reopen-review --reason "…"` listing each item's note. The agent sees it as a comment when it reworks |
+| Ditolak | A checklist item *Ditolak*, or *Tolak seluruh kartu*: `block --kind needs_input "[Ditolak oleh …] …"` |
+
+### The human half: PIC and checklist
+
+Hermes keeps the AI side of a card; daily's Postgres keeps the people (`naya_cards`, `naya_checklist_items`, `naya_learned_rules`, in `apps/api/src/modules/naya/checklist.ts`):
+
+- **PIC.** Each card has a person in charge, chosen in *Instruksi ke Naya* (default: whoever gave it) and changeable in the card detail.
+- **Handover.** When a card reaches **review**, it gets a checklist: one item per subtask result, plus the card's own result, each owned by the card's PIC. Every 10 minutes the worker calls `POST /naya/notify`, which sends the PIC a WhatsApp message with a link straight to the card (`<NAYA_WEB_URL>/#/my-tasks/<board>/<id>`). The phone comes from the person's employee record (`employees.user_id`).
+- **Decisions.** The PIC (or anyone who may review) marks each item *Selesai*, *Feedback* (note required) or *Ditolak* (reason required). The card waits while any item is still *In Progress*. When the last item is decided, the card moves in Hermes in the same transaction: if Hermes refuses, the decision is not saved.
+- **Next version.** Items that were not *Selesai* go back to *In Progress* as the next version (v2, v3, …) and are handed over again when the agent returns the card to review. Their notes are kept as candidate `naya_learned_rules` for the agent; activating them is still manual.
+- **Tugas Saya and Lanjut.** *Tugas Saya* lists the cards waiting on you, and cards waiting more than 48 hours come first. Those cards also get a WhatsApp reminder at most once a day. *Lanjut* in the header opens the most urgent one.
 
 Humans decide when work is done:
 

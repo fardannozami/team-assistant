@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { orderedStatuses } from './format.ts'
 import { mergeRefresh } from './request-state.ts'
-import { navigation, pageFromHash, pageSlug } from './routes.ts'
+import { cardFromHash, navigation, pageFromHash, pageSlug } from './routes.ts'
 
 describe('hash routing', () => {
   it('round-trips every page and falls back to the Office home', () => {
@@ -10,9 +10,15 @@ describe('hash routing', () => {
     expect(pageFromHash('#dashboard')).toBe('Office')
     expect(pageFromHash('')).toBe('Office')
     expect(pageFromHash('#/nope')).toBe('Office')
-    expect(navigation).toEqual(['Office', 'Task Board', 'Agents', 'Usage', 'Calendar', 'Settings'])
+    expect(navigation).toEqual(['Office', 'My Tasks', 'Task Board', 'Agents', 'Usage', 'Calendar', 'Settings'])
     // Sign-in data in the address is not a page.
     expect(pageFromHash('#token=abc')).toBe('Office')
+  })
+
+  it('opens the card a WhatsApp link names', () => {
+    expect(pageFromHash('#/my-tasks/default/t_9')).toBe('My Tasks')
+    expect(cardFromHash('#/my-tasks/default/t_9')).toEqual({ board: 'default', id: 't_9' })
+    expect(cardFromHash('#/my-tasks')).toBeNull()
   })
 })
 

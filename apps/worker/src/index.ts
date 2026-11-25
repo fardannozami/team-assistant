@@ -6,6 +6,7 @@ import {
   createDbClient,
   figmaConnections,
   jobExecutions,
+  nayaAgents,
   schedules,
   scheduledJobs,
   whatsappSessions,
@@ -58,6 +59,7 @@ const OWNED_PREFIXES = [
   "checkin-reminders",
   "checkin-close",
   "figma-sync",
+  "naya-notify",
   // Retired: still owned so reconcile removes repeatables left in Redis.
   "briefing-run",
 ];
@@ -80,10 +82,13 @@ const API_PATHS: Record<string, string> = {
   "checkin-reminders": "/checkins/reminders",
   "checkin-close": "/checkins/close",
   "figma-sync": "/figma/sync",
+  "naya-notify": "/naya/notify",
 };
 
 // Runs every hour, so one claim per hour instead of per day.
 const HOURLY_JOBS = new Set(["figma-sync"]);
+// Runs every 10 minutes: one claim per 10-minute slot.
+const TEN_MINUTE_JOBS = new Set(["naya-notify"]);
 
 /**
  * Job names are `<baseName>:<suffix>[@HHmm]`: the suffix is the schedule id
@@ -265,6 +270,22 @@ async function desiredRepeatables(): Promise<DesiredRepeatable[]> {
     });
   }
 
+  // Naya hands cards the AI finished to their PIC over WhatsApp, for workspaces using Naya.
+  const nayaWorkspaces = await db
+    .selectDistinct({ workspaceId: nayaAgents.workspaceId })
+    .from(nayaAgents)
+    .innerJoin(workspaces, eq(nayaAgents.workspaceId, workspaces.id))
+    .where(eq(workspaces.isActive, true));
+  for (const row of nayaWorkspaces) {
+    desired.push({
+      name: `naya-notify:${row.workspaceId}`,
+      pattern: "*/10 * * * *",
+      tz: "UTC",
+      scheduleId: null,
+      workspaceId: row.workspaceId,
+    });
+  }
+
   // Legacy global `:env` repeatables are no longer desired; they fall under
   // OWNED_PREFIXES, so reconcileSchedules removes them.
   return desired;
@@ -366,7 +387,7 @@ async function resolveJobOwner(
   suffix: string | null,
   data: { scheduleId?: unknown } | undefined,
 ): Promise<{ workspaceId: string; scheduleId: string | null; configId?: string; timezone: string } | null> {
-  if (baseName === "daily-report" || baseName === "figma-sync") {
+  if (baseName === "daily-report" || baseName === "figma-sync" || baseName === "naya-notify") {
     if (!suffix) return null;
     const [ws] = await db
       .select({ id: workspaces.id, timezone: calendarSettings.timezone })
@@ -430,7 +451,9 @@ async function processSchedulerJob(job: Job): Promise<SchedulerJobResult> {
     ? `${job.name}:manual:${job.id}`
     : HOURLY_JOBS.has(baseName)
       ? `${job.name}:${new Date().toISOString().slice(0, 13)}`
-      : `${job.name}:${date}`;
+      : TEN_MINUTE_JOBS.has(baseName)
+        ? `${job.name}:${new Date().toISOString().slice(0, 15)}`
+        : `${job.name}:${date}`;
 
   const [existing] = await db
     .select()

@@ -409,10 +409,34 @@ export const nayaInstructionSchema = z.object({
   board: z.string().max(64).optional(),
   assignee: z.string().regex(HERMES_PROFILE).optional(),
   decompose: z.boolean().default(true),
+  /** The person in charge once the AI hands the card over; defaults to whoever gave the instruction. */
+  pic: z.string().uuid().optional(),
 });
 
 export const nayaReviewSchema = z.object({
   note: z.string().max(4000).optional(),
+  board: z.string().max(64).optional(),
+});
+
+/** The four human states of a checklist item (blueprint v3). */
+export const CHECKLIST_STATUSES = ["in_progress", "done", "feedback", "rejected"] as const;
+export type ChecklistStatus = (typeof CHECKLIST_STATUSES)[number];
+
+/** A decision on one checklist item; feedback needs what to fix, a rejection needs why. */
+export const nayaChecklistDecisionSchema = z
+  .object({
+    status: z.enum(CHECKLIST_STATUSES),
+    note: z.string().trim().max(4000).optional(),
+    board: z.string().max(64).optional(),
+  })
+  .refine((value) => !["feedback", "rejected"].includes(value.status) || !!value.note, {
+    message: "Catatan wajib diisi untuk Feedback dan Ditolak.",
+    path: ["note"],
+  });
+
+/** Hand a card, or one item of it, to someone else on the team. */
+export const nayaPicSchema = z.object({
+  pic: z.string().uuid().nullable(),
   board: z.string().max(64).optional(),
 });
 

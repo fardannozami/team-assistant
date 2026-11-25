@@ -1,4 +1,4 @@
-import { boolean, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { workspaceRef } from "./workspaces.js";
 import { users } from "./auth.js";
 
@@ -51,3 +51,64 @@ export const nayaAgents = pgTable(
   },
   (t) => [uniqueIndex("naya_agents_workspace_profile_unique").on(t.workspaceId, t.profile)],
 );
+
+// The human half of the hybrid flow (blueprint v3): Hermes keeps the AI side of a card (triage →
+// running → review), these tables keep who on the team owns it and what they decided per item.
+// `board` is the Hermes board slug ("default" for the default board).
+
+/** The person in charge (PIC) of a Kanban card, set when it is created in Naya or later. */
+export const nayaCards = pgTable(
+  "naya_cards",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: workspaceRef(),
+    board: text("board").notNull().default(""),
+    taskId: text("task_id").notNull(),
+    picUserId: uuid("pic_user_id").references(() => users.id, { onDelete: "set null" }),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("naya_cards_task_unique").on(t.workspaceId, t.board, t.taskId)],
+);
+
+/** One thing a person checks on a card the AI handed over: in_progress | done | feedback | rejected. */
+export const nayaChecklistItems = pgTable(
+  "naya_checklist_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: workspaceRef(),
+    board: text("board").notNull().default(""),
+    taskId: text("task_id").notNull(),
+    /** The subtask whose result this item checks; null for the card's own result. */
+    sourceTaskId: text("source_task_id"),
+    title: text("title").notNull(),
+    picUserId: uuid("pic_user_id").references(() => users.id, { onDelete: "set null" }),
+    status: text("status").notNull().default("in_progress"),
+    /** Required for feedback (what to fix) and rejected (why); the agent reads it. */
+    note: text("note"),
+    /** Bumped each time the agent redoes the item after feedback (v1, v2, …). */
+    version: integer("version").default(1).notNull(),
+    /** When the AI handed this version to its PIC (WhatsApp sent); Tugas Saya counts waiting time from here. */
+    handedAt: timestamp("handed_at", { withTimezone: true }),
+    /** Last overdue reminder, so a waiting item is nudged at most once a day. */
+    remindedAt: timestamp("reminded_at", { withTimezone: true }),
+    decidedBy: uuid("decided_by").references(() => users.id, { onDelete: "set null" }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("naya_checklist_items_task_idx").on(t.workspaceId, t.board, t.taskId)],
+);
+
+/** Feedback and rejections kept as candidate rules for the agent; a person activates them. */
+export const nayaLearnedRules = pgTable("naya_learned_rules", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: workspaceRef(),
+  agent: text("agent"), // Hermes profile that did the work
+  ruleText: text("rule_text").notNull(),
+  sourceItemId: uuid("source_item_id").references(() => nayaChecklistItems.id, { onDelete: "set null" }),
+  status: text("status").notNull().default("candidate"), // candidate | active
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});

@@ -4,14 +4,16 @@ import {
   nayaAgentSchema,
   nayaCan,
   nayaChatSchema,
+  nayaChecklistDecisionSchema,
   nayaInstructionSchema,
+  nayaPicSchema,
   nayaReviewSchema,
   OWNER_ONLY_SCOPES,
   type NayaAction,
 } from "@repo/shared";
 import { createDbClient, users } from "@repo/database";
 import { eq } from "drizzle-orm";
-import { audit, requireRole } from "../auth/index.js";
+import { audit, requireInternalOrRole, requireRole } from "../auth/index.js";
 import { createApiToken, listApiTokens, revokeApiToken } from "../auth/tokens.js";
 import { parseWith } from "../../lib/validate.js";
 import { HttpError } from "../../lib/http-error.js";
@@ -20,6 +22,8 @@ import { bridge, hermesConfigured, type Actor } from "./bridge.js";
 import { chatKey, deleteNayaAgent, listNayaAgents, nayaPermissions, saveNayaAgent } from "./agents.js";
 import { proxyChat } from "./chat.js";
 import { teamToday } from "./team.js";
+import { cardSummaries, currentBoard, decideItem, getChecklist, inbox, listPeople, setCardPic, setItemPic } from "./checklist.js";
+import { notifyHandoffs } from "./notify.js";
 
 // Naya (naya.digdaya.co): the AI team's office. Reads and Kanban writes go to hermes-bridge,
 // chat to Hermes' API server; roles come from daily and every write is in audit_logs.
@@ -90,16 +94,23 @@ nayaApi.post("/tasks", anyone, async (c) => {
   allow(c, "instruct");
   const input = parseWith(nayaInstructionSchema, await c.req.json());
   const actor = await actorOf(c);
-  const created = await bridge.instruct(input, actor);
+  const { pic, ...instruction } = input;
+  const created = await bridge.instruct(instruction, actor);
+  // The person who answers for the result once the AI hands it over (default: who asked).
+  const board = created.board ?? input.board ?? (await currentBoard());
+  await setCardPic(getWorkspaceId(c), board, created.id, pic ?? actor.id, actor.id);
   await audit(getWorkspaceId(c), actor.id, "naya.instruct", "kanban_task", created.id, {
     title: input.title,
-    board: input.board,
+    board,
     assignee: input.assignee,
+    pic: pic ?? actor.id,
   });
-  return c.json(created, 201);
+  return c.json({ ...created, board }, 201);
 });
 
-for (const action of ["approve", "changes", "reject", "comment", "retry"] as const) {
+// Approving and asking for changes go through the checklist (below), so a card only completes
+// once every item is Selesai. Rejecting the whole card, retrying and commenting stay card-wide.
+for (const action of ["reject", "comment", "retry"] as const) {
   nayaApi.post(`/tasks/:id/${action}`, anyone, async (c) => {
     allow(c, action === "comment" ? "comment" : "review");
     const input = parseWith(nayaReviewSchema, await c.req.json().catch(() => ({})));
@@ -115,6 +126,58 @@ for (const action of ["approve", "changes", "reject", "comment", "retry"] as con
     return c.json({ ok: true });
   });
 }
+
+/* ---------- The human half: PIC, checklist, Tugas Saya ---------- */
+
+nayaApi.get("/people", anyone, async (c) => c.json(await listPeople(getWorkspaceId(c))));
+nayaApi.get("/cards", anyone, async (c) => c.json(await cardSummaries(getWorkspaceId(c))));
+nayaApi.get("/inbox", anyone, async (c) => {
+  const actor = await actorOf(c);
+  return c.json(await inbox(getWorkspaceId(c), actor.id, nayaCan(actor.role, "review")));
+});
+
+nayaApi.get("/tasks/:id/checklist", anyone, async (c) =>
+  c.json(await getChecklist(getWorkspaceId(c), c.req.query("board") || undefined, c.req.param("id"))),
+);
+
+nayaApi.post("/tasks/:id/checklist/:item", anyone, async (c) => {
+  const input = parseWith(nayaChecklistDecisionSchema, await c.req.json());
+  const actor = await actorOf(c);
+  const id = c.req.param("id");
+  const result = await decideItem(getWorkspaceId(c), input.board, id, c.req.param("item"), input, actor, nayaCan(actor.role, "review"));
+  await audit(getWorkspaceId(c), actor.id, `naya.checklist.${input.status}`, "kanban_task", id, {
+    board: input.board,
+    item: c.req.param("item"),
+    outcome: result.outcome,
+  });
+  return c.json(result);
+});
+
+const canAssign = (c: Context) => {
+  const role = getActorRole(c);
+  if (!nayaCan(role, "review") && !nayaCan(role, "instruct")) throw new HttpError(403, "Peran Anda tidak diizinkan mengganti PIC.");
+};
+
+nayaApi.post("/tasks/:id/pic", anyone, async (c) => {
+  canAssign(c);
+  const input = parseWith(nayaPicSchema, await c.req.json());
+  const id = c.req.param("id");
+  await setCardPic(getWorkspaceId(c), input.board, id, input.pic);
+  await audit(getWorkspaceId(c), getActorId(c), "naya.pic", "kanban_task", id, { board: input.board, pic: input.pic });
+  return c.json({ ok: true });
+});
+
+nayaApi.post("/tasks/:id/checklist/:item/pic", anyone, async (c) => {
+  canAssign(c);
+  const input = parseWith(nayaPicSchema, await c.req.json());
+  const id = c.req.param("id");
+  await setItemPic(getWorkspaceId(c), input.board, id, c.req.param("item"), input.pic);
+  await audit(getWorkspaceId(c), getActorId(c), "naya.pic", "kanban_task", id, { board: input.board, item: c.req.param("item"), pic: input.pic });
+  return c.json({ ok: true });
+});
+
+/** The worker, every 10 minutes: hand reviewed cards to their PIC over WhatsApp, nudge overdue ones. */
+nayaApi.post("/notify", requireInternalOrRole("Owner", "Admin"), async (c) => c.json(await notifyHandoffs(getWorkspaceId(c))));
 
 /* ---------- Chat with an agent (SSE) ---------- */
 

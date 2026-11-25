@@ -894,3 +894,21 @@ a.primary-button { display: inline-block; text-align: center; text-decoration: n
 .pipe-steps li.now .mono { background: var(--pill); color: var(--surface-3); }
 .secondary-button.warn { border-color: color-mix(in srgb, var(--pill-review) 55%, transparent); color: var(--pill-review); }
 .office-overlay .pipe-col { max-height: max(240px, calc(100dvh - 470px)); }
+
+/* Hybrid flow: the human checklist on a card, Tugas Saya and the header's Lanjut. */
+.checklist { display: grid; gap: 10px; list-style: none; margin: 10px 0 0; padding: 0; }
+.checklist-item { background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; display: grid; gap: 8px; padding: 10px 12px; }
+.checklist-head { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.checklist-head b { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.checklist-meta { align-items: center; color: var(--text-muted); display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 12px; }
+.checklist-note { border-left: 2px solid var(--border-strong); margin: 0; padding-left: 8px; white-space: pre-wrap; }
+.inbox-list { display: grid; gap: 8px; list-style: none; margin: 16px 0 0; padding: 0; }
+.inbox-row { align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; padding: 12px 14px; text-align: left; width: 100%; }
+.inbox-row:hover, .inbox-row:focus-visible { border-color: var(--accent); }
+.inbox-stale { border-left: 3px solid var(--c-e06c5f, #e06c5f); }
+.inbox-title { display: grid; gap: 2px; min-width: 0; }
+.inbox-title b { overflow-wrap: anywhere; }
+.inbox-title small, .inbox-meta small { color: var(--text-muted); font-size: 12px; }
+.inbox-meta { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.next-button { font-size: 12px; letter-spacing: 0.06em; padding: 5px 12px; }
+.next-button:disabled { cursor: default; opacity: 0.45; }
