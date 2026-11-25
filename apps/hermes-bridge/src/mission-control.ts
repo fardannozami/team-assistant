@@ -1,11 +1,12 @@
 // Adapted from Ruang (https://github.com/yugienugraha/ruang, MIT, © yugienugraha) for Naya:
 // read-only collectors of the Hermes CLI, plus a generation-safe cache and states Naya declares.
 import { execFile as execFileCallback } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { collectClaudeSessions, type ClaudeSessions } from './claude-code.js'
 import { collectOpenCodeSessions, type OpenCodeSessions } from './opencode.js'
-import { hermesHome, lastSessionActivity, profileHome, readKanban, recentLogLines } from './hermes-files.js'
+import { hermesHome, lastSessionActivity, profileHome, readCronJobs, readKanban, readProfiles, readSessions, recentLogLines } from './hermes-files.js'
 
 const execFile = promisify(execFileCallback)
 const CACHE_MS = 10_000
@@ -519,9 +520,16 @@ async function read<T>(run: Run, file: string, args: string[], parse: (output: s
 /** Profile names passed to `hermes -p`: plain names only, never anything that looks like an option. */
 export const PROFILE_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/
 
-export async function collectSnapshot(run: Run = systemRun): Promise<RuntimeSnapshot> {
+/** Profiles from Hermes' files when `home` is given and readable, else `hermes profile list`. */
+async function readProfileList(run: Run, home?: string): Promise<Source<Profile[]>> {
+  let profiles: Profile[] | undefined
+  try { profiles = home ? readProfiles(home) : undefined } catch { profiles = undefined }
+  return profiles ? { availability: 'available', data: profiles } : read(run, 'hermes', ['profile', 'list'], parseProfiles, [], { timeoutMs: PROFILE_LIST_TIMEOUT_MS })
+}
+
+export async function collectSnapshot(run: Run = systemRun, home?: string): Promise<RuntimeSnapshot> {
   const [profiles, openCode, claudeCode] = await Promise.all([
-    read(run, 'hermes', ['profile', 'list'], parseProfiles, [], { timeoutMs: PROFILE_LIST_TIMEOUT_MS }),
+    readProfileList(run, home),
     read(run, 'opencode', ['--version'], (value) => value.trim().split('\n').pop()?.trim() || 'Unknown', 'Unknown'),
     read(run, 'claude', ['--version'], parseClaudeVersion, 'Unknown'),
   ])
@@ -575,10 +583,16 @@ export async function collectTaskBoard(run: Run = systemRun): Promise<TaskBoardS
  * tagged with the profile. If the profile list cannot be read, the active profile is read as before.
  * `profiles` reuses a profile list already read (the runtime snapshot) instead of reading it again.
  */
-export async function collectCalendar(run: Run = systemRun, known?: Source<Profile[]>): Promise<CalendarSnapshot> {
+export async function collectCalendar(run: Run = systemRun, known?: Source<Profile[]>, home?: string): Promise<CalendarSnapshot> {
   const fetchedAt = new Date().toISOString()
-  const profiles = known ?? await read(run, 'hermes', ['profile', 'list'], parseProfiles, [], { timeoutMs: PROFILE_LIST_TIMEOUT_MS })
+  const profiles = known ?? await readProfileList(run, home)
   const names = profiles.availability === 'available' ? profiles.data.map((profile) => profile.name).filter((name) => PROFILE_NAME.test(name)) : []
+  // From each profile's cron/jobs.json when Hermes' home is readable: no CLI per profile.
+  if (home && names.length > 0 && existsSync(home)) {
+    const results = names.map((name) => { try { return readCronJobs(profileHome(home, name), name) } catch { return undefined } })
+    const failedProfiles = names.filter((_, index) => !results[index])
+    if (failedProfiles.length < names.length) return { jobs: { availability: 'available', data: results.flatMap((jobs) => jobs ?? []) }, ...(failedProfiles.length ? { failedProfiles } : {}), fetchedAt }
+  }
   if (names.length === 0) return { jobs: await read(run, 'hermes', ['cron', 'list', '--all'], parseCronJobs, []), fetchedAt }
   const results = await Promise.all(names.map((name) => read(run, 'hermes', ['-p', name, 'cron', 'list', '--all'], parseCronJobs, [])))
   if (results.every((result) => result.availability !== 'available')) return { jobs: results[0], fetchedAt }
@@ -587,8 +601,10 @@ export async function collectCalendar(run: Run = systemRun, known?: Source<Profi
   return { jobs: { availability: 'available', data: jobs }, ...(failedProfiles.length ? { failedProfiles } : {}), fetchedAt }
 }
 
-export async function collectActivity(run: Run = systemRun): Promise<ActivitySnapshot> {
-  const sessions = await read(run, 'hermes', ['sessions', 'list', '--limit', '20'], parseSessions, [])
+export async function collectActivity(run: Run = systemRun, home?: string): Promise<ActivitySnapshot> {
+  let direct: Session[] | undefined
+  try { direct = home ? readSessions(home, 20) : undefined } catch { direct = undefined }
+  const sessions: Source<Session[]> = direct ? { availability: 'available', data: direct } : await read(run, 'hermes', ['sessions', 'list', '--limit', '20'], parseSessions, [])
   return { sessions, fetchedAt: new Date().toISOString() }
 }
 
@@ -1060,16 +1076,16 @@ export function buildDashboard(parts: { runtime: RuntimeSnapshot; board: TaskBoa
 }
 
 // ---------------------------------------------------------------------------
-// Cached accessors. Concurrent callers share one in-flight read per source. Every read starts a
-// Python CLI (1-2 s of CPU each), so slow-changing sources are kept longer, and a source with
+// Cached accessors. Concurrent callers share one in-flight read per source. Profiles, tasks,
+// sessions, cron and agent activity come from Hermes' files (milliseconds). Skills and channels
+// still start the Python CLI (seconds of CPU each), so they are kept much longer. A source with
 // `staleMs` answers from its last value at once while it re-reads in the background.
 
-/** Profiles, cron, skills and channels change rarely; tasks and activity stay at CACHE_MS. */
-const SLOW_CACHE_MS = 60_000
-/** `hermes profile list` takes up to 25 s; agents are added or removed rarely. */
-const PROFILES_CACHE_MS = 5 * 60_000
-const SKILLS_CACHE_MS = 5 * 60_000
-const STALE_MS = 10 * 60_000
+/** Profiles, cron and sessions: cheap to read, but they change rarely. */
+const SLOW_CACHE_MS = 30_000
+/** Skills and messaging channels: CLI only, and they change only when someone sets them up. */
+const CLI_ONLY_CACHE_MS = 15 * 60_000
+const STALE_MS = 60 * 60_000
 
 function cachedSource<T>(collect: () => Promise<T>, ttl = CACHE_MS, staleMs = 0) {
   let entry: { value: T; expires: number } | undefined
@@ -1100,16 +1116,16 @@ function cachedSource<T>(collect: () => Promise<T>, ttl = CACHE_MS, staleMs = 0)
 /** The last profile list that could be read: a slow or failed read keeps the agents' desks. */
 let lastProfiles: RuntimeSnapshot['profiles'] | undefined
 const runtimeSource = cachedSource(async () => {
-  const snapshot = await collectSnapshot()
+  const snapshot = await collectSnapshot(systemRun, hermesHome())
   if (snapshot.profiles.availability === 'available') lastProfiles = snapshot.profiles
   else if (lastProfiles) return { ...snapshot, profiles: lastProfiles }
   return snapshot
-}, PROFILES_CACHE_MS, STALE_MS)
+}, SLOW_CACHE_MS, STALE_MS)
 const taskBoardSource = cachedSource(() => collectTaskBoardFast())
-const calendarSource = cachedSource(async () => collectCalendar(systemRun, (await getSnapshot()).profiles), SLOW_CACHE_MS, STALE_MS)
-const activitySource = cachedSource(() => collectActivity(), SLOW_CACHE_MS, STALE_MS)
-const knowledgeSource = cachedSource(() => collectKnowledge(), SKILLS_CACHE_MS, STALE_MS)
-const channelSource = cachedSource(() => collectChannels(), SLOW_CACHE_MS, STALE_MS)
+const calendarSource = cachedSource(async () => collectCalendar(systemRun, (await getSnapshot()).profiles, hermesHome()), SLOW_CACHE_MS, STALE_MS)
+const activitySource = cachedSource(() => collectActivity(systemRun, hermesHome()), CACHE_MS, STALE_MS)
+const knowledgeSource = cachedSource(() => collectKnowledge(), CLI_ONLY_CACHE_MS, STALE_MS)
+const channelSource = cachedSource(() => collectChannels(), CLI_ONLY_CACHE_MS, STALE_MS)
 const usageSources = new Map(USAGE_PERIODS.map((days) => [days, cachedSource(async () => collectUsage(days, (await getSnapshot()).profiles.data.map((profile) => profile.name)), INSIGHTS_CACHE_MS)]))
 
 /** Token usage of every agent over 1, 7 or 30 days (anything else reads as 7). */
