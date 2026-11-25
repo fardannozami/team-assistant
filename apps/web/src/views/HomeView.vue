@@ -66,7 +66,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { ApiError, aiApi, employeesApi, reportsApi, schedulesApi, whatsappApi, type DailyReport } from "../api";
+import { ApiError, aiApi, employeesApi, reportsApi, whatsappApi, type DailyReport } from "../api";
 import { isAdmin } from "../session";
 
 const emit = defineEmits<{ (event: "navigate", tab: string): void; (event: "tour"): void }>();
@@ -75,12 +75,11 @@ const loading = ref(true);
 const error = ref("");
 
 const setupLoaded = ref(false);
-const status = ref({ whatsapp: false, ai: false, employees: false, schedules: false });
+const status = ref({ whatsapp: false, ai: false, employees: false });
 const setup = computed(() => [
   { id: "whatsapp", title: "Hubungkan WhatsApp", description: "Tautkan nomor bot agar bisa mengirim pesan", done: status.value.whatsapp },
   { id: "ai", title: "Pasang API key AI", description: "Gunakan key Anda sendiri (mis. Gemini atau Groq, gratis) agar bot bisa menjawab pertanyaan", done: status.value.ai },
   { id: "employees", title: "Tambah anggota tim", description: "Masukkan nama dan nomor WhatsApp anggota", done: status.value.employees },
-  { id: "schedules", title: "Atur jadwal standup", description: "Tentukan jam pertanyaan dikirim setiap hari", done: status.value.schedules },
 ]);
 const doneCount = computed(() => setup.value.filter((s) => s.done).length);
 const setupDone = computed(() => doneCount.value === setup.value.length);
@@ -104,12 +103,11 @@ async function loadSummary() {
 }
 
 async function loadSetup() {
-  const [wa, ai, employees, schedules] = await Promise.allSettled([whatsappApi.status(), aiApi.settings(), employeesApi.list({ active: true }), schedulesApi.list()]);
+  const [wa, ai, employees] = await Promise.allSettled([whatsappApi.status(), aiApi.settings(), employeesApi.list({ active: true })]);
   status.value = {
     whatsapp: wa.status === "fulfilled" && (wa.value.connected || wa.value.registered),
     ai: ai.status === "fulfilled" && (ai.value.configured || ai.value.sharedKeyAvailable),
     employees: employees.status === "fulfilled" && employees.value.length > 0,
-    schedules: schedules.status === "fulfilled" && schedules.value.some((s) => s.isActive),
   };
   setupLoaded.value = true;
 }

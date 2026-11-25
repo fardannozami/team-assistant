@@ -223,33 +223,6 @@ export interface NewEmployee {
   lead?: EmployeeLead | null;
 }
 
-export interface Schedule {
-  id: string;
-  name: string;
-  timeOfDay: string;
-  weekdays: number[];
-  timezone: string;
-  reminderMiddayTime: string | null;
-  reminderAfternoonTime: string | null;
-  closeTime: string | null;
-  summaryTime: string | null;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ScheduleInput {
-  name: string;
-  timeOfDay: string;
-  weekdays: number[];
-  timezone?: string | null;
-  reminderMiddayTime?: string | null;
-  reminderAfternoonTime?: string | null;
-  closeTime?: string | null;
-  summaryTime?: string | null;
-  isActive?: boolean;
-}
-
 export type CheckinKind = "checkout" | "icebreaker";
 
 export interface CheckinQuestion {
@@ -618,33 +591,6 @@ export const teamsApi = {
     request<Team>("/teams", {
       method: "POST",
       body: JSON.stringify({ name }),
-    }),
-};
-
-export const schedulesApi = {
-  list: () =>
-    request<{ schedules: Schedule[] }>("/schedules").then((r) => r.schedules),
-
-  create: (input: ScheduleInput) =>
-    request<Schedule>("/schedules", {
-      method: "POST",
-      body: JSON.stringify(input),
-    }),
-
-  update: (id: string, input: ScheduleInput) =>
-    request<Schedule>(`/schedules/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(input),
-    }),
-
-  delete: (id: string) =>
-    request<{ deleted: boolean }>(`/schedules/${id}`, {
-      method: "DELETE",
-    }),
-
-  trigger: (id: string) =>
-    request<{ queued: boolean; scheduleId: string }>(`/schedules/${id}/trigger`, {
-      method: "POST",
     }),
 };
 

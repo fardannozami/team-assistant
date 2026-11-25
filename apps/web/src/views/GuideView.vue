@@ -88,7 +88,7 @@ const emit = defineEmits<{ navigate: [tab: string]; tour: [] }>();
 
 const roleRows = [
   ["Perintah admin via WhatsApp", "Ya", "Tidak", "Tidak"],
-  ["Anggota, tim, jadwal, hari libur", "Kelola", "Lihat", "—"],
+  ["Anggota, tim, hari libur", "Kelola", "Lihat", "—"],
   ["Koneksi WhatsApp & pengaturan AI", "Kelola", "—", "—"],
   ["Laporan & riwayat standup", "Lihat", "Lihat", "—"],
   ["Isi standup lewat WhatsApp", "Ya", "Ya", "Ya"],
@@ -132,7 +132,6 @@ const webTasks = [
   { tab: "whatsapp", title: "WhatsApp", desc: "Hubungkan nomor bot dan pantau statusnya." },
   { tab: "users", title: "Pengguna", desc: "Undang admin/manager dashboard lewat email Google dan atur aksesnya." },
   { tab: "ai", title: "AI", desc: "Pasang API key dan atur batas pemakaian per role." },
-  { tab: "schedules", title: "Jadwal", desc: "Atur jam standup dan pengingat." },
   { tab: "checkins", title: "Check-in", desc: "Atur check-out Jumat dan ice breaking Senin beserta pertanyaannya." },
   { tab: "holidays", title: "Hari libur", desc: "Tandai hari tanpa standup." },
   { tab: "reports", title: "Laporan", desc: "Lihat rekap harian dan mingguan." },

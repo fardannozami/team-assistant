@@ -20,7 +20,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import WhatsAppView from "./WhatsAppView.vue";
-import SchedulesView from "./SchedulesView.vue";
 import HolidaysView from "./HolidaysView.vue";
 import AiView from "./AiView.vue";
 import CheckinsView from "./CheckinsView.vue";
@@ -38,7 +37,6 @@ const sections = [
   { id: "ai", label: "AI", view: AiView },
   { id: "github", label: "GitHub", view: GithubView },
   { id: "figma", label: "Figma", view: FigmaView },
-  { id: "schedules", label: "Jadwal", view: SchedulesView },
   { id: "checkins", label: "Check-in", view: CheckinsView },
   { id: "holidays", label: "Hari libur", view: HolidaysView },
 ];
