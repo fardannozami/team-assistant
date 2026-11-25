@@ -7,7 +7,7 @@ import { HttpError } from "../../lib/http-error.js";
 const bridgeUrl = () => (process.env.HERMES_BRIDGE_URL ?? "").replace(/\/+$/, "");
 // The bridge's first read after a restart can take ~30 s (`hermes profile list` on a busy server).
 const READ_TIMEOUT_MS = 35_000;
-const WRITE_TIMEOUT_MS = 30_000;
+const WRITE_TIMEOUT_MS = 60_000;
 
 export const hermesConfigured = () => Boolean(bridgeUrl() && process.env.BRIDGE_TOKEN);
 

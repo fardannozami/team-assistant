@@ -1,14 +1,17 @@
 // Adapted from Ruang (https://github.com/yugienugraha/ruang, MIT, © yugienugraha) for Naya:
 // read-only collectors of the Hermes CLI, plus a generation-safe cache and states Naya declares.
 import { execFile as execFileCallback } from 'node:child_process'
+import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { collectClaudeSessions, type ClaudeSessions } from './claude-code.js'
 import { collectOpenCodeSessions, type OpenCodeSessions } from './opencode.js'
+import { hermesHome, lastSessionActivity, profileHome, readKanbanTasks, recentLogLines } from './hermes-files.js'
 
 const execFile = promisify(execFileCallback)
 const CACHE_MS = 10_000
 const INSIGHTS_CACHE_MS = 60_000
-const COMMAND_TIMEOUT_MS = 8_000
+/** The CLI starts Python for every read: 4-12 s on a small server, so 8 s timed most reads out. */
+const COMMAND_TIMEOUT_MS = 20_000
 /** `hermes profile list` checks every profile and takes ~15 s on a busy server; killed at 8 s it never finished, and the retries kept the CPU busy. */
 const PROFILE_LIST_TIMEOUT_MS = 30_000
 const COMMAND_LOG_LIMIT = 100
@@ -772,6 +775,7 @@ export async function collectTaskDetail(id: string, run: Run = systemRun, board?
 // session active in the last few minutes is direct, attributable evidence of work.
 
 export const ACTIVITY_WINDOW = '3m'
+const ACTIVITY_WINDOW_MS = 3 * 60_000
 /** At most this many profiles are probed at once, so many profiles do not flood the machine. */
 const ACTIVITY_CONCURRENCY = 4
 const LOG_RECORD = /^(\d{4}-\d{2}-\d{2}[ T][\d:,.]+)\s+[A-Z]+(?:\s+\[[^\]]*\])?\s+([\w.]+):\s?(.*)$/
@@ -840,6 +844,33 @@ export async function collectAgentActivity(profiles: readonly string[], run: Run
     return { profile, availability: 'available', ...parseRecentActivity(logs.output, sessions) }
   })
   return { agents, fetchedAt: new Date().toISOString() }
+}
+
+/**
+ * The same live activity, read from each profile's files instead of two CLI calls per profile:
+ * the last 3 minutes of `logs/agent.log`, and when its newest session in `state.db` last moved.
+ */
+export function collectAgentActivityFromFiles(profiles: readonly string[], home = hermesHome(), now = Date.now()): AgentActivitySnapshot {
+  const agents = profiles.filter((profile) => PROFILE_NAME.test(profile)).map((profile): AgentActivity => {
+    const dir = profileHome(home, profile)
+    try {
+      const activity = parseRecentActivity(recentLogLines(join(dir, 'logs', 'agent.log'), ACTIVITY_WINDOW_MS, now))
+      const session = lastSessionActivity(join(dir, 'state.db'))
+      if (!activity.active && session !== undefined && now - session <= ACTIVITY_WINDOW_MS) return { profile, availability: 'available', ...activity, active: true, kind: 'chat', label: ACTIVITY_LABELS.chat }
+      return { profile, availability: 'available', ...activity }
+    } catch {
+      return { profile, availability: 'unavailable', active: false, mentionsOpenCode: false }
+    }
+  })
+  return { agents, fetchedAt: new Date(now).toISOString() }
+}
+
+/** The default board straight from kanban.db; more boards (or an unreadable database) go through the CLI. */
+export async function collectTaskBoardFast(home = hermesHome(), run: Run = systemRun): Promise<TaskBoardSnapshot> {
+  let tasks: Task[] | undefined
+  try { tasks = readKanbanTasks(home) } catch { tasks = undefined }
+  if (!tasks) return collectTaskBoard(run)
+  return { tasks: { availability: 'available', data: tasks.map((task) => ({ ...task, board: 'default' })) }, boards: [{ slug: 'default', name: 'default', current: true, total: tasks.length }], fetchedAt: new Date().toISOString() }
 }
 
 // ---------------------------------------------------------------------------
@@ -1035,6 +1066,8 @@ export function buildDashboard(parts: { runtime: RuntimeSnapshot; board: TaskBoa
 
 /** Profiles, cron, skills and channels change rarely; tasks and activity stay at CACHE_MS. */
 const SLOW_CACHE_MS = 60_000
+/** `hermes profile list` takes up to 25 s; agents are added or removed rarely. */
+const PROFILES_CACHE_MS = 5 * 60_000
 const SKILLS_CACHE_MS = 5 * 60_000
 const STALE_MS = 10 * 60_000
 
@@ -1071,10 +1104,10 @@ const runtimeSource = cachedSource(async () => {
   if (snapshot.profiles.availability === 'available') lastProfiles = snapshot.profiles
   else if (lastProfiles) return { ...snapshot, profiles: lastProfiles }
   return snapshot
-}, SLOW_CACHE_MS, STALE_MS)
-const taskBoardSource = cachedSource(() => collectTaskBoard())
+}, PROFILES_CACHE_MS, STALE_MS)
+const taskBoardSource = cachedSource(() => collectTaskBoardFast())
 const calendarSource = cachedSource(async () => collectCalendar(systemRun, (await getSnapshot()).profiles), SLOW_CACHE_MS, STALE_MS)
-const activitySource = cachedSource(() => collectActivity())
+const activitySource = cachedSource(() => collectActivity(), SLOW_CACHE_MS, STALE_MS)
 const knowledgeSource = cachedSource(() => collectKnowledge(), SKILLS_CACHE_MS, STALE_MS)
 const channelSource = cachedSource(() => collectChannels(), SLOW_CACHE_MS, STALE_MS)
 const usageSources = new Map(USAGE_PERIODS.map((days) => [days, cachedSource(async () => collectUsage(days, (await getSnapshot()).profiles.data.map((profile) => profile.name)), INSIGHTS_CACHE_MS)]))
@@ -1088,7 +1121,7 @@ const claudeSessionsSource = cachedSource(() => collectClaudeSessions(), 15_000)
 const openCodeSessionsSource = cachedSource(async () => collectOpenCodeSessions(), 15_000)
 const agentActivitySource = cachedSource(async () => {
   const runtime = await getSnapshot()
-  return collectAgentActivity(runtime.profiles.availability === 'available' ? runtime.profiles.data.map((profile) => profile.name) : [])
+  return collectAgentActivityFromFiles(runtime.profiles.availability === 'available' ? runtime.profiles.data.map((profile) => profile.name) : [])
 }, 15_000)
 
 export function getSnapshot(now = Date.now()): Promise<RuntimeSnapshot> { return runtimeSource(now) }

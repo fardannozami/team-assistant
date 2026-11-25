@@ -13,7 +13,7 @@ import { BOARD_SLUG, PROFILE_NAME, TASK_ID, redactLogLine, systemRun, type Run }
 //   Retry        unblock (a task held by a worker error or waiting for input goes back to work)
 // Every argument is passed to execFile (no shell); ids are validated, free text is bounded.
 
-export const WRITE_TIMEOUT_MS = 20_000
+export const WRITE_TIMEOUT_MS = 30_000
 const DECOMPOSE_TIMEOUT_MS = 180_000
 export const MAX_TITLE = 200
 export const MAX_TEXT = 4_000

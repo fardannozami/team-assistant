@@ -1,6 +1,6 @@
 import { open, realpath } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { basename, extname, join, sep } from 'node:path'
+import { hermesHome } from './hermes-files.js'
 import { WriteError } from './kanban-write.js'
 import { jsonPayload, systemRun, type Run } from './mission-control.js'
 
@@ -61,9 +61,7 @@ export async function listAttachments(id: string, board: string | undefined, run
   return (await stored(id, board, run)).map(({ storedPath: _, ...item }) => item)
 }
 
-export function hermesHome(env: NodeJS.ProcessEnv = process.env): string {
-  return env.HERMES_HOME || join(homedir(), '.hermes')
-}
+export { hermesHome }
 
 /** One attachment's bytes, when it lives under Hermes' home and is not too large. */
 export async function readAttachment(id: string, attachmentId: number, board: string | undefined, options: { run?: Run; home?: string } = {}): Promise<{ attachment: Attachment; data: Uint8Array }> {
