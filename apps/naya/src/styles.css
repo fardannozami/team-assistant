@@ -224,7 +224,6 @@ code { background: var(--c-1c231e); border: 1px solid var(--c-2c352e); border-ra
 .refresh-button:hover:not(:disabled) { border-color: var(--c-f2b16b); color: var(--c-f5f2ea); }
 .refresh-button:disabled { cursor: progress; opacity: .6; }
 .source-status { align-items: center; flex-wrap: wrap; }
-.source-status .refresh-button { margin-left: auto; }
 .nav-badge { background: var(--c-6b2a22); border-radius: 9px; color: var(--c-ffd5cc); font: 10px ui-monospace, monospace; min-width: 18px; padding: 2px 6px; text-align: center; }
 a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible, .log-viewer:focus-visible { outline: 2px solid var(--c-f2b16b); outline-offset: 2px; }
 .toolbar { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }

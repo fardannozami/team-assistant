@@ -22,19 +22,18 @@ export function EmptyState({ title, children }: { title: string; children: React
   return <section className="empty-state"><h2>{title}</h2><p>{children}</p></section>
 }
 
-/** Source freshness plus a manual refresh control shared by every data page. */
+/** Source freshness shared by every data page (data refreshes on its own while the page is open). */
 export function SourceStatus({ source, fetchedAt, request }: { source?: Source<unknown>; fetchedAt?: string; request: Polled<unknown> }) {
   const status = request.status === 'pending' ? 'Menghubungkan' : request.status === 'failed' || !source || source.availability === 'unavailable' ? 'Tidak tersedia' : request.status === 'ready' && request.stale ? 'Data lama (gagal memuat ulang)' : 'Sumber langsung'
   const live = source?.availability === 'available' && !(request.status === 'ready' && request.stale)
   return <div className="source-status">
     <span className={live ? 'dot' : 'dot muted-dot'}/><span>{status}</span>
     <span>{fetchedAt ? `DIMUAT ${formatTime(fetchedAt)}` : 'MENUNGGU DATA'}</span>
-    <button type="button" className="refresh-button" onClick={request.refresh} disabled={request.refreshing} aria-label="Muat ulang sumber ini">{request.refreshing ? 'MEMUAT…' : '↻ MUAT ULANG'}</button>
   </div>
 }
 
 export function Unavailable({ source, request }: { source?: Source<unknown>; request: Polled<unknown> }) {
-  if (request.status === 'failed') return <section className="empty-state" role="alert"><h2>Tidak tersedia</h2><p>{request.message ?? 'Sumber data ini tidak bisa dihubungi. Coba muat ulang sebentar lagi.'}</p></section>
+  if (request.status === 'failed') return <section className="empty-state" role="alert"><h2>Tidak tersedia</h2><p>{request.message ?? 'Sumber data ini tidak bisa dihubungi. Naya mencoba lagi otomatis.'}</p></section>
   return source?.availability === 'unavailable' ? <section className="empty-state"><h2>Tidak tersedia</h2><p>{source.error?.message ?? 'Sumber data ini tidak bisa dibaca.'}</p></section> : null
 }
 
