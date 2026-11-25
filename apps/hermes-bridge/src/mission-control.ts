@@ -9,6 +9,8 @@ const execFile = promisify(execFileCallback)
 const CACHE_MS = 10_000
 const INSIGHTS_CACHE_MS = 60_000
 const COMMAND_TIMEOUT_MS = 8_000
+/** `hermes profile list` checks every profile and takes ~15 s on a busy server; killed at 8 s it never finished, and the retries kept the CPU busy. */
+const PROFILE_LIST_TIMEOUT_MS = 30_000
 const COMMAND_LOG_LIMIT = 100
 const LOG_TAIL_LINES = 200
 
@@ -500,9 +502,9 @@ function failure<T>(error: unknown, fallback: T): Source<T> {
   return { availability: 'unavailable', data: fallback, error: { code, message: code === 'TIMEOUT' ? 'Read timed out.' : message } }
 }
 
-async function read<T>(run: Run, file: string, args: string[], parse: (output: string) => T, fallback: T): Promise<Source<T>> {
+async function read<T>(run: Run, file: string, args: string[], parse: (output: string) => T, fallback: T, options?: RunOptions): Promise<Source<T>> {
   try {
-    return { availability: 'available', data: parse(await run(file, args)) }
+    return { availability: 'available', data: parse(await (options ? run(file, args, options) : run(file, args))) }
   } catch (error) {
     return failure(error, fallback)
   }
@@ -516,7 +518,7 @@ export const PROFILE_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/
 
 export async function collectSnapshot(run: Run = systemRun): Promise<RuntimeSnapshot> {
   const [profiles, openCode, claudeCode] = await Promise.all([
-    read(run, 'hermes', ['profile', 'list'], parseProfiles, []),
+    read(run, 'hermes', ['profile', 'list'], parseProfiles, [], { timeoutMs: PROFILE_LIST_TIMEOUT_MS }),
     read(run, 'opencode', ['--version'], (value) => value.trim().split('\n').pop()?.trim() || 'Unknown', 'Unknown'),
     read(run, 'claude', ['--version'], parseClaudeVersion, 'Unknown'),
   ])
@@ -568,10 +570,11 @@ export async function collectTaskBoard(run: Run = systemRun): Promise<TaskBoardS
  * Cron jobs of every Hermes profile. Hermes stores cron per profile, so each profile from
  * `hermes profile list` is read with `hermes -p <profile> cron list --all` and its jobs are
  * tagged with the profile. If the profile list cannot be read, the active profile is read as before.
+ * `profiles` reuses a profile list already read (the runtime snapshot) instead of reading it again.
  */
-export async function collectCalendar(run: Run = systemRun): Promise<CalendarSnapshot> {
+export async function collectCalendar(run: Run = systemRun, known?: Source<Profile[]>): Promise<CalendarSnapshot> {
   const fetchedAt = new Date().toISOString()
-  const profiles = await read(run, 'hermes', ['profile', 'list'], parseProfiles, [])
+  const profiles = known ?? await read(run, 'hermes', ['profile', 'list'], parseProfiles, [], { timeoutMs: PROFILE_LIST_TIMEOUT_MS })
   const names = profiles.availability === 'available' ? profiles.data.map((profile) => profile.name).filter((name) => PROFILE_NAME.test(name)) : []
   if (names.length === 0) return { jobs: await read(run, 'hermes', ['cron', 'list', '--all'], parseCronJobs, []), fetchedAt }
   const results = await Promise.all(names.map((name) => read(run, 'hermes', ['-p', name, 'cron', 'list', '--all'], parseCronJobs, [])))
@@ -1026,15 +1029,21 @@ export function buildDashboard(parts: { runtime: RuntimeSnapshot; board: TaskBoa
 }
 
 // ---------------------------------------------------------------------------
-// Cached accessors. Concurrent callers share one in-flight read per source.
+// Cached accessors. Concurrent callers share one in-flight read per source. Every read starts a
+// Python CLI (1-2 s of CPU each), so slow-changing sources are kept longer, and a source with
+// `staleMs` answers from its last value at once while it re-reads in the background.
 
-function cachedSource<T>(collect: () => Promise<T>, ttl = CACHE_MS) {
+/** Profiles, cron, skills and channels change rarely; tasks and activity stay at CACHE_MS. */
+const SLOW_CACHE_MS = 60_000
+const SKILLS_CACHE_MS = 5 * 60_000
+const STALE_MS = 10 * 60_000
+
+function cachedSource<T>(collect: () => Promise<T>, ttl = CACHE_MS, staleMs = 0) {
   let entry: { value: T; expires: number } | undefined
   let inflight: Promise<T> | undefined
   // A read started before a clear() (e.g. a Kanban write) must not refill the cache with stale data.
   let generation = 0
-  const get = (now = Date.now()): Promise<T> => {
-    if (entry && entry.expires > now) return Promise.resolve(entry.value)
+  const refresh = (): Promise<T> => {
     if (inflight) return inflight
     const started = generation
     const read = collect().then((value) => {
@@ -1044,15 +1053,30 @@ function cachedSource<T>(collect: () => Promise<T>, ttl = CACHE_MS) {
     inflight = read
     return read
   }
+  const get = (now = Date.now()): Promise<T> => {
+    if (entry && entry.expires > now) return Promise.resolve(entry.value)
+    if (entry && entry.expires + staleMs > now) {
+      refresh().catch(() => undefined)
+      return Promise.resolve(entry.value)
+    }
+    return refresh()
+  }
   return Object.assign(get, { clear: () => { entry = undefined; inflight = undefined; generation += 1 } })
 }
 
-const runtimeSource = cachedSource(() => collectSnapshot())
+/** The last profile list that could be read: a slow or failed read keeps the agents' desks. */
+let lastProfiles: RuntimeSnapshot['profiles'] | undefined
+const runtimeSource = cachedSource(async () => {
+  const snapshot = await collectSnapshot()
+  if (snapshot.profiles.availability === 'available') lastProfiles = snapshot.profiles
+  else if (lastProfiles) return { ...snapshot, profiles: lastProfiles }
+  return snapshot
+}, SLOW_CACHE_MS, STALE_MS)
 const taskBoardSource = cachedSource(() => collectTaskBoard())
-const calendarSource = cachedSource(() => collectCalendar())
+const calendarSource = cachedSource(async () => collectCalendar(systemRun, (await getSnapshot()).profiles), SLOW_CACHE_MS, STALE_MS)
 const activitySource = cachedSource(() => collectActivity())
-const knowledgeSource = cachedSource(() => collectKnowledge())
-const channelSource = cachedSource(() => collectChannels())
+const knowledgeSource = cachedSource(() => collectKnowledge(), SKILLS_CACHE_MS, STALE_MS)
+const channelSource = cachedSource(() => collectChannels(), SLOW_CACHE_MS, STALE_MS)
 const usageSources = new Map(USAGE_PERIODS.map((days) => [days, cachedSource(async () => collectUsage(days, (await getSnapshot()).profiles.data.map((profile) => profile.name)), INSIGHTS_CACHE_MS)]))
 
 /** Token usage of every agent over 1, 7 or 30 days (anything else reads as 7). */

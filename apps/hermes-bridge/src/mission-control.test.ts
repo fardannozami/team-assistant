@@ -38,6 +38,13 @@ describe('Hermes output parsers', () => {
     expect(snapshot.openCode.data).toBe('Unknown')
   })
 
+  it('gives the slow profile list 30 s, and the quick version checks the default timeout', async () => {
+    const timeouts: Record<string, number | undefined> = {}
+    await collectSnapshot(async (file, args, options) => { timeouts[[file, ...args].join(' ')] = options?.timeoutMs; return '1.0.0' })
+    expect(timeouts['hermes profile list']).toBe(30_000)
+    expect(timeouts['opencode --version']).toBeUndefined()
+  })
+
   it('treats unrecognized profile output as unavailable', async () => {
     const snapshot = await collectSnapshot(async (_file, args) => {
       if (args.join(' ') === 'profile list') return 'Hermes profile service is starting.'
