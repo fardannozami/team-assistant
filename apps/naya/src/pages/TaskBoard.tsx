@@ -8,6 +8,7 @@ import { loadSnapshot, type RequestState } from '../request-state.ts'
 import type { CardSummary, Task, TaskBoardSnapshot, TaskDetailSnapshot } from '../types.ts'
 import { ChecklistPanel, PicSelect } from '../checklist.tsx'
 import { usePeople } from '../people.ts'
+import { Markdown } from '../markdown.tsx'
 import { PILLS, pillOf, STAGES, stageOf, type Pill } from '../pipeline.ts'
 import { Dialog, EmptyState, PageTitle, SearchInput, SourceStatus, Unavailable } from '../ui.tsx'
 
@@ -244,13 +245,13 @@ export function TaskDetailDialog({ task, onClose, onOpenTask, onChanged, titleOf
     {failed && <p className="file-notice">{task.id ? 'Detail lengkap belum bisa dimuat. Menampilkan ringkasan dari papan.' : 'Hanya ringkasan dari papan yang tersedia untuk tugas ini.'}</p>}
     {detail && <>
       {status === 'blocked' && detail.lastError && <section className="task-section"><p className="eyebrow">KENAPA TERTAHAN</p><p className="task-prose task-prose-bad">{detail.lastError}</p></section>}
-      <section className="task-section"><p className="eyebrow">INSTRUKSI</p>{detail.body ? <p className="task-prose">{detail.body}</p> : <p className="muted">Tidak ada instruksi tambahan selain judul.</p>}</section>
-      {detail.result && <section className="task-section"><p className="eyebrow">HASIL KERJA</p><p className="task-prose">{detail.result}</p></section>}
+      <section className="task-section"><p className="eyebrow">INSTRUKSI</p>{detail.body ? <Markdown className="task-prose" text={detail.body}/> : <p className="muted">Tidak ada instruksi tambahan selain judul.</p>}</section>
+      {detail.result && <section className="task-section"><p className="eyebrow">HASIL KERJA</p><Markdown className="task-prose" text={detail.result}/></section>}
       <TaskAttachments task={task} version={version}/>
       {related('BAGIAN DARI', detail.parents)}
       {related('TUGAS TURUNAN', detail.children)}
       {task.id && <ChecklistPanel taskId={task.id} board={task.board} version={version} onDone={() => { setVersion((value) => value + 1); onChanged?.() }}/>}
-      {detail.comments.length > 0 && <section className="task-section"><p className="eyebrow">DISKUSI</p><ul className="task-timeline">{detail.comments.map((comment, index) => <li key={index}><b>{agentName(comment.author)}</b><small title={formatDateTime(comment.createdAt)}>{formatRelative(comment.createdAt)}</small><p>{commentText(comment.body)}</p></li>)}</ul></section>}
+      {detail.comments.length > 0 && <section className="task-section"><p className="eyebrow">DISKUSI</p><ul className="task-timeline">{detail.comments.map((comment, index) => <li key={index}><b>{agentName(comment.author)}</b><small title={formatDateTime(comment.createdAt)}>{formatRelative(comment.createdAt)}</small><Markdown className="md-compact" text={commentText(comment.body)}/></li>)}</ul></section>}
     </>}
     <ReviewPanel task={task} status={status} blocked={blocked} onDone={() => { setVersion((value) => value + 1); onChanged?.() }}/>
   </Dialog>
