@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { apiFetch } from '../api.ts'
 import { apiPost, useMe } from '../access.ts'
-import { formatDateTime, statusTone } from '../format.ts'
+import { agentLabel, formatDateTime, formatRelative } from '../format.ts'
 import { usePolling } from '../polling.ts'
 import { loadSnapshot, type RequestState } from '../request-state.ts'
 import type { Task, TaskBoardSnapshot, TaskDetailSnapshot } from '../types.ts'
@@ -198,11 +198,20 @@ function TaskAttachments({ task, version }: { task: Task; version: number }) {
   </section>
 }
 
-function Field({ label, value }: { label: string; value?: string | number }) {
-  return value === undefined || value === '' ? null : <div><dt>{label}</dt><dd>{value}</dd></div>
+/** Hermes notes rejections as "BLOCKED: [Ditolak oleh …] reason"; people only need the words. */
+const commentText = (body: string) => body.replace(/^BLOCKED:\s*/, '')
+
+/** Who asked for it and when it moved, as one sentence instead of a grid of timestamps. */
+function TaskStory({ createdAt, createdBy, startedAt, completedAt }: { createdAt?: string; createdBy?: string; startedAt?: string; completedAt?: string }) {
+  const parts = [
+    createdAt && <span key="created" title={formatDateTime(createdAt)}>Diminta {createdBy ? <>oleh <b>{createdBy}</b> </> : ''}{formatRelative(createdAt)}</span>,
+    startedAt && <span key="started" title={formatDateTime(startedAt)}>mulai dikerjakan {formatRelative(startedAt)}</span>,
+    completedAt && <span key="done" title={formatDateTime(completedAt)}>selesai {formatRelative(completedAt)}</span>,
+  ].filter(Boolean)
+  return parts.length ? <p className="task-story">{parts.flatMap((part, index) => index ? [' · ', part] : [part])}</p> : null
 }
 
-export function TaskDetailDialog({ task, onClose, onOpenTask, onChanged }: { task: Task; onClose: () => void; onOpenTask?: (id: string) => void; onChanged?: () => void }) {
+export function TaskDetailDialog({ task, onClose, onOpenTask, onChanged, titleOf }: { task: Task; onClose: () => void; onOpenTask?: (id: string) => void; onChanged?: () => void; titleOf?: (id: string) => string | undefined }) {
   const [state, setState] = useState<RequestState<TaskDetailSnapshot>>({ status: 'pending' })
   const [version, setVersion] = useState(0)
   useEffect(() => {
@@ -215,36 +224,28 @@ export function TaskDetailDialog({ task, onClose, onOpenTask, onChanged }: { tas
   const detail = state.status === 'ready' && state.data.task.availability === 'available' ? state.data.task.data : null
   const failed = !task.id || state.status === 'failed' || (state.status === 'ready' && !detail)
   const status = detail?.status ?? task.status
-  const links = (label: string, ids: string[]) => ids.length > 0 && <div><dt>{label}</dt><dd className="task-links">{ids.map((id) => <button type="button" key={id} className="chip chip-button" onClick={() => onOpenTask?.(id)}>{id}</button>)}</dd></div>
+  const assignee = detail?.assignee ?? task.assignee
+  const priority = detail?.priority ?? task.priority
+  const blocked = detail ? blockedBy(detail.comments) : undefined
+  const related = (label: string, ids: string[]) => ids.length > 0 && <section className="task-section"><p className="eyebrow">{label}</p><ul className="task-related">{ids.map((id) => <li key={id}><button type="button" className="link-button" onClick={() => onOpenTask?.(id)}>{titleOf?.(id) ?? id}</button></li>)}</ul></section>
   return <Dialog labelledBy="task-detail-title" onClose={onClose} closeLabel={`Tutup detail ${task.title}`} className="task-detail">
-    <p className="eyebrow">TUGAS KANBAN{task.board ? ` · BOARD ${task.board.toUpperCase()}` : ''}{task.id ? ` · ${task.id}` : ''}</p>
+    <p className="eyebrow">TUGAS{task.board ? ` · ${task.board.toUpperCase()}` : ''}</p>
     <h2 id="task-detail-title">{detail?.title ?? task.title}</h2>
+    <div className="task-meta"><span className={`pill pill-${pillOf(status)}`}>{status === 'blocked' && detail ? (blocked === 'rejected' ? '✕ Ditolak' : '✕ Tertahan') : PILLS[pillOf(status)].label}</span><span className={`chip ${assignee ? '' : 'chip-muted'}`}>{assignee ? `PIC: ${agentLabel(assignee)}` : 'Belum ditugaskan'}</span>{priority ? <span className="chip chip-priority">Prioritas {priority}</span> : null}</div>
+    {detail && <TaskStory {...detail}/>}
     <StageSteps status={status}/>
-    <div className="task-meta"><span className={`pill pill-${pillOf(status)}`}>{status === 'blocked' && detail ? (blockedBy(detail.comments) === 'rejected' ? '✕ Ditolak' : '✕ Tertahan') : PILLS[pillOf(status)].label}</span><span className={`chip ${task.assignee ? '' : 'chip-muted'}`}>{detail?.assignee ?? task.assignee ?? 'belum ditugaskan'}</span>{(detail?.priority ?? task.priority) ? <span className="chip chip-priority">P{detail?.priority ?? task.priority}</span> : null}</div>
     {state.status === 'pending' && task.id && <p className="muted">Memuat detail tugas…</p>}
-    {failed && <p className="file-notice">{task.id ? 'Detail lengkap belum bisa dibaca (hermes kanban show gagal). Menampilkan ringkasan dari papan.' : 'Tugas ini tidak punya id, jadi hanya ringkasan papan yang tersedia.'}</p>}
-    <ReviewPanel task={task} status={status} blocked={detail ? blockedBy(detail.comments) : undefined} onDone={() => { setVersion((value) => value + 1); onChanged?.() }}/>
+    {failed && <p className="file-notice">{task.id ? 'Detail lengkap belum bisa dimuat. Menampilkan ringkasan dari papan.' : 'Hanya ringkasan dari papan yang tersedia untuk tugas ini.'}</p>}
     {detail && <>
-      <dl className="office-detail-grid task-grid">
-        <Field label="Dibuat" value={detail.createdAt ? `${formatDateTime(detail.createdAt)}${detail.createdBy ? ` oleh ${detail.createdBy}` : ''}` : undefined}/>
-        <Field label="Mulai" value={detail.startedAt && formatDateTime(detail.startedAt)}/>
-        <Field label="Selesai" value={detail.completedAt && formatDateTime(detail.completedAt)}/>
-        <Field label="Workspace" value={detail.workspace}/>
-        <Field label="Branch" value={detail.branch}/>
-        <Field label="Model" value={detail.model}/>
-        <Field label="Tenant" value={detail.tenant}/>
-        <Field label="Skills" value={detail.skills.join(', ')}/>
-        {links('Bergantung pada', detail.parents)}
-        {links('Menahan', detail.children)}
-      </dl>
-      {detail.lastError && <section className="task-section"><p className="eyebrow">KEGAGALAN TERAKHIR</p><pre className="task-text text-bad">{detail.lastError}</pre></section>}
-      <section className="task-section"><p className="eyebrow">DESKRIPSI</p>{detail.body ? <pre className="task-text">{detail.body}</pre> : <p className="muted">Tanpa deskripsi.</p>}</section>
-      {detail.result && <section className="task-section"><p className="eyebrow">HASIL / RINGKASAN TERAKHIR</p><pre className="task-text">{detail.result}</pre></section>}
+      {status === 'blocked' && detail.lastError && <section className="task-section"><p className="eyebrow">KENAPA TERTAHAN</p><p className="task-prose task-prose-bad">{detail.lastError}</p></section>}
+      <section className="task-section"><p className="eyebrow">INSTRUKSI</p>{detail.body ? <p className="task-prose">{detail.body}</p> : <p className="muted">Tidak ada instruksi tambahan selain judul.</p>}</section>
+      {detail.result && <section className="task-section"><p className="eyebrow">HASIL KERJA</p><p className="task-prose">{detail.result}</p></section>}
       <TaskAttachments task={task} version={version}/>
-      {detail.runs.length > 0 && <section className="task-section"><p className="eyebrow">PERCOBAAN ({detail.runs.length})</p><table className="log-table"><thead><tr><th>Run</th><th>Profil</th><th>Status</th><th>Mulai</th><th>Selesai</th></tr></thead><tbody>{detail.runs.map((run) => <tr key={run.id}><td>#{run.id}</td><td>{run.profile ?? '—'}</td><td><span className={`badge ${statusTone(run.outcome ?? run.status ?? '')}`}>{run.outcome ?? run.status ?? '—'}</span>{run.error && <div className="text-bad small-note">{run.error}</div>}{run.summary && <div className="small-note">{run.summary}</div>}</td><td>{formatDateTime(run.startedAt)}</td><td>{formatDateTime(run.endedAt)}</td></tr>)}</tbody></table></section>}
-      {detail.comments.length > 0 && <section className="task-section"><p className="eyebrow">KOMENTAR ({detail.comments.length})</p><ul className="task-timeline">{detail.comments.map((comment, index) => <li key={index}><b>{comment.author}</b><small>{formatDateTime(comment.createdAt)}</small><p>{comment.body}</p></li>)}</ul></section>}
-      {detail.events.length > 0 && <section className="task-section"><p className="eyebrow">AKTIVITAS ({detail.events.length})</p><ul className="task-timeline">{[...detail.events].reverse().map((event, index) => <li key={index}><b>{event.kind}</b><small>{formatDateTime(event.createdAt)}{event.runId ? ` · run #${event.runId}` : ''}</small>{event.detail && <code>{event.detail}</code>}</li>)}</ul></section>}
+      {related('BAGIAN DARI', detail.parents)}
+      {related('TUGAS TURUNAN', detail.children)}
+      {detail.comments.length > 0 && <section className="task-section"><p className="eyebrow">DISKUSI</p><ul className="task-timeline">{detail.comments.map((comment, index) => <li key={index}><b>{agentLabel(comment.author)}</b><small title={formatDateTime(comment.createdAt)}>{formatRelative(comment.createdAt)}</small><p>{commentText(comment.body)}</p></li>)}</ul></section>}
     </>}
+    <ReviewPanel task={task} status={status} blocked={blocked} onDone={() => { setVersion((value) => value + 1); onChanged?.() }}/>
   </Dialog>
 }
 
@@ -298,6 +299,6 @@ export function TaskBoard() {
       <PipelineColumns tasks={visible} multiBoard={multiBoard} onOpen={(task, trigger_) => { trigger.current = trigger_; setOpenTask(task) }}/>
       <section className="pipe-legend" aria-label="Legenda"><span className="eyebrow">LEGENDA</span>{(Object.keys(PILLS) as Pill[]).map((pill) => <span key={pill}><span className={`pill pill-${pill}`}>{PILLS[pill].label}</span> {PILLS[pill].legend}</span>)}</section>
     </>)}
-    {openTask && <TaskDetailDialog key={`${openTask.board ?? ''}-${openTask.id ?? openTask.title}`} task={openTask} onClose={closeTask} onChanged={snapshot.refresh} onOpenTask={(id) => setOpenTask(all.find((task) => task.id === id && task.board === openTask.board) ?? { id, title: id, status: 'unknown', ...(openTask.board ? { board: openTask.board } : {}) })}/>}
+    {openTask && <TaskDetailDialog key={`${openTask.board ?? ''}-${openTask.id ?? openTask.title}`} task={openTask} onClose={closeTask} onChanged={snapshot.refresh} titleOf={(id) => all.find((task) => task.id === id && task.board === openTask.board)?.title} onOpenTask={(id) => setOpenTask(all.find((task) => task.id === id && task.board === openTask.board) ?? { id, title: id, status: 'unknown', ...(openTask.board ? { board: openTask.board } : {}) })}/>}
   </>
 }

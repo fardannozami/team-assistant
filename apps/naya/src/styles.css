@@ -453,6 +453,13 @@ main { max-width: 1680px; }
 .task-attachment-row small { color: var(--text-muted); display: block; font-size: 12px; }
 .task-attachment-actions { display: flex; gap: 6px; }
 .task-attachment-text { max-height: 420px; }
+.task-story { color: var(--text-muted); font-size: 13px; line-height: 1.5; margin: 10px 0 0; }
+.task-story b { color: var(--text); font-weight: 600; }
+.task-prose { color: var(--text); font-size: 15px; line-height: 1.65; margin: 8px 0 0; max-width: 68ch; overflow-wrap: anywhere; white-space: pre-wrap; }
+.task-prose-bad { border-left: 3px solid var(--c-ff9d8f); color: var(--c-ff9d8f); font-size: 14px; padding-left: 12px; }
+.task-related { display: grid; gap: 4px; list-style: none; margin: 8px 0 0; padding: 0; }
+.task-related .link-button { background: none; border: 0; color: var(--accent); cursor: pointer; font: inherit; font-size: 14px; padding: 2px 0; text-align: left; }
+.task-related .link-button:hover { text-decoration: underline; }
 .task-timeline { display: grid; gap: 10px; list-style: none; margin: 8px 0 0; padding: 0; }
 .task-timeline li { border-left: 2px solid var(--border-strong); display: grid; gap: 3px; padding-left: 10px; }
 .task-timeline b { font-size: 13px; }

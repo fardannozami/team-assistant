@@ -16,6 +16,21 @@ export function formatDateTime(value: string | undefined): string {
   return Number.isFinite(time) ? new Date(time).toLocaleString() : value
 }
 
+const relative = new Intl.RelativeTimeFormat('id', { numeric: 'auto' })
+const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [['day', 86_400], ['hour', 3_600], ['minute', 60]]
+
+/** "3 jam lalu", "kemarin", "baru saja"; older than a week falls back to the date. */
+export function formatRelative(value: string | undefined, now = Date.now()): string {
+  if (!value) return '—'
+  const time = Date.parse(value)
+  if (!Number.isFinite(time)) return value
+  const seconds = Math.round((time - now) / 1000)
+  if (Math.abs(seconds) < 60) return 'baru saja'
+  if (Math.abs(seconds) >= 7 * 86_400) return new Date(time).toLocaleDateString('id', { day: 'numeric', month: 'short', year: 'numeric' })
+  const [unit, size] = UNITS.find(([, size]) => Math.abs(seconds) >= size)!
+  return relative.format(Math.round(seconds / size), unit)
+}
+
 /** Hermes Kanban board order (plugins/kanban dashboard), followed by less common states. */
 export const TASK_STATUS_ORDER = ['triage', 'todo', 'scheduled', 'ready', 'running', 'blocked', 'review', 'done', 'archived']
 export const CORE_TASK_STATUSES = ['todo', 'ready', 'running', 'review', 'done']
