@@ -285,7 +285,7 @@ const LEAD_LABEL: Record<EmployeeLead, string> = { design: "Lead Design", develo
 
 const SHIFT_LABEL: Record<EmployeeShift, string> = { day: "Siang", night: "Malam" };
 const SHIFT_HINT: Record<EmployeeShift, string> = {
-  day: "Standup pagi sesuai jadwal (default 09:00), checkout 16:00.",
+  day: "Standup pagi sesuai jadwal (default 09:00), checkout 17:00.",
   night: "Standup 19:00, checkout 07:00 keesokan paginya.",
 };
 const creating = ref(false);

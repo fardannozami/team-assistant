@@ -18,13 +18,13 @@ export const CORE_STANDUP_ELEMENTS = [
 export const MORNING_STANDUP_ELEMENTS = ["today"] as const;
 
 // Work shifts. Siang follows the standup schedule's time (09:00 by default)
-// and checks out at 16:00; malam starts at 19:00 and checks out at 07:00 the
+// and checks out at 17:00; malam starts at 19:00 and checks out at 07:00 the
 // next morning, for the shift that started the evening before. All in the
 // standup schedule's timezone, on its weekdays.
 export const EMPLOYEE_SHIFTS = ["day", "night"] as const;
 export type EmployeeShift = (typeof EMPLOYEE_SHIFTS)[number];
 export const SHIFT_TIMES: Record<EmployeeShift, { standup: string; checkout: string }> = {
-  day: { standup: "09:00", checkout: "16:00" },
+  day: { standup: "09:00", checkout: "17:00" },
   night: { standup: "19:00", checkout: "07:00" },
 };
 /** Hours the night shift's work window sits after the day's: noon to noon. */

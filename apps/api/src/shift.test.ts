@@ -23,6 +23,6 @@ describe("shift dates", () => {
   test("night shift texts", () => {
     expect(morningPromptText("2026-11-20", null, "night")).toBe("Selamat malam! Standup shift malam 2026-11-20 🌙\nApa rencanamu hari ini?");
     expect(checkoutLaterText("night")).toContain("Besok jam 07:00 pagi");
-    expect(checkoutLaterText("day")).toContain("Jam 16:00 nanti");
+    expect(checkoutLaterText("day")).toContain("Jam 17:00 nanti");
   });
 });
