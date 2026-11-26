@@ -67,7 +67,7 @@ What each role sees follows the blueprint's access matrix (`NAYA_VIEWS` in `pack
 | Papan Tugas | every card | only the cards they are the PIC of (of the card or of an item), and those cards' subtasks |
 | Agent, Kalender, Pemakaian | ✓ | — (`/runtime`, `/calendar`, `/usage` answer 403) |
 
-A card someone may not see answers 404 in its detail, attachments, checklist and comments, so its existence is not given away. In the PIC picker, employees get only names: who is santai and how much waits on whom is for those who assign work.
+A card someone may not see answers 404 in its detail, attachments, checklist and comments, so its existence is not given away. In the PIC picker, employees get only names: who is santai and how much waits on whom is for those who assign work. In the office, employees see every colleague's avatar and presence, but only their own plan: `/team` sends a colleague's tasks empty, and the detail panel leaves the kanban out.
 
 ## OpenCode in the office
 

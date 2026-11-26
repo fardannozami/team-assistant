@@ -135,7 +135,8 @@ export function OfficeDetail({ station, onClose }: { station: OfficeStation; onC
       <div role="tabpanel" aria-label={DETAIL_LABEL[tab]} className="detail-body">
         {employee && <>
           <p className="detail-activity">{PRESENCE_NOTE[employee.presence]}</p>
-          <TeamKanban tasks={employee.tasks}/>
+          {/* A colleague's plan only for those who see every task; the API leaves it out for the rest. */}
+          {!me || me.can.see.allTasks || station.id === `employee:${me.user.employeeId}` ? <TeamKanban tasks={employee.tasks}/> : null}
           <dl className="office-detail-grid"><div><dt>Tim</dt><dd>{employee.team ?? '—'}</dd></div><div><dt>Sumber data</dt><dd>{station.provenance}</dd></div><div><dt>Kebaruan data</dt><dd>{station.freshness}</dd></div></dl>
         </>}
         {!employee && tab === 'Overview' && <>

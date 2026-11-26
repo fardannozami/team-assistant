@@ -61,6 +61,14 @@ export function teamPresence(session: { checkoutStatus: string | null } | undefi
   return isStandbyPlan(plan) ? "standby" : "working";
 }
 
+/**
+ * The office as seen without the "allTasks" view: everyone's avatar and presence stay, but only
+ * one's own plan comes along; a colleague's standup is for those who run the team.
+ */
+export function withOwnTasks(members: TeamMember[], employeeId: string | null): TeamMember[] {
+  return members.map((member) => (member.id === employeeId ? member : { ...member, tasks: [] }));
+}
+
 /** Every standup target with today's (their shift's) standup. No phone numbers leave here. */
 export async function teamToday(workspaceId: string): Promise<{ members: TeamMember[]; fetchedAt: string }> {
   const [people, tz] = await Promise.all([standupTargets(workspaceId), standupTimezone(workspaceId)]);

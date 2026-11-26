@@ -1,5 +1,6 @@
 import { MORNING_STANDUP_ELEMENTS, isNoBlocker, type StandupElement } from "@repo/shared";
 import { standupAnswers, standupSessions } from "@repo/database";
+import { nayaStandupLines } from "../../naya/login.js";
 import { morningOpenings, type MorningOpening } from "../draft.js";
 import { parseStandupText } from "./parse.js";
 import {
@@ -128,6 +129,8 @@ export async function recordAnswers(
     return [
       summarize(date, "Standup tercatat untuk", await getAnswers(standupRow.id)),
       `Terima kasih 😊 ${checkoutLaterText(employee.shift)}`,
+      // The standup is in either way: a failed link only leaves it out.
+      ...(await nayaStandupLines(employee.workspaceId, employee.id).catch(() => [])),
     ].join("\n");
   }
   return `Diterima. ${STANDUP_QUESTIONS[stillMissing[0]!]}`;

@@ -24,7 +24,7 @@ import { getActorId, getActorRole, getWorkspaceId } from "../../lib/tenant.js";
 import { bridge, hermesConfigured, type Actor } from "./bridge.js";
 import { chatKey, deleteNayaAgent, listNayaAgents, nayaPermissions, saveNayaAgent } from "./agents.js";
 import { proxyChat } from "./chat.js";
-import { teamToday } from "./team.js";
+import { teamToday, withOwnTasks } from "./team.js";
 import { boardOf, cardSummaries, continueCard, currentBoard, decideItem, getChecklist, inbox, setCardPic, setItemPic, visibleCards } from "./checklist.js";
 import { employeeOf, listMembers } from "./members.js";
 import { notifyHandoffs } from "./notify.js";
@@ -123,7 +123,11 @@ nayaApi.get("/channels", anyone, async (c) => c.json(await bridge.channels(fresh
 
 /* ---------- The human team: avatars follow today's standup ---------- */
 
-nayaApi.get("/team", anyone, async (c) => c.json(await teamToday(getWorkspaceId(c))));
+nayaApi.get("/team", anyone, async (c) => {
+  const team = await teamToday(getWorkspaceId(c));
+  if (nayaSees(getActorRole(c), "allTasks")) return c.json(team);
+  return c.json({ ...team, members: withOwnTasks(team.members, await employeeOf(getWorkspaceId(c), getActorId(c)!)) });
+});
 
 /* ---------- Instructions and reviews on the Hermes Kanban ---------- */
 
