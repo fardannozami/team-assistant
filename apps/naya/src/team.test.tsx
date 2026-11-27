@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { OfficeDetail } from './pages/Office.tsx'
 import { idlePlan, createLayout } from './office3d-layout.ts'
-import { stationBadge, teamStations } from './team.ts'
+import { isResting, stationBadge, teamStations } from './team.ts'
 import type { OfficeStation, TeamMember } from './types.ts'
 
 const agent: OfficeStation = {
@@ -18,10 +18,20 @@ describe('team avatars', () => {
     member('b', 'standby', [{ title: 'Eksplorasi Three.js', status: 'doing' }]),
     member('c', 'resting', [{ title: 'Fix login', status: 'done' }]),
     member('d', 'absent'),
+    { ...member('e', 'resting'), shift: 'night', offShift: true },
   ], [agent])
 
-  it('puts people who standup in the office after the agents, and leaves out who has not', () => {
-    expect(stations.map((station) => [station.id, station.seat])).toEqual([['employee:a', 3], ['employee:b', 4], ['employee:c', 5]])
+  it('puts everyone in the office after the agents, including who has not sent a standup yet', () => {
+    expect(stations.map((station) => [station.id, station.seat])).toEqual([['employee:a', 3], ['employee:b', 4], ['employee:c', 5], ['employee:d', 6], ['employee:e', 7]])
+  })
+
+  it('greys out who has not sent a standup, and puts the night shift to bed during the day', () => {
+    const [, , , absent, asleep] = stations
+    expect(absent).toMatchObject({ room: 'Lounge', state: 'Offline', recentActivity: 'Belum standup' })
+    expect(stationBadge(absent)).toEqual({ label: 'Belum standup', tone: 'muted' })
+    expect(asleep).toMatchObject({ room: 'Lounge', state: 'Idle', recentActivity: 'Shift malam · belum mulai' })
+    expect(stationBadge(asleep).label).toBe('Tidur')
+    expect(isResting(asleep)).toBe(true)
   })
 
   it('works at a desk on today\'s plan, santai on standby, and rests after checkout', () => {

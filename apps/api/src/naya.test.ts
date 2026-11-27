@@ -11,7 +11,7 @@ import { demuxLogs, opsServices, opsStatus, redactSecrets } from "./modules/ops/
 import { nayaPermissions, type NayaAgent } from "./modules/naya/agents.js";
 import { chatEndpoint, relayStream } from "./modules/naya/chat.js";
 import { isNayaKeyword } from "./modules/naya/login.js";
-import { splitTasks, teamPresence, teamTasks, withOwnTasks } from "./modules/naya/team.js";
+import { offNightShift, splitTasks, teamPresence, teamTasks, withOwnTasks } from "./modules/naya/team.js";
 
 describe("sign-in link secrets", () => {
   test("codes are prefixed, url-safe and unique; only their hash is kept", () => {
@@ -294,7 +294,7 @@ describe("team avatars from today's standup", () => {
 
   test("without allTasks, colleagues keep their avatar but not their plan", () => {
     const task = { title: "Fix login", status: "doing" as const };
-    const member = (id: string) => ({ id, name: id, team: null, shift: "day", date: "2026-11-26", presence: "working" as const, tasks: [task] });
+    const member = (id: string) => ({ id, name: id, team: null, shift: "day", date: "2026-11-26", presence: "working" as const, offShift: false, tasks: [task] });
     const seen = withOwnTasks([member("me"), member("other")], "me");
     expect(seen.map((m) => [m.id, m.presence, m.tasks.length])).toEqual([["me", "working", 1], ["other", "working", 0]]);
     expect(withOwnTasks([member("other")], null)[0]!.tasks).toEqual([]);
@@ -312,6 +312,17 @@ describe("team avatars from today's standup", () => {
     expect(teamPresence({ checkoutStatus: "completed" }, { today: "Fix login" })).toBe("resting");
     expect(teamPresence({ checkoutStatus: "missed" }, { today: "Fix login" })).toBe("resting");
     expect(teamPresence({ checkoutStatus: "pending" }, { today: "Fix login" })).toBe("working");
+  });
+
+  test("the night shift is off between its checkout and its standup", () => {
+    // Asia/Jakarta is UTC+7.
+    const at = (hour: number, minute = 0) => new Date(Date.UTC(2026, 10, 27, hour - 7, minute));
+    expect(offNightShift("night", "Asia/Jakarta", at(14))).toBe(true);
+    expect(offNightShift("night", "Asia/Jakarta", at(7))).toBe(true);
+    expect(offNightShift("night", "Asia/Jakarta", at(6, 59))).toBe(false);
+    expect(offNightShift("night", "Asia/Jakarta", at(19))).toBe(false);
+    expect(offNightShift("night", "Asia/Jakarta", at(23))).toBe(false);
+    expect(offNightShift("day", "Asia/Jakarta", at(14))).toBe(false);
   });
 
   test("the kanban moves done work and adds blockers at checkout", () => {

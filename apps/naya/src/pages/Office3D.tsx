@@ -343,7 +343,7 @@ export default function Office3D({ stations, onSelect }: { stations: OfficeStati
         const badge = stationBadge(station)
         const busy = ['Working', 'Reviewing', 'Collaborating'].includes(station.state)
         const idle = wandering(station)
-        const idleLabel = idle && (isResting(station) ? 'Istirahat · sudah checkout' : idle.placement.label ?? idle.stop.label)
+        const idleLabel = idle && (isResting(station) ? (station.employee?.offShift ? 'Tidur · shift malam belum mulai' : 'Istirahat · sudah checkout') : idle.placement.label ?? idle.stop.label)
         return <button key={station.id} ref={register(labels, `agent-${station.id}`)} type="button" className={`agent-tag-3d state-${station.state.toLowerCase()}${station.employee ? ' employee' : ''}`} onClick={(event) => onSelect(station, event.currentTarget)} aria-label={`${station.name}. ${badge.label}.${station.activity ? ` ${station.activity}.` : ''}${idleLabel ? ` ${idleLabel}.` : ''} Buka detail.`}>
           {busy && station.activity && <span className="speech speech-3d">{station.activity}</span>}
           {idle && <span className={`speech speech-3d speech-idle${idle.placement.pose === 'lie' ? ' speech-sleep' : ''}`}>{idle.placement.pose === 'lie' ? '💤 ' : ''}{idleLabel}</span>}

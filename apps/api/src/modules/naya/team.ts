@@ -1,22 +1,24 @@
 import { createDbClient, standupAnswers, standupSessions, standups } from "@repo/database";
 import { and, eq, inArray } from "drizzle-orm";
-import { isNoBlocker, shiftDate } from "@repo/shared";
+import { isNoBlocker, SHIFT_TIMES, shiftDate } from "@repo/shared";
 import { standupTargets } from "../standups/service.js";
 import { standupTimezone } from "../standups/engine.js";
 
 // The human team in Naya's office: each employee's avatar follows today's standup. After the
 // morning standup they work at a desk with today's plan as kanban cards; a plan that is only
-// exploration or standby has them santai around the office; after checkout they rest.
+// exploration or standby has them santai around the office; after checkout they rest. Night-shift
+// people with no standup yet are asleep during the day (between their checkout and standup).
 
 const db = createDbClient(
   process.env.DATABASE_URL ?? "postgres://teamassistant:teamassistant@localhost:5432/teamassistant",
 );
 
-/** absent: no plan yet today · working · standby: exploration/standby only · resting: checked out. */
+/** absent: no plan yet today · working · standby: exploration/standby only · resting: checked out, or off shift. */
 export type TeamPresence = "absent" | "working" | "standby" | "resting";
 export type TeamTaskStatus = "doing" | "done" | "blocked";
 export interface TeamTask { title: string; status: TeamTaskStatus }
-export interface TeamMember { id: string; name: string; team: string | null; shift: string; date: string; presence: TeamPresence; tasks: TeamTask[] }
+/** `offShift`: resting because it is outside their (night) shift, not because they checked out. */
+export interface TeamMember { id: string; name: string; team: string | null; shift: string; date: string; presence: TeamPresence; offShift: boolean; tasks: TeamTask[] }
 
 /** Lines, bullets, numbering and semicolons each start a new item. */
 export function splitTasks(text: string | null | undefined): string[] {
@@ -51,6 +53,13 @@ export function teamTasks(answers: Record<string, string>, checkedOut: boolean):
   ];
   if (!isNoBlocker(answers.blockers)) tasks.push(...splitTasks(answers.blockers).map((title): TeamTask => ({ title, status: "blocked" })));
   return tasks;
+}
+
+/** Whether it is outside the night shift right now (after its checkout, before its standup). */
+export function offNightShift(shift: string, timezone: string, at: Date = new Date()): boolean {
+  if (shift !== "night") return false;
+  const time = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(at);
+  return time >= SHIFT_TIMES.night.checkout && time < SHIFT_TIMES.night.standup;
 }
 
 export function teamPresence(session: { checkoutStatus: string | null } | undefined, answers: Record<string, string>): TeamPresence {
@@ -98,7 +107,9 @@ export async function teamToday(workspaceId: string): Promise<{ members: TeamMem
   const members = people.map((person): TeamMember => {
     const session = sessions.get(person.id);
     const answers = session?.answers ?? {};
-    const presence = teamPresence(session, answers);
+    // No standup yet, but their night shift has not started: asleep, not missing.
+    const offShift = teamPresence(session, answers) === "absent" && offNightShift(person.shift, tz);
+    const presence = offShift ? "resting" : teamPresence(session, answers);
     return {
       id: person.id,
       name: person.name,
@@ -106,7 +117,8 @@ export async function teamToday(workspaceId: string): Promise<{ members: TeamMem
       shift: person.shift,
       date: dateOf.get(person.id)!,
       presence,
-      tasks: presence === "absent" ? [] : teamTasks(answers, presence === "resting"),
+      offShift,
+      tasks: presence === "absent" || offShift ? [] : teamTasks(answers, presence === "resting"),
     };
   });
   return { members, fetchedAt: new Date().toISOString() };

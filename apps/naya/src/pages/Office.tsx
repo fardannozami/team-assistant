@@ -83,7 +83,7 @@ export function TeamKanban({ tasks }: { tasks: TeamTask[] }) {
   })}</div>
 }
 
-const PRESENCE_NOTE = { absent: '', working: 'Sedang mengerjakan rencana hari ini.', standby: 'Hari ini eksplorasi / standby, jadi santai di sekitar kantor.', resting: 'Sudah checkout, sedang istirahat.' } as const
+const PRESENCE_NOTE = { absent: 'Belum mengirim standup hari ini.', working: 'Sedang mengerjakan rencana hari ini.', standby: 'Hari ini eksplorasi / standby, jadi santai di sekitar kantor.', resting: 'Sudah checkout, sedang istirahat.' } as const
 
 /** This agent's tokens over the last 7 days and its rank in the crew (Hermes profiles only). */
 function AgentTokens({ agent }: { agent: string }) {
@@ -134,7 +134,7 @@ export function OfficeDetail({ station, onClose }: { station: OfficeStation; onC
       {profile && <div className="detail-tabs" role="tablist" aria-label={`Detail ${station.name}`}>{tabs.map((item) => <button type="button" role="tab" key={item} aria-selected={tab === item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{DETAIL_LABEL[item]}</button>)}</div>}
       <div role="tabpanel" aria-label={DETAIL_LABEL[tab]} className="detail-body">
         {employee && <>
-          <p className="detail-activity">{PRESENCE_NOTE[employee.presence]}</p>
+          <p className="detail-activity">{employee.offShift ? 'Shift malam belum mulai, sedang tidur.' : PRESENCE_NOTE[employee.presence]}</p>
           {/* A colleague's plan only for those who see every task; the API leaves it out for the rest. */}
           {!me || me.can.see.allTasks || station.id === `employee:${me.user.employeeId}` ? <TeamKanban tasks={employee.tasks}/> : null}
           <dl className="office-detail-grid"><div><dt>Tim</dt><dd>{employee.team ?? '—'}</dd></div><div><dt>Sumber data</dt><dd>{station.provenance}</dd></div><div><dt>Kebaruan data</dt><dd>{station.freshness}</dd></div></dl>
@@ -182,7 +182,8 @@ function hudItems(office: OfficeSnapshot | undefined, dashboard: DashboardSnapsh
   const items: HudItem[] = []
   if (team && team.members.length > 0) {
     const count = (presence: string) => team.members.filter((member) => member.presence === presence).length
-    items.push({ label: 'Tim hadir', value: `${team.members.length - count('absent')}/${team.members.length}`, title: `${count('working')} bekerja · ${count('standby')} standby · ${count('resting')} istirahat · ${count('absent')} belum standup` })
+    const asleep = team.members.filter((member) => member.offShift).length
+    items.push({ label: 'Tim hadir', value: `${team.members.length - count('absent')}/${team.members.length}`, title: `${count('working')} bekerja · ${count('standby')} standby · ${count('resting') - asleep} istirahat · ${asleep} tidur (shift malam) · ${count('absent')} belum standup` })
   }
   if (summary) {
     items.push({ label: 'Kru aktif', value: `${summary.active}/${summary.declared}`, title: `${summary.idle} santai · ${summary.offline} offline · ${summary.unknown} tidak diketahui` })
