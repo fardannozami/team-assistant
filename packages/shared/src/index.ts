@@ -434,6 +434,13 @@ export function nayaGroupOf(pic: string | null | undefined): NayaGroup | null {
   return pic === "all:design" ? "design" : pic === "all:development" ? "development" : null;
 }
 
+/**
+ * Where a reviewed card goes next: to the designers, the developers, or nowhere ("none": the
+ * agent's result is the end of it, e.g. leads, reports, content).
+ */
+export const NAYA_NEXT_STEPS = ["design", "development", "none"] as const;
+export type NayaNext = (typeof NAYA_NEXT_STEPS)[number];
+
 export const nayaInstructionSchema = z.object({
   title: z.string().trim().min(1, "Judul wajib diisi").max(200),
   body: z.string().max(4000).optional(),
@@ -444,6 +451,8 @@ export const nayaInstructionSchema = z.object({
    * whole team ("all:design", "all:development").
    */
   pic: z.union([z.literal("auto"), z.enum(NAYA_PIC_GROUPS), z.string().uuid()]).default("auto"),
+  /** Where it goes after review; omitted: suggested from the agent and title when the AI is done. */
+  next: z.enum(NAYA_NEXT_STEPS).optional(),
 });
 
 export const nayaReviewSchema = z.object({
@@ -501,19 +510,22 @@ export function nayaPoolOf(lead: string | null | undefined, team?: string | null
   return null;
 }
 
-/** Hermes agents whose work goes on to the designers; Engineering agents go to the developers. */
+/** Hermes agents whose work goes on to the designers, to the developers, or to nobody. */
 const DESIGN_AGENTS = new Set(["naya-3a", "naya-3b", "naya-4a", "naya-5d"]);
-const DEVELOPMENT_AGENTS = new Set(["naya-3c", "naya-3d"]);
+const DEVELOPMENT_AGENTS = new Set(["naya-2b", "naya-3c", "naya-3d"]);
+const AGENT_ONLY = new Set(["naya-1a", "naya-1b", "naya-1c", "naya-2a", "naya-2c", "naya-4b", "naya-5a", "naya-5b", "naya-5c"]);
 
 /**
  * Where a card in review should go next, suggested from the agent that made it, else its title;
- * development when neither says. PM/Admin or the lead of that team may change it.
+ * nowhere when neither says. PM/Admin or the lead of that team may change it.
  */
-export function nayaNextStep(task: { title: string; assignee?: string | null }): NayaGroup {
+export function nayaNextStep(task: { title: string; assignee?: string | null }): NayaNext {
   if (task.assignee && DESIGN_AGENTS.has(task.assignee)) return "design";
   if (task.assignee && DEVELOPMENT_AGENTS.has(task.assignee)) return "development";
-  if (NAYA_POOLS.design.pattern.test(task.title) && !NAYA_POOLS.development.pattern.test(task.title)) return "design";
-  return "development";
+  if (task.assignee && AGENT_ONLY.has(task.assignee)) return "none";
+  const design = NAYA_POOLS.design.pattern.test(task.title);
+  const development = NAYA_POOLS.development.pattern.test(task.title);
+  return design && !development ? "design" : development ? "development" : "none";
 }
 
 /** The team a lead position leads ("design" → "design"), or null for everyone else. */
@@ -521,9 +533,9 @@ export function nayaLeadOf(lead: string | null | undefined): NayaGroup | null {
   return lead === "design" || lead === "development" ? lead : null;
 }
 
-/** Who continues a card after review: the team, and a member of it (null: the most available). */
+/** Who continues a card after review: the team (or nobody), and a member of it (null: the most available). */
 export const nayaNextSchema = z.object({
-  step: z.enum(["design", "development"]).optional(),
+  step: z.enum(NAYA_NEXT_STEPS).optional(),
   pic: z.string().uuid().nullable(),
   board: z.string().max(64).optional(),
 });

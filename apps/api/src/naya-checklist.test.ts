@@ -202,6 +202,9 @@ describe("who picks up a card", () => {
     expect(nayaNextStep({ title: "Wireframe dashboard", assignee: "naya-3c" })).toBe("development");
     expect(nayaNextStep({ title: "Desain landing page" })).toBe("design");
     expect(nayaNextStep({ title: "PRD aplikasi kasir", assignee: "naya-2b" })).toBe("development");
+    expect(nayaNextStep({ title: "Draf ice-breaker", assignee: "naya-1c" })).toBe("none");
+    expect(nayaNextStep({ title: "Ringkas notulen rapat", assignee: "claude" })).toBe("none");
+    expect(nextPlan("none", null, [member("Eko", "developer", "standby", 0)])).toEqual({ step: "none", pic: null, suggested: null });
     const team = [member("Dina", "designer", "working", 0), member("Eko", "developer", "working", 0), member("Fani", "developer", "standby", 3)];
     expect(nextPlan("development", null, team).suggested?.name).toBe("Fani");
     expect(nextPlan("development", "eko", team)).toEqual({ step: "development", pic: "eko", suggested: { id: "eko", name: "Eko", presence: "working" } });

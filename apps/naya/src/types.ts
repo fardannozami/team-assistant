@@ -135,8 +135,8 @@ export type ChecklistStatus = 'in_progress' | 'done' | 'feedback' | 'rejected'
 export interface ChecklistItem { id: string; title: string; agent: string | null; sourceTaskId: string | null; picEmployeeId: string | null; status: ChecklistStatus; note: string | null; version: number; decidedAt: string | null; handedAt: string | null; updatedAt: string }
 /** Who picks up a card at each stage: sales/PM review, then design or development. */
 export type NayaPool = 'review' | 'design' | 'development'
-/** Who continues a card after review: the team, the chosen member (null: the most available), and who that is now. */
-export interface NextPlan { step: Exclude<NayaPool, 'review'>; pic: string | null; suggested: { id: string; name: string; presence: TeamPresence } | null }
+/** Who continues a card after review: the team ('none': it ends with the agent), the chosen member (null: the most available), and who that is now. */
+export interface NextPlan { step: Exclude<NayaPool, 'review'> | 'none'; pic: string | null; suggested: { id: string; name: string; presence: TeamPresence } | null }
 export interface Checklist { status: string; pic: string | null; pool: NayaPool | null; group: Exclude<NayaPool, 'review'> | null; next: NextPlan | null; continuesFrom: string | null; continuedTo: string | null; continuedStep: Exclude<NayaPool, 'review'> | null; items: ChecklistItem[] }
 /** A team member (employee) with their pool by position, and today's standup presence. */
 export interface Member { id: string; name: string; team: string | null; lead: string | null; pool: NayaPool | null; presence: TeamPresence; userId: string | null; load: number }

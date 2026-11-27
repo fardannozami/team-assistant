@@ -1,6 +1,6 @@
 import { createDbClient, nayaCards, nayaChecklistItems, nayaLearnedRules } from "@repo/database";
 import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
-import { NAYA_POOLS, nayaNextStep, type ChecklistStatus, type NayaGroup, type NayaPool } from "@repo/shared";
+import { NAYA_POOLS, nayaNextStep, type ChecklistStatus, type NayaGroup, type NayaNext, type NayaPool } from "@repo/shared";
 import { HttpError } from "../../lib/http-error.js";
 import { bridge, type Actor } from "./bridge.js";
 import { assertMember, listMembers, memberNames, memberPools, mostAvailable, pickAvailable, type Member } from "./members.js";
@@ -16,7 +16,8 @@ import { assertMember, listMembers, memberNames, memberPools, mostAvailable, pic
 // card is continued to them. A card can also go to a whole team (all designers, all developers):
 // its items then have no PIC and wait on everyone in that pool. While a card is in review it
 // carries a plan for afterwards: design or development, and who there (by default the most
-// available, idle first), which PM/Admin or the lead of that team may change.
+// available, idle first), which PM/Admin or the lead of that team may change; or nowhere, when
+// the agent's result is the end of it.
 
 const db = createDbClient(
   process.env.DATABASE_URL ?? "postgres://teamassistant:teamassistant@localhost:5432/teamassistant",
@@ -89,7 +90,7 @@ export async function setCardPic(
   board: string | undefined,
   taskId: string,
   pic: string | null,
-  options: { createdBy?: string; pool?: NayaPool | null; group?: NayaGroup | null; continuesFrom?: string } = {},
+  options: { createdBy?: string; pool?: NayaPool | null; group?: NayaGroup | null; continuesFrom?: string; next?: NayaNext } = {},
 ) {
   const key = boardOf(board);
   if (pic) await assertMember(workspaceId, pic);
@@ -98,7 +99,7 @@ export async function setCardPic(
   const picGroup = options.group ?? null;
   await db
     .insert(nayaCards)
-    .values({ workspaceId, board: key, taskId, picEmployeeId: pic, picGroup, createdBy: options.createdBy, continuesFrom: options.continuesFrom, ...pool })
+    .values({ workspaceId, board: key, taskId, picEmployeeId: pic, picGroup, createdBy: options.createdBy, continuesFrom: options.continuesFrom, nextStep: options.next, ...pool })
     .onConflictDoUpdate({ target: [nayaCards.workspaceId, nayaCards.board, nayaCards.taskId], set: { picEmployeeId: pic, picGroup, ...pool, updatedAt: new Date() } });
   // Items the previous PIC had not decided yet move along; the new PIC is notified for them.
   const previous = before?.pic ? eq(nayaChecklistItems.picEmployeeId, before.pic) : isNull(nayaChecklistItems.picEmployeeId);
@@ -162,8 +163,8 @@ export async function getChecklist(workspaceId: string, board: string | undefine
   };
 }
 
-/** Who continues a card after review, as shown: the chosen member, else the most available now. */
-export interface NextPlan { step: NayaGroup; pic: string | null; suggested: { id: string; name: string; presence: Member["presence"] } | null }
+/** Who continues a card after review, as shown: the chosen member, else the most available now; nobody for "none". */
+export interface NextPlan { step: NayaNext; pic: string | null; suggested: { id: string; name: string; presence: Member["presence"] } | null }
 
 type PlanCard = { nextStep: string | null; nextPicEmployeeId: string | null; continuesFrom: string | null; continuedTo: string | null };
 
@@ -171,22 +172,23 @@ type PlanCard = { nextStep: string | null; nextPicEmployeeId: string | null; con
 export const planned = (status: string, card: Omit<PlanCard, "nextPicEmployeeId">) =>
   (status === "review" || status === "done") && !card.continuesFrom && !card.continuedTo;
 
-const planStep = (card: Pick<PlanCard, "nextStep">, task: BoardTask): NayaGroup => (card.nextStep as NayaGroup | null) ?? nayaNextStep(task);
+const planStep = (card: Pick<PlanCard, "nextStep">, task: BoardTask): NayaNext => (card.nextStep as NayaNext | null) ?? nayaNextStep(task);
 
-export function nextPlan(step: NayaGroup, chosen: string | null, members: Member[]): NextPlan {
+export function nextPlan(step: NayaNext, chosen: string | null, members: Member[]): NextPlan {
+  if (step === "none") return { step, pic: null, suggested: null };
   const person = chosen ? members.find((member) => member.id === chosen) : mostAvailable(members, step);
   return { step, pic: chosen, suggested: person ? { id: person.id, name: person.name, presence: person.presence } : null };
 }
 
 /**
- * Changes who continues a card after review. PM/Admin may change the team and the member; the lead
- * of the planned team only the member, from their own team.
+ * Changes who continues a card after review. PM/Admin may change the team (or end it with the
+ * agent) and the member; the lead of the planned team only the member, from their own team.
  */
 export async function setNext(
   workspaceId: string,
   board: string | undefined,
   taskId: string,
-  input: { step?: NayaGroup; pic: string | null },
+  input: { step?: NayaNext; pic: string | null },
   who: { canPlan: boolean; lead: NayaGroup | null },
 ) {
   const key = boardOf(board);
@@ -199,7 +201,8 @@ export async function setNext(
   if (!who.canPlan && (step !== current || who.lead !== step)) {
     throw new HttpError(403, "Hanya PM/Admin, atau lead tim yang dituju, yang bisa mengubah rencana lanjutan.");
   }
-  if (input.pic && (await memberPools(workspaceId)).get(input.pic) !== step) throw new HttpError(400, `Pilih anggota tim ${NAYA_POOLS[step].label}.`);
+  if (input.pic && step === "none") throw new HttpError(400, "Kartu yang cukup sampai agent tidak punya anggota lanjutan.");
+  if (input.pic && step !== "none" && (await memberPools(workspaceId)).get(input.pic) !== step) throw new HttpError(400, `Pilih anggota tim ${NAYA_POOLS[step].label}.`);
   await db.update(nayaCards).set({ nextStep: step, nextPicEmployeeId: input.pic, updatedAt: new Date() }).where(eq(nayaCards.id, card.id));
 }
 

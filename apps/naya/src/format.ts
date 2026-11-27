@@ -4,6 +4,8 @@ import type { Member, NayaPool } from './types.ts'
 export const POOL_LABEL: Record<NayaPool, string> = { review: 'Sales/PM', design: 'Designer', development: 'Developer' }
 /** A card given to a whole team, e.g. "Semua Developer". */
 export const teamLabel = (team: Exclude<NayaPool, 'review'>) => `Semua ${POOL_LABEL[team]}`
+/** Where a card goes after review, as offered in pickers. */
+export const NEXT_LABEL = { development: 'Lanjut ke Developer', design: 'Lanjut ke Designer', none: 'Cukup sampai agent (tidak dilanjutkan ke tim)' } as const
 export const PRESENCE_LABEL: Record<Member['presence'], string> = { standby: 'santai', working: 'sedang bekerja', absent: 'belum standup', resting: 'sudah pulang' }
 
 const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 })

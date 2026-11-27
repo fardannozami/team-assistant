@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { apiFetch } from '../api.ts'
 import { useAgentName, type AgentName } from '../agent-name.ts'
 import { apiPost, useMe } from '../access.ts'
-import { agentLabel, formatDateTime, formatRelative, POOL_LABEL, PRESENCE_LABEL, teamLabel } from '../format.ts'
+import { agentLabel, formatDateTime, formatRelative, NEXT_LABEL, POOL_LABEL, PRESENCE_LABEL, teamLabel } from '../format.ts'
 import { usePolling } from '../polling.ts'
 import { loadSnapshot, type RequestState } from '../request-state.ts'
 import type { CardSummary, Task, TaskBoardSnapshot, TaskDetailSnapshot } from '../types.ts'
@@ -111,13 +111,15 @@ function InstructionDialog({ boards, onClose, onCreated }: { boards: { slug: str
   const people = usePeople()
   // "auto": the most available sales/PM member reviews it when the AI is done.
   const [pic, setPic] = useState<string>('auto')
+  // Where it goes after review; '' leaves it to the suggestion (by agent and title).
+  const [next, setNext] = useState<'' | keyof typeof NEXT_LABEL>('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (!title.trim()) { setError('Judul wajib diisi.'); return }
     setBusy(true)
-    const result = await apiPost<{ id: string }>('/api/tasks', { title, body, pic, ...(board ? { board } : {}) })
+    const result = await apiPost<{ id: string }>('/api/tasks', { title, body, pic, ...(next ? { next } : {}), ...(board ? { board } : {}) })
     setBusy(false)
     if (!result.ok) { setError(result.message); return }
     onCreated()
@@ -133,6 +135,10 @@ function InstructionDialog({ boards, onClose, onCreated }: { boards: { slug: str
       <textarea id="instruction-body" value={body} onChange={(event) => setBody(event.target.value)} maxLength={4000} placeholder="Target, kriteria, format hasil, tenggat…"/>
       {boards.length > 1 && <label className="select-label">Board <select value={board} onChange={(event) => setBoard(event.target.value)}>{boards.map((item) => <option key={item.slug} value={item.slug}>{item.name}</option>)}</select></label>}
       <PicSelect label="PIC (yang mereview hasilnya)" value={pic === 'auto' ? null : pic} people={people} autoPool="review" teams onChange={(next) => setPic(next ?? 'auto')}/>
+      <label className="select-label">Setelah review <select value={next} onChange={(event) => setNext(event.target.value as typeof next)}>
+        <option value="">Otomatis (disarankan dari agent dan judul)</option>
+        {(['development', 'design', 'none'] as const).map((step) => <option key={step} value={step}>{NEXT_LABEL[step]}</option>)}
+      </select></label>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="review-actions"><button type="submit" className="primary-button" disabled={busy}>{busy ? 'Mengirim…' : 'Kirim ke Naya'}</button><button type="button" className="secondary-button" onClick={onClose}>Batal</button></div>
       <p className="small-note">Tugas masuk ke kolom Triase; AI memutuskan sendiri apakah dikerjakan langsung atau dipecah menjadi subtugas. Setelah AI selesai, PIC (satu orang, semua Designer/Developer, atau Sales/PM yang paling tersedia) menerima WhatsApp dan mereview tiap item di Tugas Saya. Dari sana kartu bisa dilanjutkan ke Designer atau Developer.</p>
@@ -269,7 +275,7 @@ export function PipelineColumns({ tasks, multiBoard, onOpen, agentName = agentLa
           <span className="pipe-card-head"><span className={`pill pill-${pill}`}>{PILLS[pill].label}</span>{task.id && <span className="mono">#{task.id}</span>}</span>
           <strong>{task.title}</strong>
           <span className={`pipe-bar pill-${pill}`}><span style={{ width: `${((stageOf(task.status) + 1) / STAGES.length) * 100}%` }}/></span>
-          {card?.next && task.status === 'review' && <span className="pipe-card-next">→ {POOL_LABEL[card.next.step]}: {card.next.suggested ? `${card.next.suggested.name}${card.next.pic ? '' : ` (saran · ${PRESENCE_LABEL[card.next.suggested.presence]})`}` : 'belum ada yang tersedia'}</span>}
+          {card?.next && task.status === 'review' && <span className="pipe-card-next">{card.next.step === 'none' ? '✓ Cukup sampai agent' : <>→ {POOL_LABEL[card.next.step]}: {card.next.suggested ? `${card.next.suggested.name}${card.next.pic ? '' : ` (saran · ${PRESENCE_LABEL[card.next.suggested.presence]})`}` : 'belum ada yang tersedia'}</>}</span>}
           <span className="pipe-card-foot"><span>AI: {task.assignee ? agentName(task.assignee) : 'belum ditugaskan'}{card?.picName ? ` · PIC: ${card.picName}` : card?.group ? ` · PIC: ${teamLabel(card.group)}` : ''}{card?.total ? ` · ✓ ${card.done}/${card.total}` : ''}</span><span className="mono">{multiBoard && task.board ? `${task.board} · ` : ''}{task.priority ? `P${task.priority}` : ''}</span></span>
         </button>
       })}</div>

@@ -141,18 +141,19 @@ nayaApi.post("/tasks", anyone, async (c) => {
   allow(c, "instruct");
   const input = parseWith(nayaInstructionSchema, await c.req.json());
   const actor = await actorOf(c);
-  const { pic, ...instruction } = input;
+  const { pic, next, ...instruction } = input;
   const created = await bridge.instruct(instruction, actor);
   // Who reviews the result: a chosen member, a whole team (all designers or developers), or
   // "auto": the most available sales/PM member when the AI hands it over.
   const board = created.board ?? input.board ?? (await currentBoard());
   const group = nayaGroupOf(pic);
-  await setCardPic(getWorkspaceId(c), board, created.id, pic === "auto" || group ? null : pic, { createdBy: actor.id, pool: pic === "auto" ? "review" : null, group });
+  await setCardPic(getWorkspaceId(c), board, created.id, pic === "auto" || group ? null : pic, { createdBy: actor.id, pool: pic === "auto" ? "review" : null, group, next });
   await audit(getWorkspaceId(c), actor.id, "naya.instruct", "kanban_task", created.id, {
     title: input.title,
     board,
     assignee: input.assignee,
     pic,
+    next,
   });
   return c.json({ ...created, board }, 201);
 });
