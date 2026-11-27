@@ -77,11 +77,16 @@ OpenCode gets a desk when `opencode --version` works where the bridge runs, or w
 
 ## Claude Code in the office
 
-When `claude --version` works where the bridge runs, Claude Code gets its own desk.
+Claude Code gets its own desk when `claude --version` works where the bridge runs, or when its sessions folder (`$CLAUDE_CONFIG_DIR/projects`) is readable there.
 - **Working:** while one of its sessions changed in the last 3 minutes. The desk shows the project folder name.
 - **Working "atas perintah <profile>":** when a Hermes agent's log shows it running `claude -p`.
 - **Data read:** only session-file times and the newest session's working-folder name. Transcripts are never read.
-- **Where it appears:** in development (Hermes on your machine) it shows up right away. In production, the Hermes image does not include Claude Code yet, so there is no desk.
+- **Local development:** Hermes runs on your machine, so the desk shows up right away.
+- **Production:** Claude Code runs on the host, outside the `hermes` container. Do **not** mount `~/.claude` into it: the agents there run tools and could read every transcript. Instead, `docker/claude-activity-sync.sh` keeps an activity-only copy. The copy has one tiny file per session changed in the last day, with the session's time and the working folder's name; project paths are hashed. Set it up once on the host:
+  1. Copy the script to the server, e.g. `/opt/team-assistant/claude-activity-sync.sh`. Deploys copy only the compose file.
+  2. Run it every minute as the user whose sessions should count. With cron: `* * * * * /opt/team-assistant/claude-activity-sync.sh /root/.claude/projects /var/lib/claude-activity`
+  3. Set `CLAUDE_ACTIVITY_DIR=/var/lib/claude-activity` in `.env`, then run `docker compose -f docker-compose.prod.yml up -d hermes`. The folder is mounted read-only. The script writes it readable for others, so the container's user (uid 10000) can read it.
+  The desk turns Working within a minute or two of a prompt, and its name is shown as the second "Coder" next to OpenCode.
 
 ## The team in the office
 

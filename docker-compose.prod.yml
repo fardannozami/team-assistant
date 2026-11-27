@@ -96,11 +96,18 @@ services:
       API_SERVER_HOST: 0.0.0.0
       # OpenCode runs on the host; Naya reads its session database (metadata only) from here.
       OPENCODE_DATA_DIR: /opt/opencode
+      # Claude Code runs on the host too; the bridge reads <dir>/projects for its desk.
+      CLAUDE_CONFIG_DIR: /opt/claude
     volumes:
       - hermes-data:/opt/data
       # The host's OpenCode data folder (OPENCODE_HOST_DATA, e.g. /root/.local/share/opencode),
       # read-only. Unset: an empty folder, and OpenCode has no desk in the office.
       - ${OPENCODE_HOST_DATA:-./opencode-data}:/opt/opencode:ro
+      # An activity-only copy of the host's Claude Code sessions (CLAUDE_ACTIVITY_DIR, kept by
+      # docker/claude-activity-sync.sh), read-only: session times and folder names, never the
+      # transcripts, which the agents in this container must not read. Never mount ~/.claude
+      # itself here. Unset: an empty folder, and Claude Code has no desk in the office.
+      - ${CLAUDE_ACTIVITY_DIR:-./claude-activity}:/opt/claude:ro
     networks: [agents]
     # One multiplexed gateway (~250 MB) serves every profile; each running Kanban task adds a
     # worker. The image has no Chromium, so the browser tool stays off and needs no headroom.

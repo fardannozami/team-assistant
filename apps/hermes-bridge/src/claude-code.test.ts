@@ -79,6 +79,12 @@ describe('claude code in the office', () => {
     expect(station({ agentActivity: quiet, claudeSessions: idleSessions })).toMatchObject({ state: 'Idle', room: 'Lounge' })
   })
 
+  it('gets a desk on a server from the mounted sessions folder alone', () => {
+    const server = { ...runtime, claudeCode: { availability: 'unavailable' as const, data: 'Unknown' } }
+    const idle = { availability: 'available' as const, active: false, activeSessions: 0, fetchedAt: at }
+    expect(buildOfficeSnapshot(server, board, activity, { now: at, claudeSessions: idle }).stations.find((item) => item.id === 'claude-code')).toMatchObject({ role: 'Claude Code', state: 'Idle' })
+  })
+
   it('has no desk when Claude Code is not installed', async () => {
     const snapshot = await collectSnapshot(async (file) => {
       if (file === 'claude' || file === 'opencode') throw new Error('not found')

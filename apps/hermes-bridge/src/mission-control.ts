@@ -898,16 +898,19 @@ const CODER_NAME = 'Coder'
 /**
  * One office station per agent: every Hermes profile, plus OpenCode when it is installed. OpenCode
  * counts as installed when `opencode --version` runs or its session database is readable: on a
- * server it runs on the host, and only its data folder is mounted into this container.
+ * server it runs on the host, and only its data folder is mounted into this container. Claude Code
+ * likewise, when `claude --version` runs or its sessions folder is readable (on a server, an
+ * activity-only copy kept by docker/claude-activity-sync.sh).
  */
 interface AgentSpec { id: string; role: string; profile?: string; gateway?: GatewayState; aliases: string[]; displayName?: string }
 
-export function agentRoster(runtime: RuntimeSnapshot, openCodeSessions?: OpenCodeSessions): AgentSpec[] {
+export function agentRoster(runtime: RuntimeSnapshot, openCodeSessions?: OpenCodeSessions, claudeSessions?: ClaudeSessions): AgentSpec[] {
   const profiles = runtime.profiles.availability === 'available' ? runtime.profiles.data : []
   const agents: AgentSpec[] = profiles.filter((profile) => PROFILE_NAME.test(profile.name)).map((profile) => ({ id: profile.name, role: 'Hermes profile', profile: profile.name, gateway: profile.gateway, aliases: [profile.name.toLowerCase()], ...(profile.displayName ? { displayName: profile.displayName } : {}) }))
   const openCode = runtime.openCode.availability === 'available' || openCodeSessions?.availability === 'available'
   if (openCode && !agents.some((agent) => agent.id === 'opencode')) agents.push({ id: 'opencode', role: 'OpenCode', displayName: CODER_NAME, aliases: ['opencode', 'open-code'] })
-  if (runtime.claudeCode?.availability === 'available' && !agents.some((agent) => agent.id === CLAUDE_CODE_ID)) agents.push({ id: CLAUDE_CODE_ID, role: 'Claude Code', displayName: CODER_NAME, aliases: [CLAUDE_CODE_ID, 'claude'] })
+  const claudeCode = runtime.claudeCode?.availability === 'available' || claudeSessions?.availability === 'available'
+  if (claudeCode && !agents.some((agent) => agent.id === CLAUDE_CODE_ID)) agents.push({ id: CLAUDE_CODE_ID, role: 'Claude Code', displayName: CODER_NAME, aliases: [CLAUDE_CODE_ID, 'claude'] })
   return agents
 }
 
@@ -1012,7 +1015,7 @@ export function buildOfficeSnapshot(runtime: RuntimeSnapshot, board: TaskBoardSn
   const freshActivity = activity.sessions.availability === 'available' && isFresh(activity.fetchedAt, now)
   const agentActivity = options.agentActivity && isFresh(options.agentActivity.fetchedAt, now) ? options.agentActivity : undefined
   const explicitStates = options.explicitStates ?? []
-  const stations = agentRoster(runtime, options.openCodeSessions).map((agent, index): OfficeStation => {
+  const stations = agentRoster(runtime, options.openCodeSessions, options.claudeSessions).map((agent, index): OfficeStation => {
     const gateway = agent.gateway
     const task = freshBoard ? attributedTask(board.tasks.data, agent.aliases) : undefined
     const overlay = explicitState(agent, explicitStates, now)
@@ -1035,7 +1038,7 @@ export function buildOfficeSnapshot(runtime: RuntimeSnapshot, board: TaskBoardSn
     const recentActivity = live.probe
       ? live.probe.active ? `${live.probe.label ?? 'Active'}${live.probe.lastSeen ? ` (last log ${live.probe.lastSeen})` : ''}` : `No activity in the last ${ACTIVITY_WINDOW}`
       : activity.sessions.availability === 'unavailable' ? 'Not Available' : collaboration === 'Collaborating' ? 'Attributed active collaboration session' : 'No attributed recent activity'
-    const runtimeProvenance = agent.profile ? `Gateway ${gateway ?? 'Unknown'} (hermes profile list)` : agent.id === CLAUDE_CODE_ID ? `${runtime.claudeCode?.data ?? 'Claude Code'}; session files changed in the last 3 minutes (metadata only)` : options.openCodeSessions?.availability === 'available' ? 'OpenCode; session messages in the last 3 minutes (opencode.db, metadata only)' : 'OpenCode version availability is not a state signal'
+    const runtimeProvenance = agent.profile ? `Gateway ${gateway ?? 'Unknown'} (hermes profile list)` : agent.id === CLAUDE_CODE_ID ? `${runtime.claudeCode?.availability === 'available' ? runtime.claudeCode.data : 'Claude Code (host)'}; session files changed in the last 3 minutes (metadata only)` : options.openCodeSessions?.availability === 'available' ? 'OpenCode; session messages in the last 3 minutes (opencode.db, metadata only)' : 'OpenCode version availability is not a state signal'
     const managedIdle = state === 'Idle' ? '; Naya managed-idle placement policy (not agent-reported presence)' : ''
     const liveProvenance = options.agentActivity ? `; live activity (${agent.profile ? `hermes -p ${agent.profile} logs/sessions` : 'agent logs mentioning OpenCode'}, last ${ACTIVITY_WINDOW}): ${!agentActivity || !live.known ? 'unavailable' : live.state !== 'Unknown' ? live.probe?.kind ?? 'active' : 'none'}` : ''
     return {
