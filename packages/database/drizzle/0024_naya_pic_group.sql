@@ -1,0 +1,1 @@
+ALTER TABLE "naya_cards" ADD COLUMN "pic_group" text;

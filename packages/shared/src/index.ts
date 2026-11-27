@@ -425,13 +425,25 @@ export const nayaAgentSchema = z.object({
 });
 export type NayaAgentInput = z.infer<typeof nayaAgentSchema>;
 
+/** A whole team as a card's PIC: everyone in that pool is notified and may decide its items. */
+export const NAYA_PIC_GROUPS = ["all:design", "all:development"] as const;
+export type NayaGroup = "design" | "development";
+
+/** The team a PIC value names ("all:design" → "design"), or null for a person, "auto" or nobody. */
+export function nayaGroupOf(pic: string | null | undefined): NayaGroup | null {
+  return pic === "all:design" ? "design" : pic === "all:development" ? "development" : null;
+}
+
 export const nayaInstructionSchema = z.object({
   title: z.string().trim().min(1, "Judul wajib diisi").max(200),
   body: z.string().max(4000).optional(),
   board: z.string().max(64).optional(),
   assignee: z.string().regex(HERMES_PROFILE).optional(),
-  /** Who reviews the result: a team member's id, or "auto" (the most available sales/PM member). */
-  pic: z.union([z.literal("auto"), z.string().uuid()]).default("auto"),
+  /**
+   * Who reviews the result: a team member's id, "auto" (the most available sales/PM member), or a
+   * whole team ("all:design", "all:development").
+   */
+  pic: z.union([z.literal("auto"), z.enum(NAYA_PIC_GROUPS), z.string().uuid()]).default("auto"),
 });
 
 export const nayaReviewSchema = z.object({
@@ -455,9 +467,9 @@ export const nayaChecklistDecisionSchema = z
     path: ["note"],
   });
 
-/** Hand a card, or one item of it, to someone else on the team (an employee id). */
+/** Hand a card, or one item of it, to someone else on the team (an employee id), or a card to a whole team. */
 export const nayaPicSchema = z.object({
-  pic: z.string().uuid().nullable(),
+  pic: z.union([z.enum(NAYA_PIC_GROUPS), z.string().uuid()]).nullable(),
   board: z.string().max(64).optional(),
 });
 

@@ -61,7 +61,8 @@ export const nayaAgents = pgTable(
  * The person in charge (PIC) of a Kanban card: someone on the team (an employee, reached over
  * WhatsApp), chosen when it is created in Naya or later. With `picPool` set and no PIC yet, the
  * most available member of that pool (sales/PM, design, development) is picked when the AI hands
- * the card over. A reviewed card can continue to design or development as a new card.
+ * the card over. With `picGroup` set instead, the card is the whole team's: everyone in that pool
+ * is notified and may decide. A reviewed card can continue to design or development as a new card.
  */
 export const nayaCards = pgTable(
   "naya_cards",
@@ -73,6 +74,8 @@ export const nayaCards = pgTable(
     picEmployeeId: uuid("pic_employee_id").references(() => employees.id, { onDelete: "set null" }),
     /** "review" | "design" | "development": pick the PIC from this pool at handover. */
     picPool: text("pic_pool"),
+    /** "design" | "development": the whole team is the PIC (no single person). */
+    picGroup: text("pic_group"),
     /** The card this one continues (a reviewed card handed to design or development). */
     continuesFrom: text("continues_from"),
     /** The card created to continue this one, and to which pool ("design" | "development"). */

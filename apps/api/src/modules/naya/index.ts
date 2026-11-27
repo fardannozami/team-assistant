@@ -6,6 +6,7 @@ import {
   nayaChatSchema,
   nayaChecklistDecisionSchema,
   nayaContinueSchema,
+  nayaGroupOf,
   nayaInstructionSchema,
   nayaPicSchema,
   nayaReviewSchema,
@@ -26,7 +27,7 @@ import { chatKey, deleteNayaAgent, listNayaAgents, nayaPermissions, saveNayaAgen
 import { proxyChat } from "./chat.js";
 import { teamToday, withOwnTasks } from "./team.js";
 import { boardOf, cardSummaries, continueCard, currentBoard, decideItem, getChecklist, inbox, setCardPic, setItemPic, visibleCards } from "./checklist.js";
-import { employeeOf, listMembers } from "./members.js";
+import { employeeOf, listMembers, poolOf } from "./members.js";
 import { notifyHandoffs } from "./notify.js";
 
 // Naya (naya.digdaya.co): the AI team's office. Reads and Kanban writes go to hermes-bridge,
@@ -68,7 +69,8 @@ const sees = (view: NayaView) => async (c: Context, next: () => Promise<void>) =
  */
 async function ownCards(c: Context): Promise<Set<string> | null> {
   if (nayaSees(getActorRole(c), "allTasks")) return null;
-  return visibleCards(getWorkspaceId(c), await employeeOf(getWorkspaceId(c), getActorId(c)!));
+  const employeeId = await employeeOf(getWorkspaceId(c), getActorId(c)!);
+  return visibleCards(getWorkspaceId(c), employeeId, await poolOf(getWorkspaceId(c), employeeId));
 }
 
 /** 404 (not 403) for a card someone may not see, so its existence is not given away either. */
@@ -137,10 +139,11 @@ nayaApi.post("/tasks", anyone, async (c) => {
   const actor = await actorOf(c);
   const { pic, ...instruction } = input;
   const created = await bridge.instruct(instruction, actor);
-  // Who reviews the result: a chosen member, or "auto": the most available sales/PM member when
-  // the AI hands it over.
+  // Who reviews the result: a chosen member, a whole team (all designers or developers), or
+  // "auto": the most available sales/PM member when the AI hands it over.
   const board = created.board ?? input.board ?? (await currentBoard());
-  await setCardPic(getWorkspaceId(c), board, created.id, pic === "auto" ? null : pic, { createdBy: actor.id, pool: pic === "auto" ? "review" : null });
+  const group = nayaGroupOf(pic);
+  await setCardPic(getWorkspaceId(c), board, created.id, pic === "auto" || group ? null : pic, { createdBy: actor.id, pool: pic === "auto" ? "review" : null, group });
   await audit(getWorkspaceId(c), actor.id, "naya.instruct", "kanban_task", created.id, {
     title: input.title,
     board,
@@ -185,7 +188,8 @@ nayaApi.get("/cards", anyone, async (c) => {
 });
 nayaApi.get("/inbox", anyone, async (c) => {
   const actor = await actorOf(c);
-  return c.json(await inbox(getWorkspaceId(c), await employeeOf(getWorkspaceId(c), actor.id), nayaCan(actor.role, "review")));
+  const employeeId = await employeeOf(getWorkspaceId(c), actor.id);
+  return c.json(await inbox(getWorkspaceId(c), employeeId, nayaCan(actor.role, "review"), await poolOf(getWorkspaceId(c), employeeId)));
 });
 
 nayaApi.get("/tasks/:id/checklist", ...ownCard, async (c) =>
@@ -196,9 +200,11 @@ nayaApi.post("/tasks/:id/checklist/:item", anyone, async (c) => {
   const input = parseWith(nayaChecklistDecisionSchema, await c.req.json());
   const actor = await actorOf(c);
   const id = c.req.param("id");
+  const employeeId = await employeeOf(getWorkspaceId(c), actor.id);
   const result = await decideItem(getWorkspaceId(c), input.board, id, c.req.param("item"), input, actor, {
-    employeeId: await employeeOf(getWorkspaceId(c), actor.id),
+    employeeId,
     canReview: nayaCan(actor.role, "review"),
+    pool: await poolOf(getWorkspaceId(c), employeeId),
   });
   await audit(getWorkspaceId(c), actor.id, `naya.checklist.${input.status}`, "kanban_task", id, {
     board: input.board,
@@ -217,7 +223,8 @@ nayaApi.post("/tasks/:id/pic", anyone, async (c) => {
   canAssign(c);
   const input = parseWith(nayaPicSchema, await c.req.json());
   const id = c.req.param("id");
-  await setCardPic(getWorkspaceId(c), input.board, id, input.pic);
+  const group = nayaGroupOf(input.pic);
+  await setCardPic(getWorkspaceId(c), input.board, id, group ? null : input.pic, { group });
   await audit(getWorkspaceId(c), getActorId(c), "naya.pic", "kanban_task", id, { board: input.board, pic: input.pic });
   return c.json({ ok: true });
 });
@@ -226,6 +233,8 @@ nayaApi.post("/tasks/:id/checklist/:item/pic", anyone, async (c) => {
   canAssign(c);
   const input = parseWith(nayaPicSchema, await c.req.json());
   const id = c.req.param("id");
+  // A whole team takes a card, not a single item.
+  if (nayaGroupOf(input.pic)) throw new HttpError(400, "Item checklist hanya bisa diberikan ke satu orang.");
   await setItemPic(getWorkspaceId(c), input.board, id, c.req.param("item"), input.pic);
   await audit(getWorkspaceId(c), getActorId(c), "naya.pic", "kanban_task", id, { board: input.board, item: c.req.param("item"), pic: input.pic });
   return c.json({ ok: true });

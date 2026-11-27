@@ -1,6 +1,6 @@
 import { createDbClient, nayaCards, nayaChecklistItems, nayaLearnedRules } from "@repo/database";
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
-import { NAYA_POOLS, type ChecklistStatus, type NayaPool } from "@repo/shared";
+import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
+import { NAYA_POOLS, type ChecklistStatus, type NayaGroup, type NayaPool } from "@repo/shared";
 import { HttpError } from "../../lib/http-error.js";
 import { bridge, type Actor } from "./bridge.js";
 import { assertMember, memberNames, pickAvailable } from "./members.js";
@@ -13,7 +13,8 @@ import { assertMember, memberNames, pickAvailable } from "./members.js";
 // Selesai come back as the next version when the agent hands the card over again.
 // PICs are team members (employees). A card left on "auto" gets the most available member of its
 // pool when the AI hands it over: sales/PM to review, then design or development once a reviewed
-// card is continued to them.
+// card is continued to them. A card can also go to a whole team (all designers, all developers):
+// its items then have no PIC and wait on everyone in that pool.
 
 const db = createDbClient(
   process.env.DATABASE_URL ?? "postgres://teamassistant:teamassistant@localhost:5432/teamassistant",
@@ -78,23 +79,25 @@ const cardWhere = (workspaceId: string, board: string, taskId: string) => and(eq
 
 /**
  * Sets who is in charge of a card (and of its items still being checked by the previous PIC).
- * `pool` leaves the choice to handover time: the most available member of that pool.
+ * `pool` leaves the choice to handover time: the most available member of that pool; `group` gives
+ * the card to a whole team instead of one person. Either way a person or nobody replaces the group.
  */
 export async function setCardPic(
   workspaceId: string,
   board: string | undefined,
   taskId: string,
   pic: string | null,
-  options: { createdBy?: string; pool?: NayaPool | null; continuesFrom?: string } = {},
+  options: { createdBy?: string; pool?: NayaPool | null; group?: NayaGroup | null; continuesFrom?: string } = {},
 ) {
   const key = boardOf(board);
   if (pic) await assertMember(workspaceId, pic);
   const [before] = await db.select({ pic: nayaCards.picEmployeeId }).from(nayaCards).where(cardWhere(workspaceId, key, taskId)).limit(1);
   const pool = options.pool === undefined ? {} : { picPool: options.pool };
+  const picGroup = options.group ?? null;
   await db
     .insert(nayaCards)
-    .values({ workspaceId, board: key, taskId, picEmployeeId: pic, createdBy: options.createdBy, continuesFrom: options.continuesFrom, ...pool })
-    .onConflictDoUpdate({ target: [nayaCards.workspaceId, nayaCards.board, nayaCards.taskId], set: { picEmployeeId: pic, ...pool, updatedAt: new Date() } });
+    .values({ workspaceId, board: key, taskId, picEmployeeId: pic, picGroup, createdBy: options.createdBy, continuesFrom: options.continuesFrom, ...pool })
+    .onConflictDoUpdate({ target: [nayaCards.workspaceId, nayaCards.board, nayaCards.taskId], set: { picEmployeeId: pic, picGroup, ...pool, updatedAt: new Date() } });
   // Items the previous PIC had not decided yet move along; the new PIC is notified for them.
   const previous = before?.pic ? eq(nayaChecklistItems.picEmployeeId, before.pic) : isNull(nayaChecklistItems.picEmployeeId);
   await db
@@ -148,6 +151,7 @@ export async function getChecklist(workspaceId: string, board: string | undefine
     status: task.status,
     pic: card?.picEmployeeId ?? null,
     pool: (card?.picPool as NayaPool | null) ?? null,
+    group: (card?.picGroup as NayaGroup | null) ?? null,
     continuesFrom: card?.continuesFrom ?? null,
     continuedTo: card?.continuedTo ?? null,
     continuedStep: (card?.continuedStep as NayaPool | null) ?? null,
@@ -165,15 +169,16 @@ export async function seedChecklist(workspaceId: string, board: string, task: Bo
   const snapshot = await boardSnapshot();
   const children = childIds.map((id) => ({ id, title: snapshot.tasks.data.find((item) => item.id === id && boardOf(item.board) === board)?.title }));
   // "Auto": the most available member of the card's pool, chosen now that the work is ready.
-  const [current] = await db.select({ pic: nayaCards.picEmployeeId, pool: nayaCards.picPool }).from(nayaCards).where(cardWhere(workspaceId, board, taskId)).limit(1);
-  const picked = !current?.pic && current?.pool ? await pickAvailable(workspaceId, current.pool as NayaPool) : null;
+  // A whole-team card keeps its items without a PIC: they wait on everyone in the team.
+  const [current] = await db.select({ pic: nayaCards.picEmployeeId, pool: nayaCards.picPool, group: nayaCards.picGroup }).from(nayaCards).where(cardWhere(workspaceId, board, taskId)).limit(1);
+  const picked = !current?.pic && !current?.group && current?.pool ? await pickAvailable(workspaceId, current.pool as NayaPool) : null;
   await db.transaction(async (tx) => {
     // The card row serialises two people opening the same card at once.
     const [card] = await tx.select().from(nayaCards).where(cardWhere(workspaceId, board, taskId)).for("update");
     const again = await tx.select({ id: nayaChecklistItems.id }).from(nayaChecklistItems).where(and(eq(nayaChecklistItems.workspaceId, workspaceId), eq(nayaChecklistItems.board, board), eq(nayaChecklistItems.taskId, taskId))).limit(1);
     if (again.length) return;
-    const pic = card?.picEmployeeId ?? picked;
-    if (card && !card.picEmployeeId && pic) await tx.update(nayaCards).set({ picEmployeeId: pic, updatedAt: new Date() }).where(eq(nayaCards.id, card.id));
+    const pic = card?.picEmployeeId ?? (card?.picGroup ? null : picked);
+    if (card && !card.picEmployeeId && !card.picGroup && pic) await tx.update(nayaCards).set({ picEmployeeId: pic, updatedAt: new Date() }).where(eq(nayaCards.id, card.id));
     await tx.insert(nayaChecklistItems).values(seedItems(task, children).map((item) => ({ workspaceId, board, taskId, ...item, picEmployeeId: pic })));
   });
 }
@@ -189,20 +194,21 @@ export async function decideItem(
   itemId: string,
   decision: { status: ChecklistStatus; note?: string },
   actor: Actor,
-  me: { employeeId: string | null; canReview: boolean },
+  me: { employeeId: string | null; canReview: boolean; pool: NayaPool | null },
 ): Promise<{ outcome: CardOutcome }> {
   const key = boardOf(board);
   const task = await findTask(key, taskId, true);
   if (task.status !== "review") throw new HttpError(409, "Checklist hanya bisa diputuskan saat kartu menunggu review.");
   return db.transaction(async (tx) => {
-    await tx.select({ id: nayaCards.id }).from(nayaCards).where(cardWhere(workspaceId, key, taskId)).for("update");
+    const [card] = await tx.select({ group: nayaCards.picGroup }).from(nayaCards).where(cardWhere(workspaceId, key, taskId)).for("update");
     const items = await tx
       .select({ ...itemColumns })
       .from(nayaChecklistItems)
       .where(and(eq(nayaChecklistItems.workspaceId, workspaceId), eq(nayaChecklistItems.board, key), eq(nayaChecklistItems.taskId, taskId)));
     const item = items.find((row) => row.id === itemId);
     if (!item) throw new HttpError(404, "Item checklist tidak dikenal.");
-    if ((!me.employeeId || item.picEmployeeId !== me.employeeId) && !me.canReview) throw new HttpError(403, "Item ini milik PIC lain.");
+    const mine = (!!me.employeeId && item.picEmployeeId === me.employeeId) || (!item.picEmployeeId && !!card?.group && card.group === me.pool);
+    if (!mine && !me.canReview) throw new HttpError(403, "Item ini milik PIC lain.");
     const note = decision.status === "feedback" || decision.status === "rejected" ? decision.note!.trim() : decision.note?.trim() || null;
     const now = new Date();
     const decided = decision.status === "in_progress" ? null : now;
@@ -249,10 +255,10 @@ export interface InboxEntry {
 
 /**
  * Tugas Saya: cards in review that wait on this person, either as the PIC of an item still being
- * checked, or as the card's PIC before its checklist exists. Items with no PIC wait on everyone
- * who may review. The oldest and overdue come first.
+ * checked, or as the card's PIC before its checklist exists. Items with no PIC wait on the card's
+ * team when it has one, else on everyone who may review. The oldest and overdue come first.
  */
-export async function inbox(workspaceId: string, me: string | null, canReview: boolean, now = Date.now()): Promise<InboxEntry[]> {
+export async function inbox(workspaceId: string, me: string | null, canReview: boolean, myPool: NayaPool | null, now = Date.now()): Promise<InboxEntry[]> {
   const snapshot = await boardSnapshot();
   const inReview = snapshot.tasks.data.filter((task) => task.status === "review" && task.id);
   if (!inReview.length) return [];
@@ -261,19 +267,19 @@ export async function inbox(workspaceId: string, me: string | null, canReview: b
     db.select().from(nayaCards).where(and(eq(nayaCards.workspaceId, workspaceId), inArray(nayaCards.taskId, ids))),
     db.select().from(nayaChecklistItems).where(and(eq(nayaChecklistItems.workspaceId, workspaceId), inArray(nayaChecklistItems.taskId, ids))),
   ]);
-  return inboxEntries(inReview, cards, items, me, canReview, now);
+  return inboxEntries(inReview, cards, items, me, canReview, now, myPool);
 }
 
-type CardRow = { board: string; taskId: string; picEmployeeId: string | null; updatedAt: Date };
+type CardRow = { board: string; taskId: string; picEmployeeId: string | null; picGroup?: string | null; updatedAt: Date };
 type ItemRow = { board: string; taskId: string; picEmployeeId: string | null; status: string; handedAt: Date | null; updatedAt: Date };
 
-/** `me` is the signed-in person's employee id (null when their account is not linked to one). */
-export function inboxEntries(tasks: BoardTask[], cards: CardRow[], items: ItemRow[], me: string | null, canReview: boolean, now: number): InboxEntry[] {
-  const mine = (pic: string | null) => (!!me && pic === me) || (!pic && canReview);
+/** `me` is the signed-in person's employee id (null when their account is not linked to one), `myPool` their pool. */
+export function inboxEntries(tasks: BoardTask[], cards: CardRow[], items: ItemRow[], me: string | null, canReview: boolean, now: number, myPool: NayaPool | null = null): InboxEntry[] {
   const entries: InboxEntry[] = [];
   for (const task of tasks) {
     const board = boardOf(task.board);
     const card = cards.find((row) => row.board === board && row.taskId === task.id);
+    const mine = (pic: string | null) => (!!me && pic === me) || (!pic && (card?.picGroup ? card.picGroup === myPool : canReview));
     const own = items.filter((row) => row.board === board && row.taskId === task.id);
     const waiting = own.length ? own.filter((row) => row.status === "in_progress" && mine(row.picEmployeeId)) : mine(card?.picEmployeeId ?? null) ? [] : null;
     if (waiting === null || (own.length && !waiting.length)) continue;
@@ -295,13 +301,13 @@ export function inboxEntries(tasks: BoardTask[], cards: CardRow[], items: ItemRo
 /** PIC and checklist progress per card, for the board's cards. */
 export async function cardSummaries(workspaceId: string) {
   const [cards, items] = await Promise.all([
-    db.select({ board: nayaCards.board, taskId: nayaCards.taskId, pic: nayaCards.picEmployeeId, pool: nayaCards.picPool }).from(nayaCards).where(eq(nayaCards.workspaceId, workspaceId)),
+    db.select({ board: nayaCards.board, taskId: nayaCards.taskId, pic: nayaCards.picEmployeeId, pool: nayaCards.picPool, group: nayaCards.picGroup }).from(nayaCards).where(eq(nayaCards.workspaceId, workspaceId)),
     db.select({ board: nayaChecklistItems.board, taskId: nayaChecklistItems.taskId, status: nayaChecklistItems.status }).from(nayaChecklistItems).where(eq(nayaChecklistItems.workspaceId, workspaceId)),
   ]);
   const names = await memberNames(workspaceId, [...new Set(cards.map((card) => card.pic).filter((pic): pic is string => !!pic))]);
-  const summary = new Map<string, { board: string; taskId: string; pic: string | null; picName: string | null; pool: string | null; done: number; total: number }>();
+  const summary = new Map<string, { board: string; taskId: string; pic: string | null; picName: string | null; pool: string | null; group: string | null; done: number; total: number }>();
   for (const card of cards) {
-    summary.set(`${card.board}:${card.taskId}`, { board: card.board, taskId: card.taskId, pic: card.pic, picName: card.pic ? (names.get(card.pic) ?? null) : null, pool: card.pool, done: 0, total: 0 });
+    summary.set(`${card.board}:${card.taskId}`, { board: card.board, taskId: card.taskId, pic: card.pic, picName: card.pic ? (names.get(card.pic) ?? null) : null, pool: card.pool, group: card.group, done: 0, total: 0 });
   }
   for (const item of items) {
     const entry = summary.get(`${item.board}:${item.taskId}`);
@@ -355,13 +361,14 @@ export async function continueCard(workspaceId: string, board: string | undefine
 
 /**
  * The cards a member without the "allTasks" view may see: those they are the PIC of, or of an item
- * on, plus the subtasks behind their items (so the card's detail can link to them). Keys are
- * "<board>:<task id>".
+ * on, or that went to their whole team, plus the subtasks behind their items (so the card's detail
+ * can link to them). Keys are "<board>:<task id>".
  */
-export async function visibleCards(workspaceId: string, employeeId: string | null): Promise<Set<string>> {
+export async function visibleCards(workspaceId: string, employeeId: string | null, pool: NayaPool | null = null): Promise<Set<string>> {
   if (!employeeId) return new Set();
+  const own = pool ? or(eq(nayaCards.picEmployeeId, employeeId), eq(nayaCards.picGroup, pool)) : eq(nayaCards.picEmployeeId, employeeId);
   const [cards, items] = await Promise.all([
-    db.select({ board: nayaCards.board, taskId: nayaCards.taskId }).from(nayaCards).where(and(eq(nayaCards.workspaceId, workspaceId), eq(nayaCards.picEmployeeId, employeeId))),
+    db.select({ board: nayaCards.board, taskId: nayaCards.taskId }).from(nayaCards).where(and(eq(nayaCards.workspaceId, workspaceId), own)),
     db.select({ board: nayaChecklistItems.board, taskId: nayaChecklistItems.taskId, source: nayaChecklistItems.sourceTaskId }).from(nayaChecklistItems).where(and(eq(nayaChecklistItems.workspaceId, workspaceId), eq(nayaChecklistItems.picEmployeeId, employeeId))),
   ]);
   const keys = new Set(cards.map((card) => `${card.board}:${card.taskId}`));

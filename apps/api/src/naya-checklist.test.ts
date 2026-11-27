@@ -3,10 +3,10 @@
  * handoff and reminder messages.
  */
 import { describe, expect, test } from "bun:test";
-import { HERMES_PROFILE, NAYA_ROSTER, nayaSees, ROSTER_FALLBACK, nayaChecklistDecisionSchema, nayaInstructionSchema, nayaPoolOf, rosterAgent } from "@repo/shared";
+import { HERMES_PROFILE, NAYA_ROSTER, nayaSees, ROSTER_FALLBACK, nayaChecklistDecisionSchema, nayaGroupOf, nayaInstructionSchema, nayaPoolOf, rosterAgent } from "@repo/shared";
 import { cardOutcome, continuation, handoffNote, inboxEntries, seedItems, STALE_MS } from "./modules/naya/checklist.js";
 import { mostAvailable, type Member } from "./modules/naya/members.js";
-import { cardPath, noticeText, planNotices } from "./modules/naya/notify.js";
+import { cardPath, expandTeams, noticeText, planNotices } from "./modules/naya/notify.js";
 import { whatsappEmail } from "./modules/naya/accounts.js";
 import { NEXT_PATH } from "./modules/auth/login-links.js";
 
@@ -83,6 +83,13 @@ describe("tugas saya", () => {
     expect(inboxEntries(tasks.slice(0, 1), [], items, "me", true, now)).toHaveLength(1);
   });
 
+  test("items without a PIC on a whole-team card wait on that team, not on every reviewer", () => {
+    const cards = [{ board: "default", taskId: "a", picEmployeeId: null, picGroup: "development", updatedAt: at(1) }];
+    const items = [item("a", null, "in_progress", 1)];
+    expect(inboxEntries(tasks.slice(0, 1), cards, items, "me", false, now, "development")).toHaveLength(1);
+    expect(inboxEntries(tasks.slice(0, 1), cards, items, "me", true, now, "design")).toEqual([]);
+  });
+
   test("a card whose items are all decided by me drops out", () => {
     expect(inboxEntries(tasks.slice(0, 1), [], [item("a", "me", "done", 1)], "me", true, now)).toEqual([]);
   });
@@ -117,6 +124,12 @@ describe("whatsapp handoff", () => {
     expect(plan.handoff).toEqual([{ pic: "budi", ids: ["1", "2"], cards: [{ board: "default", taskId: "a", title: "PRD kasir", items: 2, version: 2 }] }]);
     expect(plan.reminder).toEqual([{ pic: "budi", ids: ["3"], cards: [{ board: "default", taskId: "b", title: "Wireframe", items: 1, version: 1 }] }]);
     expect(STALE_MS).toBe(48 * HOUR);
+  });
+
+  test("a whole-team card reaches everyone in that team", () => {
+    const pools = new Map<string, string | null>([["budi", "development"], ["sari", "development"], ["dina", "design"]]);
+    const expanded = expandTeams([row("1", "a", null, null), row("2", "b", null, null), row("3", "a", "dina", null)], new Map([["default:a", "development"]]), pools);
+    expect(expanded.map((item) => [item.id, item.picEmployeeId])).toEqual([["1", "budi"], ["1", "sari"], ["2", null], ["3", "dina"]]);
   });
 
   test("the message links straight to the card", () => {
@@ -187,6 +200,9 @@ describe("who picks up a card", () => {
   test("instructions default to an automatic sales/PM reviewer", () => {
     expect(nayaInstructionSchema.parse({ title: "Cari prospek" }).pic).toBe("auto");
     expect(nayaInstructionSchema.safeParse({ title: "x", pic: "budi" }).success).toBe(false);
+    expect(nayaInstructionSchema.parse({ title: "x", pic: "all:development" }).pic).toBe("all:development");
+    expect(nayaGroupOf("all:design")).toBe("design");
+    expect(nayaGroupOf("auto")).toBeNull();
   });
 
   test("a reviewed card continues to the design or PRD agent, with the reviewer's note", () => {

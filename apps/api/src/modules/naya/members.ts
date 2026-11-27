@@ -71,6 +71,21 @@ export async function pickAvailable(workspaceId: string, pool: NayaPool): Promis
   return mostAvailable(await listMembers(workspaceId), pool)?.id ?? null;
 }
 
+/** Every active employee's pool, by id: who a whole-team card waits on. */
+export async function memberPools(workspaceId: string): Promise<Map<string, NayaPool | null>> {
+  const rows = await db
+    .select({ id: employees.id, lead: employees.lead, team: teams.name })
+    .from(employees)
+    .leftJoin(teams, eq(teams.id, employees.teamId))
+    .where(and(eq(employees.workspaceId, workspaceId), eq(employees.isActive, true)));
+  return new Map(rows.map((row) => [row.id, nayaPoolOf(row.lead, row.team)]));
+}
+
+/** The employee's pool, or null (also for nobody). */
+export async function poolOf(workspaceId: string, employeeId: string | null): Promise<NayaPool | null> {
+  return employeeId ? ((await memberPools(workspaceId)).get(employeeId) ?? null) : null;
+}
+
 /** The employee record of a signed-in person, if their account is linked to one. */
 export async function employeeOf(workspaceId: string, userId: string): Promise<string | null> {
   const [row] = await db.select({ id: employees.id }).from(employees).where(and(eq(employees.workspaceId, workspaceId), eq(employees.userId, userId), eq(employees.isActive, true))).limit(1);

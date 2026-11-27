@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { rosterAgent } from '@repo/shared/naya-roster'
 import { apiPost, useMe } from './access.ts'
-import { agentLabel, formatRelative } from './format.ts'
+import { agentLabel, formatRelative, POOL_LABEL, teamLabel } from './format.ts'
 import { usePeople } from './people.ts'
 import { loadSnapshot, type RequestState } from './request-state.ts'
 import type { Checklist, ChecklistItem, ChecklistStatus, Member, NayaPool } from './types.ts'
@@ -10,12 +10,12 @@ import type { Checklist, ChecklistItem, ChecklistStatus, Member, NayaPool } from
 // item of its checklist is In Progress, Selesai, Feedback (what to fix) or Ditolak (why). The card
 // only moves once nobody is still checking, and the notes go back to the agent. PICs are team
 // members; "auto" picks the most available member of the card's pool when the AI hands it over,
-// and a reviewed card can continue to design or development.
+// and a reviewed card can continue to design or development. A card can also go to a whole team
+// (all designers, all developers): everyone in it is notified and may decide.
 
 const CHECKLIST_LABEL: Record<ChecklistStatus, string> = { in_progress: 'In Progress', done: 'Selesai', feedback: 'Feedback', rejected: 'Ditolak' }
 const CHECKLIST_PILL: Record<ChecklistStatus, string> = { in_progress: 'review', done: 'done', feedback: 'ai', rejected: 'blocked' }
 
-const POOL_LABEL: Record<NayaPool, string> = { review: 'Sales/PM', design: 'Designer', development: 'Developer' }
 const PRESENCE_LABEL: Record<Member['presence'], string> = { standby: 'santai', working: 'sedang bekerja', absent: 'belum standup', resting: 'sudah pulang' }
 const PRESENCE_RANK: Record<Member['presence'], number> = { standby: 0, working: 1, absent: 2, resting: 3 }
 
@@ -28,17 +28,23 @@ const OUTCOME_TEXT: Record<string, string> = {
 /** "auto" in a picker: leave the choice to handover time. */
 const AUTO = 'auto'
 
+/** A whole team as the card's PIC, as the API takes it ("all:design", "all:development"). */
+const TEAMS = ['design', 'development'] as const
+const teamPic = (team: Exclude<NayaPool, 'review'>) => `all:${team}`
+
 const memberLabel = (member: Member) => `${member.name} · ${PRESENCE_LABEL[member.presence]}${member.load ? ` · ${member.load} antrean` : ''}`
 
 /**
  * A team member picker, grouped by pool, the most available first. With `autoPool`, the first
- * option is "auto" (the most available member of that pool); otherwise "" is nobody.
+ * option is "auto" (the most available member of that pool); otherwise "" is nobody. With `teams`,
+ * a whole team can be picked too.
  */
-export function PicSelect({ value, people: list, onChange, label, disabled, autoPool }: { value: string | null; people: Member[]; onChange: (pic: string | null) => void; label: string; disabled?: boolean; autoPool?: NayaPool | null }) {
+export function PicSelect({ value, people: list, onChange, label, disabled, autoPool, teams }: { value: string | null; people: Member[]; onChange: (pic: string | null) => void; label: string; disabled?: boolean; autoPool?: NayaPool | null; teams?: boolean }) {
   const groups: [string, Member[]][] = [...(['review', 'design', 'development'] as NayaPool[]).map((pool): [string, Member[]] => [POOL_LABEL[pool], list.filter((member) => member.pool === pool)]), ['Lainnya', list.filter((member) => !member.pool)]]
   const sorted = (members: Member[]) => [...members].sort((a, b) => PRESENCE_RANK[a.presence] - PRESENCE_RANK[b.presence] || a.load - b.load || a.name.localeCompare(b.name))
   return <label className="select-label">{label} <select value={value ?? (autoPool ? AUTO : '')} disabled={disabled} onChange={(event) => onChange(event.target.value && event.target.value !== AUTO ? event.target.value : autoPool ? AUTO : null)}>
     {autoPool ? <option value={AUTO}>Otomatis: {POOL_LABEL[autoPool]} yang tersedia (prioritas santai)</option> : <option value="">— belum ada —</option>}
+    {teams && <optgroup label="Satu tim">{TEAMS.map((team) => <option key={team} value={teamPic(team)}>{teamLabel(team)} ({list.filter((member) => member.pool === team).length} orang)</option>)}</optgroup>}
     {groups.filter(([, members]) => members.length).map(([name, members]) => <optgroup key={name} label={name}>{sorted(members).map((member) => <option key={member.id} value={member.id}>{memberLabel(member)}</option>)}</optgroup>)}
   </select></label>
 }
@@ -147,7 +153,7 @@ export function ChecklistPanel({ taskId, board, version, onDone }: { taskId: str
   if (state.status === 'failed') return <section className="task-section"><p className="eyebrow">CHECKLIST</p><p className="text-bad small-note">{state.message}</p></section>
   if (state.status !== 'ready') return null
   const checklist = state.data
-  const { status, pic, pool, items } = checklist
+  const { status, pic, pool, group, items } = checklist
   const open = status === 'review'
   const mayAssign = me.can.review || me.can.instruct
   const done = items.filter((item) => item.status === 'done').length
@@ -161,14 +167,16 @@ export function ChecklistPanel({ taskId, board, version, onDone }: { taskId: str
     setReload((value) => value + 1)
     return true
   }
-  const picName = list.find((person) => person.id === pic)?.name
+  const picName = list.find((person) => person.id === pic)?.name ?? (group ? teamLabel(group) : undefined)
+  const myPool = list.find((person) => person.id === me.user.employeeId)?.pool
   return <section className="task-section" aria-label="Checklist manusia">
     <p className="eyebrow">CHECKLIST TIM{items.length ? ` · ${done}/${items.length} SELESAI` : ''}</p>
     {checklist.continuesFrom && <p className="small-note">Lanjutan dari kartu <span className="mono">#{checklist.continuesFrom}</span> yang sudah disetujui Sales/PM.</p>}
     {mayAssign
-      ? <PicSelect label="PIC kartu" value={pic} people={list} autoPool={pool} onChange={(next) => void post('pic', { pic: next === AUTO ? null : next })}/>
+      ? <PicSelect label="PIC kartu" value={pic ?? (group ? teamPic(group) : null)} people={list} autoPool={pool} teams onChange={(next) => void post('pic', { pic: next === AUTO ? null : next })}/>
       : <p className="small-note">PIC kartu: {picName ?? (pool ? `otomatis (${POOL_LABEL[pool]} yang tersedia)` : 'belum ada')}</p>}
-    {!pic && pool && <p className="small-note">PIC dipilih otomatis saat AI selesai: {POOL_LABEL[pool]} yang santai lebih dulu, lalu yang sedang bekerja.</p>}
+    {group && <p className="small-note">Semua {POOL_LABEL[group]} menerima pemberitahuan WhatsApp dan bisa memutuskan item yang belum punya PIC.</p>}
+    {!pic && !group && pool && <p className="small-note">PIC dipilih otomatis saat AI selesai: {POOL_LABEL[pool]} yang santai lebih dulu, lalu yang sedang bekerja.</p>}
     {!items.length && <p className="small-note">Checklist muncul saat AI menyerahkan hasilnya (kolom Review). PIC kartu menerima pemberitahuan WhatsApp.</p>}
     {items.length > 0 && !open && <p className="small-note">{status === 'done' ? 'Kartu sudah selesai.' : 'AI sedang mengerjakan versi berikutnya; keputusan dibuka lagi saat kartu kembali ke Review.'}</p>}
     {items.length > 0 && <ul className="checklist">{items.map((item) => <ChecklistRow
@@ -177,7 +185,7 @@ export function ChecklistPanel({ taskId, board, version, onDone }: { taskId: str
       open={open}
       people={list}
       mayAssign={mayAssign}
-      mayDecide={(!!me.user.employeeId && item.picEmployeeId === me.user.employeeId) || me.can.review}
+      mayDecide={(!!me.user.employeeId && item.picEmployeeId === me.user.employeeId) || (!item.picEmployeeId && !!group && group === myPool) || me.can.review}
       onAssign={(next) => void post(`checklist/${encodeURIComponent(item.id)}/pic`, { pic: next })}
       onDecide={(next, note) => post(`checklist/${encodeURIComponent(item.id)}`, { status: next, ...(note ? { note } : {}) })}
     />)}</ul>}

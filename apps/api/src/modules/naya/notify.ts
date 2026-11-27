@@ -1,14 +1,16 @@
-import { createDbClient, employees, nayaChecklistItems } from "@repo/database";
+import { createDbClient, employees, nayaCards, nayaChecklistItems } from "@repo/database";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { normalizePhoneNumber, sendText } from "../whatsapp/service.js";
 import { appUrl, createLoginLink, HANDOVER_LINK_TTL_MS } from "../auth/login-links.js";
 import { ensureEmployeeAccount, employeeRef } from "./accounts.js";
 import { boardOf, boardSnapshot, seedChecklist, STALE_MS } from "./checklist.js";
+import { memberPools } from "./members.js";
 
 // WhatsApp for the hybrid flow (run by the worker every 10 minutes): when the AI hands a card
 // over, its PIC gets a message with a link straight to the card; work left waiting longer than
 // 48 hours is nudged once a day. Each link signs its PIC in on the way (a one-time code, made for
 // them, good for 12 hours), so a tap opens the card; their daily account is made on first use.
+// A card given to a whole team reaches everyone in it.
 
 const db = createDbClient(
   process.env.DATABASE_URL ?? "postgres://teamassistant:teamassistant@localhost:5432/teamassistant",
@@ -73,6 +75,26 @@ export function planNotices(items: Waiting[], titles: Map<string, string>, now: 
   };
 }
 
+/** Items without a PIC on a whole-team card, once for each member of that team. */
+export function expandTeams(items: Waiting[], groups: Map<string, string>, pools: Map<string, string | null>): Waiting[] {
+  return items.flatMap((item) => {
+    const group = item.picEmployeeId ? undefined : groups.get(`${item.board}:${item.taskId}`);
+    if (!group) return [item];
+    return [...pools].filter(([, pool]) => pool === group).map(([id]) => ({ ...item, picEmployeeId: id }));
+  });
+}
+
+async function withTeams(workspaceId: string, items: Waiting[]): Promise<Waiting[]> {
+  const taskIds = [...new Set(items.filter((item) => !item.picEmployeeId).map((item) => item.taskId))];
+  if (!taskIds.length) return items;
+  const cards = await db
+    .select({ board: nayaCards.board, taskId: nayaCards.taskId, group: nayaCards.picGroup })
+    .from(nayaCards)
+    .where(and(eq(nayaCards.workspaceId, workspaceId), inArray(nayaCards.taskId, taskIds)));
+  const groups = new Map(cards.filter((card) => card.group).map((card) => [`${card.board}:${card.taskId}`, card.group!]));
+  return groups.size ? expandTeams(items, groups, await memberPools(workspaceId)) : items;
+}
+
 export async function notifyHandoffs(workspaceId: string, now = Date.now()) {
   const snapshot = await boardSnapshot(true);
   const inReview = snapshot.tasks.data.filter((task) => task.status === "review" && task.id);
@@ -93,7 +115,7 @@ export async function notifyHandoffs(workspaceId: string, now = Date.now()) {
     .from(nayaChecklistItems)
     .where(and(eq(nayaChecklistItems.workspaceId, workspaceId), eq(nayaChecklistItems.status, "in_progress"), inArray(nayaChecklistItems.taskId, [...new Set(inReview.map((task) => task.id!))])));
   const waiting = rows.filter((row) => titles.has(`${row.board}:${row.taskId}`));
-  const plan = planNotices(waiting, titles, now);
+  const plan = planNotices(await withTeams(workspaceId, waiting), titles, now);
 
   const pics = [...new Set([...plan.handoff, ...plan.reminder].map((entry) => entry.pic))];
   const phones = pics.length

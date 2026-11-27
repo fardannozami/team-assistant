@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { apiFetch } from '../api.ts'
 import { useAgentName, type AgentName } from '../agent-name.ts'
 import { apiPost, useMe } from '../access.ts'
-import { agentLabel, formatDateTime, formatRelative } from '../format.ts'
+import { agentLabel, formatDateTime, formatRelative, teamLabel } from '../format.ts'
 import { usePolling } from '../polling.ts'
 import { loadSnapshot, type RequestState } from '../request-state.ts'
 import type { CardSummary, Task, TaskBoardSnapshot, TaskDetailSnapshot } from '../types.ts'
@@ -132,10 +132,10 @@ function InstructionDialog({ boards, onClose, onCreated }: { boards: { slug: str
       <label className="field-label" htmlFor="instruction-body">Detail (opsional)</label>
       <textarea id="instruction-body" value={body} onChange={(event) => setBody(event.target.value)} maxLength={4000} placeholder="Target, kriteria, format hasil, tenggat…"/>
       {boards.length > 1 && <label className="select-label">Board <select value={board} onChange={(event) => setBoard(event.target.value)}>{boards.map((item) => <option key={item.slug} value={item.slug}>{item.name}</option>)}</select></label>}
-      <PicSelect label="PIC (yang mereview hasilnya)" value={pic === 'auto' ? null : pic} people={people} autoPool="review" onChange={(next) => setPic(next ?? 'auto')}/>
+      <PicSelect label="PIC (yang mereview hasilnya)" value={pic === 'auto' ? null : pic} people={people} autoPool="review" teams onChange={(next) => setPic(next ?? 'auto')}/>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="review-actions"><button type="submit" className="primary-button" disabled={busy}>{busy ? 'Mengirim…' : 'Kirim ke Naya'}</button><button type="button" className="secondary-button" onClick={onClose}>Batal</button></div>
-      <p className="small-note">Tugas masuk ke kolom Triase; AI memutuskan sendiri apakah dikerjakan langsung atau dipecah menjadi subtugas. Setelah AI selesai, PIC (atau Sales/PM yang paling tersedia) menerima WhatsApp dan mereview tiap item di Tugas Saya. Dari sana kartu bisa dilanjutkan ke Designer atau Developer.</p>
+      <p className="small-note">Tugas masuk ke kolom Triase; AI memutuskan sendiri apakah dikerjakan langsung atau dipecah menjadi subtugas. Setelah AI selesai, PIC (satu orang, semua Designer/Developer, atau Sales/PM yang paling tersedia) menerima WhatsApp dan mereview tiap item di Tugas Saya. Dari sana kartu bisa dilanjutkan ke Designer atau Developer.</p>
     </form>
   </Dialog>
 }
@@ -269,7 +269,7 @@ export function PipelineColumns({ tasks, multiBoard, onOpen, agentName = agentLa
           <span className="pipe-card-head"><span className={`pill pill-${pill}`}>{PILLS[pill].label}</span>{task.id && <span className="mono">#{task.id}</span>}</span>
           <strong>{task.title}</strong>
           <span className={`pipe-bar pill-${pill}`}><span style={{ width: `${((stageOf(task.status) + 1) / STAGES.length) * 100}%` }}/></span>
-          <span className="pipe-card-foot"><span>AI: {task.assignee ? agentName(task.assignee) : 'belum ditugaskan'}{card?.picName ? ` · PIC: ${card.picName}` : ''}{card?.total ? ` · ✓ ${card.done}/${card.total}` : ''}</span><span className="mono">{multiBoard && task.board ? `${task.board} · ` : ''}{task.priority ? `P${task.priority}` : ''}</span></span>
+          <span className="pipe-card-foot"><span>AI: {task.assignee ? agentName(task.assignee) : 'belum ditugaskan'}{card?.picName ? ` · PIC: ${card.picName}` : card?.group ? ` · PIC: ${teamLabel(card.group)}` : ''}{card?.total ? ` · ✓ ${card.done}/${card.total}` : ''}</span><span className="mono">{multiBoard && task.board ? `${task.board} · ` : ''}{task.priority ? `P${task.priority}` : ''}</span></span>
         </button>
       })}</div>
     </section>
