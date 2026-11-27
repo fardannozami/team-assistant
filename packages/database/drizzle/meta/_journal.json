@@ -176,6 +176,13 @@
       "when": 1795760492021,
       "tag": "0024_naya_pic_group",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1795760889552,
+      "tag": "0025_naya_next_plan",
+      "breakpoints": true
     }
   ]
 }

@@ -3,8 +3,8 @@
  * handoff and reminder messages.
  */
 import { describe, expect, test } from "bun:test";
-import { HERMES_PROFILE, NAYA_ROSTER, nayaSees, ROSTER_FALLBACK, nayaChecklistDecisionSchema, nayaGroupOf, nayaInstructionSchema, nayaPoolOf, rosterAgent } from "@repo/shared";
-import { cardOutcome, continuation, handoffNote, inboxEntries, seedItems, STALE_MS } from "./modules/naya/checklist.js";
+import { HERMES_PROFILE, NAYA_ROSTER, nayaSees, ROSTER_FALLBACK, nayaChecklistDecisionSchema, nayaGroupOf, nayaInstructionSchema, nayaLeadOf, nayaNextStep, nayaPoolOf, rosterAgent } from "@repo/shared";
+import { cardOutcome, continuation, handoffNote, inboxEntries, nextPlan, planned, seedItems, STALE_MS } from "./modules/naya/checklist.js";
 import { mostAvailable, type Member } from "./modules/naya/members.js";
 import { cardPath, expandTeams, noticeText, planNotices } from "./modules/naya/notify.js";
 import { whatsappEmail } from "./modules/naya/accounts.js";
@@ -195,6 +195,26 @@ describe("who picks up a card", () => {
   test("between equally available members, the one with less waiting on them", () => {
     const team = [member("Eko", "developer", "working", 4), member("Fani", "developer", "working", 1), member("Gita", "developer", "absent", 0)];
     expect(mostAvailable(team, "development")?.name).toBe("Fani");
+  });
+
+  test("a card in review is suggested to the most available designer or developer", () => {
+    expect(nayaNextStep({ title: "Microcopy onboarding", assignee: "naya-3b" })).toBe("design");
+    expect(nayaNextStep({ title: "Wireframe dashboard", assignee: "naya-3c" })).toBe("development");
+    expect(nayaNextStep({ title: "Desain landing page" })).toBe("design");
+    expect(nayaNextStep({ title: "PRD aplikasi kasir", assignee: "naya-2b" })).toBe("development");
+    const team = [member("Dina", "designer", "working", 0), member("Eko", "developer", "working", 0), member("Fani", "developer", "standby", 3)];
+    expect(nextPlan("development", null, team).suggested?.name).toBe("Fani");
+    expect(nextPlan("development", "eko", team)).toEqual({ step: "development", pic: "eko", suggested: { id: "eko", name: "Eko", presence: "working" } });
+    expect(nextPlan("design", null, [])).toEqual({ step: "design", pic: null, suggested: null });
+  });
+
+  test("only a first-round card not yet continued has a plan; leads are design or development", () => {
+    const card = { nextStep: null, continuesFrom: null, continuedTo: null };
+    expect(planned("review", card)).toBe(true);
+    expect(planned("running", card)).toBe(false);
+    expect(planned("review", { ...card, continuesFrom: "7" })).toBe(false);
+    expect(planned("done", { ...card, continuedTo: "9" })).toBe(false);
+    expect([nayaLeadOf("design"), nayaLeadOf("development"), nayaLeadOf("developer"), nayaLeadOf(null)]).toEqual(["design", "development", null, null]);
   });
 
   test("instructions default to an automatic sales/PM reviewer", () => {

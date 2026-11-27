@@ -1,6 +1,6 @@
 import { createDbClient, employees, nayaChecklistItems, teams } from "@repo/database";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { nayaPoolOf, type NayaPool } from "@repo/shared";
+import { nayaLeadOf, nayaPoolOf, type NayaGroup, type NayaPool } from "@repo/shared";
 import { HttpError } from "../../lib/http-error.js";
 import { teamToday, type TeamPresence } from "./team.js";
 
@@ -84,6 +84,13 @@ export async function memberPools(workspaceId: string): Promise<Map<string, Naya
 /** The employee's pool, or null (also for nobody). */
 export async function poolOf(workspaceId: string, employeeId: string | null): Promise<NayaPool | null> {
   return employeeId ? ((await memberPools(workspaceId)).get(employeeId) ?? null) : null;
+}
+
+/** The team the employee leads (Lead Design, Lead Dev), or null. */
+export async function leadOf(workspaceId: string, employeeId: string | null): Promise<NayaGroup | null> {
+  if (!employeeId) return null;
+  const [row] = await db.select({ lead: employees.lead }).from(employees).where(and(eq(employees.id, employeeId), eq(employees.workspaceId, workspaceId))).limit(1);
+  return nayaLeadOf(row?.lead);
 }
 
 /** The employee record of a signed-in person, if their account is linked to one. */

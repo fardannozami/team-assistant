@@ -8,6 +8,7 @@ import {
   nayaContinueSchema,
   nayaGroupOf,
   nayaInstructionSchema,
+  nayaNextSchema,
   nayaPicSchema,
   nayaReviewSchema,
   nayaSees,
@@ -26,8 +27,8 @@ import { bridge, hermesConfigured, type Actor } from "./bridge.js";
 import { chatKey, deleteNayaAgent, listNayaAgents, nayaPermissions, saveNayaAgent } from "./agents.js";
 import { proxyChat } from "./chat.js";
 import { teamToday, withOwnTasks } from "./team.js";
-import { boardOf, cardSummaries, continueCard, currentBoard, decideItem, getChecklist, inbox, setCardPic, setItemPic, visibleCards } from "./checklist.js";
-import { employeeOf, listMembers, poolOf } from "./members.js";
+import { boardOf, cardSummaries, continueCard, currentBoard, decideItem, getChecklist, inbox, setCardPic, setItemPic, setNext, visibleCards } from "./checklist.js";
+import { employeeOf, leadOf, listMembers, poolOf } from "./members.js";
 import { notifyHandoffs } from "./notify.js";
 
 // Naya (naya.digdaya.co): the AI team's office. Reads and Kanban writes go to hermes-bridge,
@@ -70,7 +71,8 @@ const sees = (view: NayaView) => async (c: Context, next: () => Promise<void>) =
 async function ownCards(c: Context): Promise<Set<string> | null> {
   if (nayaSees(getActorRole(c), "allTasks")) return null;
   const employeeId = await employeeOf(getWorkspaceId(c), getActorId(c)!);
-  return visibleCards(getWorkspaceId(c), employeeId, await poolOf(getWorkspaceId(c), employeeId));
+  const [pool, lead] = await Promise.all([poolOf(getWorkspaceId(c), employeeId), leadOf(getWorkspaceId(c), employeeId)]);
+  return visibleCards(getWorkspaceId(c), employeeId, pool, lead);
 }
 
 /** 404 (not 403) for a card someone may not see, so its existence is not given away either. */
@@ -91,7 +93,9 @@ nayaApi.get("/me", anyone, async (c) => {
   const agents = await listNayaAgents(getWorkspaceId(c));
   // Linked to an employee record, the person is a team member who can be a card's PIC.
   const employeeId = await employeeOf(getWorkspaceId(c), actor.id);
-  return c.json({ user: { ...actor, employeeId }, can: nayaPermissions(actor.role, agents), agents, hermes: hermesConfigured() });
+  // A lead (design or development) decides who on their team continues the cards headed their way.
+  const lead = await leadOf(getWorkspaceId(c), employeeId);
+  return c.json({ user: { ...actor, employeeId, lead }, can: nayaPermissions(actor.role, agents), agents, hermes: hermesConfigured() });
 });
 
 /* ---------- Reads from Hermes ---------- */
@@ -177,8 +181,8 @@ for (const action of ["reject", "comment", "retry"] as const) {
 
 nayaApi.get("/people", anyone, async (c) => {
   const members = await listMembers(getWorkspaceId(c));
-  // Who is santai and how much waits on whom is for those who assign work; others get names only.
-  if (nayaSees(getActorRole(c), "allTasks")) return c.json(members);
+  // Who is santai and how much waits on whom is for those who assign work (leads too); others get names only.
+  if (nayaSees(getActorRole(c), "allTasks") || (await leadOf(getWorkspaceId(c), await employeeOf(getWorkspaceId(c), getActorId(c)!)))) return c.json(members);
   return c.json(members.map((member) => ({ ...member, team: null, lead: null, presence: "absent", userId: null, load: 0 })));
 });
 nayaApi.get("/cards", anyone, async (c) => {
@@ -237,6 +241,17 @@ nayaApi.post("/tasks/:id/checklist/:item/pic", anyone, async (c) => {
   if (nayaGroupOf(input.pic)) throw new HttpError(400, "Item checklist hanya bisa diberikan ke satu orang.");
   await setItemPic(getWorkspaceId(c), input.board, id, c.req.param("item"), input.pic);
   await audit(getWorkspaceId(c), getActorId(c), "naya.pic", "kanban_task", id, { board: input.board, item: c.req.param("item"), pic: input.pic });
+  return c.json({ ok: true });
+});
+
+/** Who continues a card after review: PM/Admin choose the team and member, a lead the member of their team. */
+nayaApi.post("/tasks/:id/next", anyone, async (c) => {
+  const input = parseWith(nayaNextSchema, await c.req.json());
+  const id = c.req.param("id");
+  await assertSeesCard(c, id, input.board);
+  const lead = await leadOf(getWorkspaceId(c), await employeeOf(getWorkspaceId(c), getActorId(c)!));
+  await setNext(getWorkspaceId(c), input.board, id, input, { canPlan: nayaCan(getActorRole(c), "instruct"), lead });
+  await audit(getWorkspaceId(c), getActorId(c), "naya.next", "kanban_task", id, { board: input.board, step: input.step, pic: input.pic });
   return c.json({ ok: true });
 });
 

@@ -5,8 +5,11 @@ import { apiFetch, LOCKED_EVENT } from './api.ts'
 
 export { LOCKED_EVENT }
 
-/** `employeeId`: their team member record, when their account is linked to one (then they can be a PIC). */
-export interface SessionUser { id: string; name: string; email: string; role: string | null; employeeId?: string | null }
+/**
+ * `employeeId`: their team member record, when their account is linked to one (then they can be a PIC).
+ * `lead`: the team they lead, if any; they choose who on it continues the cards headed its way.
+ */
+export interface SessionUser { id: string; name: string; email: string; role: string | null; employeeId?: string | null; lead?: 'design' | 'development' | null }
 /** `see`: the pages a role may open (blueprint v3 access matrix); the API enforces the same. */
 export interface Permissions { instruct: boolean; review: boolean; comment: boolean; manageAgents: boolean; chat: string[]; see: { allTasks: boolean; agents: boolean; calendar: boolean; usage: boolean } }
 export interface NayaAgent { profile: string; displayName: string; description: string | null; chatRoles: string[]; isLead: boolean; hasKey: boolean }

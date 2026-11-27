@@ -81,6 +81,12 @@ export const nayaCards = pgTable(
     /** The card created to continue this one, and to which pool ("design" | "development"). */
     continuedTo: text("continued_to"),
     continuedStep: text("continued_step"),
+    /**
+     * The plan for after review: "design" | "development", and who in that team (null: the most
+     * available one). PM/Admin, or the lead of that team, may change it.
+     */
+    nextStep: text("next_step"),
+    nextPicEmployeeId: uuid("next_pic_employee_id").references(() => employees.id, { onDelete: "set null" }),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

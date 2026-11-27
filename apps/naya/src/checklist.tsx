@@ -1,10 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { rosterAgent } from '@repo/shared/naya-roster'
 import { apiPost, useMe } from './access.ts'
-import { agentLabel, formatRelative, POOL_LABEL, teamLabel } from './format.ts'
+import { agentLabel, formatRelative, POOL_LABEL, PRESENCE_LABEL, teamLabel } from './format.ts'
 import { usePeople } from './people.ts'
 import { loadSnapshot, type RequestState } from './request-state.ts'
-import type { Checklist, ChecklistItem, ChecklistStatus, Member, NayaPool } from './types.ts'
+import type { Checklist, ChecklistItem, ChecklistStatus, Member, NayaPool, NextPlan } from './types.ts'
 
 // The human half of a card (blueprint v3). The AI drafts until the card reaches review; then each
 // item of its checklist is In Progress, Selesai, Feedback (what to fix) or Ditolak (why). The card
@@ -16,7 +16,6 @@ import type { Checklist, ChecklistItem, ChecklistStatus, Member, NayaPool } from
 const CHECKLIST_LABEL: Record<ChecklistStatus, string> = { in_progress: 'In Progress', done: 'Selesai', feedback: 'Feedback', rejected: 'Ditolak' }
 const CHECKLIST_PILL: Record<ChecklistStatus, string> = { in_progress: 'review', done: 'done', feedback: 'ai', rejected: 'blocked' }
 
-const PRESENCE_LABEL: Record<Member['presence'], string> = { standby: 'santai', working: 'sedang bekerja', absent: 'belum standup', resting: 'sudah pulang' }
 const PRESENCE_RANK: Record<Member['presence'], number> = { standby: 0, working: 1, absent: 2, resting: 3 }
 
 const OUTCOME_TEXT: Record<string, string> = {
@@ -105,9 +104,32 @@ function ChecklistRow({ item, mayDecide, mayAssign, open, people: list, onAssign
   </li>
 }
 
+/**
+ * Who continues the card after review: a designer or developer, by default the most available (idle
+ * first). PM/Admin may change the team and the member; the lead of that team the member.
+ */
+function NextPlanBox({ next, people: list, canPlan, isLead, onChange }: { next: NextPlan; people: Member[]; canPlan: boolean; isLead: boolean; onChange: (body: { step?: NextPlan['step']; pic: string | null }) => void }) {
+  const team = list.filter((member) => member.pool === next.step)
+  const who = next.suggested ? `${next.suggested.name} (${PRESENCE_LABEL[next.suggested.presence]})` : `belum ada ${POOL_LABEL[next.step].toLowerCase()} yang tersedia`
+  return <div className="continue-box">
+    <p className="eyebrow">LANJUTAN SETELAH REVIEW</p>
+    {canPlan && <label className="select-label">Tim <select value={next.step} onChange={(event) => onChange({ step: event.target.value as NextPlan['step'], pic: null })}>
+      <option value="development">{POOL_LABEL.development}</option>
+      <option value="design">{POOL_LABEL.design}</option>
+    </select></label>}
+    {canPlan || isLead
+      ? <PicSelect label={POOL_LABEL[next.step]} value={next.pic} people={team} autoPool={next.step} onChange={(pic) => onChange({ pic: pic === AUTO ? null : pic })}/>
+      : <p className="small-note">Dilanjutkan oleh {POOL_LABEL[next.step]}: <b>{who}</b></p>}
+    <p className="small-note">{next.pic
+      ? `Dipilih: ${who}. Kartu lanjutan langsung diserahkan ke dia.`
+      : `Saran saat ini: ${who}, ${POOL_LABEL[next.step].toLowerCase()} yang paling tersedia. Kalau dibiarkan otomatis, dipilih lagi saat AI selesai menyusun requirement.`}
+      {' '}Bisa diubah oleh PM/Admin atau Lead {next.step === 'design' ? 'Design' : 'Dev'}.</p>
+  </div>
+}
+
 /** After review: send the card on to design or development (an AI agent drafts the requirement first). */
 function ContinueActions({ checklist, onContinue }: { checklist: Checklist; onContinue: (step: Exclude<NayaPool, 'review'>, note: string) => Promise<boolean> }) {
-  const [step, setStep] = useState<Exclude<NayaPool, 'review'>>()
+  const [step, setStep] = useState<Exclude<NayaPool, 'review'> | undefined>(checklist.next?.step)
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   if (checklist.continuedTo) {
@@ -190,6 +212,13 @@ export function ChecklistPanel({ taskId, board, version, onDone }: { taskId: str
       onDecide={(next, note) => post(`checklist/${encodeURIComponent(item.id)}`, { status: next, ...(note ? { note } : {}) })}
     />)}</ul>}
     {open && items.length > 0 && <p className="small-note">Kartu baru maju setelah semua item diputuskan: semua Selesai menutup kartu; Feedback dan Ditolak dikirim ke agent beserta catatannya.</p>}
+    {checklist.next && <NextPlanBox
+      next={checklist.next}
+      people={list}
+      canPlan={me.can.instruct}
+      isLead={!!me.user.lead && me.user.lead === checklist.next.step}
+      onChange={(body) => void post('next', body)}
+    />}
     {status === 'done' && mayAssign && !checklist.continuesFrom && <ContinueActions checklist={checklist} onContinue={(step, note) => post('continue', { step, ...(note.trim() ? { note } : {}) }, `Kartu baru dibuat untuk ${POOL_LABEL[step]}. AI menyusun requirement-nya dulu.`)}/>}
     {message && <p className={message.ok ? 'form-success' : 'form-error'} role={message.ok ? 'status' : 'alert'}>{message.text}</p>}
   </section>

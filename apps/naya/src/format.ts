@@ -1,9 +1,10 @@
 import { rosterAgent } from '@repo/shared/naya-roster'
-import type { NayaPool } from './types.ts'
+import type { Member, NayaPool } from './types.ts'
 
 export const POOL_LABEL: Record<NayaPool, string> = { review: 'Sales/PM', design: 'Designer', development: 'Developer' }
 /** A card given to a whole team, e.g. "Semua Developer". */
 export const teamLabel = (team: Exclude<NayaPool, 'review'>) => `Semua ${POOL_LABEL[team]}`
+export const PRESENCE_LABEL: Record<Member['presence'], string> = { standby: 'santai', working: 'sedang bekerja', absent: 'belum standup', resting: 'sudah pulang' }
 
 const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 })
 const whole = new Intl.NumberFormat('en')

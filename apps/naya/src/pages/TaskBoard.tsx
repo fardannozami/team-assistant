@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { apiFetch } from '../api.ts'
 import { useAgentName, type AgentName } from '../agent-name.ts'
 import { apiPost, useMe } from '../access.ts'
-import { agentLabel, formatDateTime, formatRelative, teamLabel } from '../format.ts'
+import { agentLabel, formatDateTime, formatRelative, POOL_LABEL, PRESENCE_LABEL, teamLabel } from '../format.ts'
 import { usePolling } from '../polling.ts'
 import { loadSnapshot, type RequestState } from '../request-state.ts'
 import type { CardSummary, Task, TaskBoardSnapshot, TaskDetailSnapshot } from '../types.ts'
@@ -269,6 +269,7 @@ export function PipelineColumns({ tasks, multiBoard, onOpen, agentName = agentLa
           <span className="pipe-card-head"><span className={`pill pill-${pill}`}>{PILLS[pill].label}</span>{task.id && <span className="mono">#{task.id}</span>}</span>
           <strong>{task.title}</strong>
           <span className={`pipe-bar pill-${pill}`}><span style={{ width: `${((stageOf(task.status) + 1) / STAGES.length) * 100}%` }}/></span>
+          {card?.next && task.status === 'review' && <span className="pipe-card-next">→ {POOL_LABEL[card.next.step]}: {card.next.suggested ? `${card.next.suggested.name}${card.next.pic ? '' : ` (saran · ${PRESENCE_LABEL[card.next.suggested.presence]})`}` : 'belum ada yang tersedia'}</span>}
           <span className="pipe-card-foot"><span>AI: {task.assignee ? agentName(task.assignee) : 'belum ditugaskan'}{card?.picName ? ` · PIC: ${card.picName}` : card?.group ? ` · PIC: ${teamLabel(card.group)}` : ''}{card?.total ? ` · ✓ ${card.done}/${card.total}` : ''}</span><span className="mono">{multiBoard && task.board ? `${task.board} · ` : ''}{task.priority ? `P${task.priority}` : ''}</span></span>
         </button>
       })}</div>

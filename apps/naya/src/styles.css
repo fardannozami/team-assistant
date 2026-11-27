@@ -881,6 +881,7 @@ a.primary-button { display: inline-block; text-align: center; text-decoration: n
 .pipe-card-head, .pipe-card-foot { align-items: center; display: flex; gap: 8px; justify-content: space-between; }
 .pipe-card-head .mono, .pipe-card-foot { color: var(--text-muted); font-size: 11px; }
 .pipe-card-foot { font-size: 12px; }
+.pipe-card-next { color: var(--text-muted); font-size: 12px; }
 .pipe-bar { background: var(--border); border-radius: 2px; display: block; height: 4px; overflow: hidden; }
 .pipe-bar > span { background: var(--pill); display: block; height: 100%; }
 .pipe-legend { align-items: center; color: var(--text-muted); display: flex; flex-wrap: wrap; font-size: 12px; gap: 10px 16px; margin-top: 16px; }

@@ -501,6 +501,33 @@ export function nayaPoolOf(lead: string | null | undefined, team?: string | null
   return null;
 }
 
+/** Hermes agents whose work goes on to the designers; Engineering agents go to the developers. */
+const DESIGN_AGENTS = new Set(["naya-3a", "naya-3b", "naya-4a", "naya-5d"]);
+const DEVELOPMENT_AGENTS = new Set(["naya-3c", "naya-3d"]);
+
+/**
+ * Where a card in review should go next, suggested from the agent that made it, else its title;
+ * development when neither says. PM/Admin or the lead of that team may change it.
+ */
+export function nayaNextStep(task: { title: string; assignee?: string | null }): NayaGroup {
+  if (task.assignee && DESIGN_AGENTS.has(task.assignee)) return "design";
+  if (task.assignee && DEVELOPMENT_AGENTS.has(task.assignee)) return "development";
+  if (NAYA_POOLS.design.pattern.test(task.title) && !NAYA_POOLS.development.pattern.test(task.title)) return "design";
+  return "development";
+}
+
+/** The team a lead position leads ("design" → "design"), or null for everyone else. */
+export function nayaLeadOf(lead: string | null | undefined): NayaGroup | null {
+  return lead === "design" || lead === "development" ? lead : null;
+}
+
+/** Who continues a card after review: the team, and a member of it (null: the most available). */
+export const nayaNextSchema = z.object({
+  step: z.enum(["design", "development"]).optional(),
+  pic: z.string().uuid().nullable(),
+  board: z.string().max(64).optional(),
+});
+
 /** Continue a reviewed card to design or development. */
 export const nayaContinueSchema = z.object({
   step: z.enum(["design", "development"]),
